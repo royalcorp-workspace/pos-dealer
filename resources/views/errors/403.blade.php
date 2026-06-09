@@ -1,0 +1,32 @@
+@extends('frontend.layouts.app')
+
+@section('title', '403 - Akses Ditolak - IMG')
+
+@section('content')
+<div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh] font-sans">
+    <div class="max-w-4xl mx-auto text-center">
+        <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-brand-light text-brand-gold mb-8 shadow-sm">
+            <i class="fa-solid fa-lock w-10 h-10"></i>
+        </div>
+
+        <p class="text-brand-gold-dark font-bold tracking-[0.3em] uppercase text-sm mb-4">403 - Akses Ditolak</p>
+
+        <h1 class="text-4xl md:text-6xl font-extrabold text-brand-dark tracking-tight font-serif mb-6">
+            Maaf, Anda tidak memiliki akses ke halaman ini.
+        </h1>
+
+        <p class="text-gray-500 text-lg max-w-2xl mx-auto leading-relaxed">
+            Halaman yang Anda tuju membutuhkan izin khusus. Silakan kembali ke halaman utama dan lanjutkan berbelanja.
+        </p>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+            <a href="{{ route('home') }}" class="px-8 py-4 rounded-full font-bold text-white bg-brand-dark hover:bg-brand-darker transition-all shadow-lg shadow-brand-dark/20">
+                Kembali ke Home
+            </a>
+            <a href="{{ route('help') }}" class="px-8 py-4 rounded-full font-bold text-brand-dark bg-white border-2 border-brand-dark hover:bg-brand-dark hover:text-white transition-all">
+                Hubungi Bantuan
+            </a>
+        </div>
+    </div>
+</div>
+@endsection
