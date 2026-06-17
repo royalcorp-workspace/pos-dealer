@@ -90,9 +90,9 @@
                                             </div>
                                             <form action="{{ route('cart.remove', $item['id']) }}" method="POST">
                                                 @csrf
-                                                <button type="submit" class="text-gray-400 hover:text-red-500 p-1 focus:outline-none">
-                                                    <i class="fa-solid fa-trash-can w-4 h-4"></i>
-                                                </button>
+<button type="submit" class="text-gray-400 hover:text-red-500 p-1 focus:outline-none" aria-label="Hapus item">
+                                                            <i class="fa-solid fa-trash-can w-4 h-4"></i>
+                                                        </button>
                                             </form>
                                         </div>
                                         <div class="mt-auto flex justify-between items-end">
@@ -103,7 +103,7 @@
                                                 <form action="{{ route('cart.update', $item['id']) }}" method="POST" class="inline">
                                                     @csrf
                                                     <input type="hidden" name="quantity" value="{{ $item['quantity'] - 1 }}">
-                                                    <button type="submit" class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none">-</button>
+                                                    <button type="submit" class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none" aria-label="Kurangi jumlah">-</button>
                                                 </form>
                                                 
                                                 <span class="text-sm font-semibold text-brand-darker">{{ $item['quantity'] }}</span>
@@ -112,7 +112,7 @@
                                                 <form action="{{ route('cart.update', $item['id']) }}" method="POST" class="inline">
                                                     @csrf
                                                     <input type="hidden" name="quantity" value="{{ $item['quantity'] + 1 }}">
-                                                    <button type="submit" class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none">+</button>
+                                                    <button type="submit" class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none" aria-label="Tambah jumlah">+</button>
                                                 </form>
                                             </div>
                                         </div>
@@ -126,7 +126,7 @@
                     @if(count($cart) > 0)
                         <div class="p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-4">
                             <!-- Coupon Trigger -->
-                            <button class="w-full flex justify-between items-center bg-white p-3 md:p-4 rounded-xl border border-brand-muted hover:border-brand-gold transition-colors group shadow-sm focus:outline-none">
+                            <button class="w-full flex justify-between items-center bg-white p-3 md:p-4 rounded-xl border border-brand-muted hover:border-brand-gold transition-colors group shadow-sm focus:outline-none" aria-label="Pilih kupon">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 rounded-full bg-brand-light text-brand-gold flex items-center justify-center">
                                         <span class="font-bold text-lg">%</span>
@@ -147,7 +147,11 @@
                                 </div>
                             </div>
 
-                            <button class="w-full py-4 text-center rounded-xl font-bold bg-brand-dark hover:bg-brand-darker text-brand-gold transition-transform active:scale-[0.98] shadow-lg shadow-brand-dark/20 mt-2 flex justify-center items-center gap-2 focus:outline-none">
+                            <button 
+                                @click="isCartOpen = false" 
+                                onclick="window.location.href='{{ route('checkout') }}'"
+                                class="w-full py-4 text-center rounded-xl font-bold bg-brand-dark hover:bg-brand-darker text-brand-gold transition-transform active:scale-[0.98] shadow-lg shadow-brand-dark/20 mt-2 flex justify-center items-center gap-2 focus:outline-none"
+                            >
                                 Checkout Sekarang
                                 <i class="fa-solid fa-cart-shopping w-5 h-5"></i>
                             </button>

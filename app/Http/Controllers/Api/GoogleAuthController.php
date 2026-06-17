@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuthAuditService;
 use App\Services\AuthTokenService;
+use App\Services\DeviceSessionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +19,8 @@ class GoogleAuthController extends Controller
 {
     public function __construct(
         private readonly AuthTokenService $tokens,
-        private readonly AuthAuditService $audit
+        private readonly AuthAuditService $audit,
+        private readonly DeviceSessionService $deviceSessions
     ) {
     }
 
@@ -187,8 +189,11 @@ class GoogleAuthController extends Controller
             ]);
         }
 
-        $access = $this->tokens->issueAccessToken($user);
-        $refreshModel = $this->tokens->issueRefreshToken($user, $request);
+        $deviceId = $this->deviceSessions->deviceId($request);
+        $access = $this->tokens->issueAccessToken($user, $deviceId);
+        $refreshModel = $this->tokens->issueRefreshToken($user, $request, $deviceId);
+        $this->deviceSessions->register($request, $user, null, null, $refreshModel->getKey());
+        $this->deviceSessions->enforceLimit($user, null, $deviceId);
 
         $this->audit->log($user, 'login_success', $request, [
             'provider' => 'google',

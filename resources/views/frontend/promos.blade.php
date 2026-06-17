@@ -1,8 +1,67 @@
 @extends('frontend.layouts.app')
 
 @section('title', 'Promo Spesial - IMG')
+@section('meta_description', 'Dapatkan promo kasur, springbed, dan perlengkapan tidur premium di IMG. Nikmati diskon, cashback, dan gratis ongkir untuk kenyamanan tidur Anda.')
+@section('canonical', route('promos'))
 
 @section('content')
+    @php
+        $offerItems = collect($promos)->map(function ($promo, $index) {
+            return [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'item' => [
+                    '@type' => 'Offer',
+                    'name' => $promo['title'],
+                    'description' => $promo['desc'],
+                    'url' => route('promos'),
+                    'availability' => 'https://schema.org/InStock',
+                    'areaServed' => [
+                        '@type' => 'Place',
+                        'name' => 'Indonesia',
+                    ],
+                ],
+            ];
+        })->values()->toArray();
+
+        $offerCatalogSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'OfferCatalog',
+            '@id' => route('promos') . '#offers',
+            'name' => 'Promo Spesial IMG',
+            'description' => 'Kumpulan promo kasur, springbed, dan perlengkapan tidur premium di International Mattress Gallery.',
+            'url' => route('promos'),
+            'itemListElement' => $offerItems,
+        ];
+
+        $promoBreadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                [
+                    '@type' => 'ListItem',
+                    'position' => 1,
+                    'name' => 'Home',
+                    'item' => route('home'),
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 2,
+                    'name' => 'Promo Spesial',
+                ],
+            ],
+        ];
+    @endphp
+
+    @push('jsonld')
+        <script type="application/ld+json">
+        @json($offerCatalogSchema)
+        </script>
+        <script type="application/ld+json">
+        @json($promoBreadcrumbSchema)
+        </script>
+    @endpush
+
         <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh]" x-data="{ copiedCode: null }">
             <div class="text-center mb-12">
                 <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark mb-4 font-serif">Promo Spesial</h1>

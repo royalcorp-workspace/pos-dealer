@@ -1,6 +1,7 @@
 @extends('frontend.layouts.app')
 
 @section('title', 'Memproses Login Google - IMG')
+@section('robots', 'noindex,nofollow')
 
 @section('content')
 <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh] font-sans">

@@ -31,7 +31,7 @@ class AuthTokenService
         return $raw;
     }
 
-    public function issueAccessToken(User $user): string
+    public function issueAccessToken(User $user, ?string $deviceId = null): string
     {
         $now = time();
 
@@ -44,10 +44,14 @@ class AuthTokenService
             'typ' => 'access',
         ];
 
+        if ($deviceId !== null) {
+            $payload['device_id'] = $deviceId;
+        }
+
         return JWT::encode($payload, $this->jwtSecret(), 'HS256');
     }
 
-    public function issueRefreshToken(User $user, Request $request): RefreshToken
+    public function issueRefreshToken(User $user, Request $request, ?string $deviceId = null): RefreshToken
     {
         $raw = Str::random(60);
         $tokenHash = hash('sha256', $raw);
@@ -56,6 +60,7 @@ class AuthTokenService
         $expiresAt = $now->copy()->addSeconds($this->refreshTtlSeconds);
         $model = RefreshToken::create([
             'user_id' => $user->getAttributes()['id'],
+            'device_id' => $deviceId,
             'token_hash' => $tokenHash,
             'expires_at' => $expiresAt,
             'revoked' => false,
@@ -82,7 +87,7 @@ class AuthTokenService
         $refreshToken->update(['revoked' => true]);
     }
 
-    public function refresh(string $rawRefreshToken, User $user, Request $request): array
+    public function refresh(string $rawRefreshToken, User $user, Request $request, ?string $deviceId = null): array
     {
         $tokenHash = $this->hashRefreshToken($rawRefreshToken);
 
@@ -106,11 +111,12 @@ class AuthTokenService
             }
         }
 
-        // Rotate
-        $this->revokeRefreshToken($existing);
-        $new = $this->issueRefreshToken($user, $request);
+        $newDeviceId = $existing->device_id ?: $deviceId;
 
-        $access = $this->issueAccessToken($user);
+        $this->revokeRefreshToken($existing);
+        $new = $this->issueRefreshToken($user, $request, $newDeviceId);
+
+        $access = $this->issueAccessToken($user, $newDeviceId);
 
         return [
             'access_token' => $access,

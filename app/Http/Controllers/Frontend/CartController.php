@@ -3,55 +3,71 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
-use App\Services\ProductService;
+use App\Models\Frontend\ProductsCatalog\Product;
+use App\Models\Frontend\ProductsCatalog\ProductVariant;
 use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
-    private ProductService $productService;
-
-    public function __construct(ProductService $productService)
+    public function toggleWishlist(Request $request)
     {
-        $this->productService = $productService;
+        $request->validate([
+            'product_id' => 'required|string|uuid',
+        ]);
+
+        $productId = $request->input('product_id');
+        $wishlist = session()->get('wishlist', []);
+        $isInWishlist = in_array($productId, $wishlist);
+
+        if ($isInWishlist) {
+            $wishlist = array_values(array_filter($wishlist, fn($id) => $id !== $productId));
+            session()->put('wishlist', $wishlist);
+            $message = 'Produk dihapus dari favorit';
+        } else {
+            $wishlist[] = $productId;
+            session()->put('wishlist', $wishlist);
+            $message = 'Produk ditambahkan ke favorit';
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'in_wishlist' => !$isInWishlist,
+                'wishlist_count' => count($wishlist),
+                'message' => $message,
+            ]);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 
     public function add(Request $request)
     {
         $request->validate([
-            'product_id' => 'required|string',
+            'product_id' => 'required|string|uuid',
             'quantity' => 'required|integer|min:1',
-            'size' => 'nullable|string',
+            'variant_id' => 'nullable|string|uuid',
         ]);
 
         $productId = $request->input('product_id');
+        $variantId = $request->input('variant_id');
         $quantity = (int) $request->input('quantity');
-        $size = $request->input('size');
 
-        $product = $this->productService->find($productId);
+        $product = Product::where('id', $productId)->first();
         if (!$product) {
             return response()->json(['error' => 'Product not found'], 404);
         }
 
-        // Calculate price based on size
-        $price = $product['price'];
-        if ($product['isVariable'] && $size) {
-            $sizes = [
-                '200 x 090 cm',
-                '200 x 100 cm',
-                '200 x 120 cm',
-                '200 x 160 cm',
-                '200 x 180 cm',
-                '200 x 200 cm'
-            ];
-            $basePrice = $product['minPrice'] ?? $product['price'];
-            $sizeIndex = array_search($size, $sizes);
-            if ($sizeIndex !== false) {
-                $price = $basePrice + ($sizeIndex * 500000);
+        $price = $product->base_price;
+        if ($variantId) {
+            $variant = ProductVariant::where('id', $variantId)->first();
+            if ($variant) {
+                $price = $variant->price;
             }
         }
 
         $cart = session()->get('cart', []);
-        $cartItemId = $productId . '-' . ($size ?: 'default');
+        $cartItemId = $variantId ? $variantId : $productId;
 
         if (isset($cart[$cartItemId])) {
             $cart[$cartItemId]['quantity'] += $quantity;
@@ -59,18 +75,17 @@ class CartController extends Controller
             $cart[$cartItemId] = [
                 'id' => $cartItemId,
                 'product_id' => $productId,
-                'name' => $product['name'],
-                'brand' => $product['brand'],
-                'image' => $product['image'],
-                'size' => $size,
-                'price' => $price,
+                'name' => $product->name,
+                'brand' => $product->brand->name ?? '',
+                'image' => $product->thumbnail_url ?? '',
+                'price' => (float) $price,
                 'quantity' => $quantity,
             ];
         }
 
         session()->put('cart', $cart);
 
-        if ($request->wantsJson()) {
+        if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
@@ -100,7 +115,7 @@ class CartController extends Controller
             session()->put('cart', $cart);
         }
 
-        if ($request->wantsJson()) {
+        if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
@@ -121,7 +136,7 @@ class CartController extends Controller
             session()->put('cart', $cart);
         }
 
-        if ($request->wantsJson()) {
+        if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
@@ -151,4 +166,3 @@ class CartController extends Controller
         return $total;
     }
 }
-

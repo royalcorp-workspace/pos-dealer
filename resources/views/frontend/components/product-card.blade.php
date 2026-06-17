@@ -35,7 +35,7 @@
         <!-- Hover Action (Desktop) -->
         @if(!$isSoldOut)
             <div class="product-card__actions absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 duration-300 flex flex-col gap-2 z-10">
-                <button class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none">
+                <button class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none" aria-label="Tambah ke favorit">
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>
                 </button>
                 <button 
@@ -43,7 +43,7 @@
                     data-product-id="{{ $product['id'] }}"
                     @click="window.openProductReview($event, '{{ $product['id'] }}')"
                     class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none"
-                    title="Lihat Ulasan"
+                    aria-label="Lihat ulasan"
                 >
                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
@@ -53,7 +53,7 @@
 
     <!-- Product Info -->
     <div class="p-5 flex flex-col flex-1">
-        <div class="mb-1 text-xs font-semibold text-brand-gold-dark uppercase tracking-widest">
+        <div class="mb-1 text-xs font-semibold text-gray-600 uppercase tracking-widest">
             {{ $product['brand'] }}
         </div>
         
@@ -70,11 +70,11 @@
             data-product-id="{{ $product['id'] }}"
             @click="window.openProductReview($event, '{{ $product['id'] }}')"
         >
-            <div class="flex items-center text-brand-gold">
+            <div class="flex items-center text-brand-gold-dark">
                 <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>
             </div>
             <span class="text-sm font-medium text-gray-700">{{ $product['rating'] }}</span>
-            <span class="text-xs text-gray-400 hover:text-brand-gold-dark underline-offset-2 hover:underline">({{ $product['reviewsCount'] }} Ulasan)</span>
+            <span class="text-xs text-gray-500 hover:text-brand-gold-dark underline-offset-2 hover:underline">({{ $product['reviewsCount'] }} Ulasan)</span>
         </div>
 
         <!-- Pricing -->

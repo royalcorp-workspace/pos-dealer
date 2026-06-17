@@ -17,6 +17,7 @@ class RefreshToken extends Model
 
     protected $fillable = [
         'user_id',
+        'device_id',
         'token_hash',
         'expires_at',
         'revoked',

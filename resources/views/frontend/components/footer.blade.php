@@ -13,13 +13,13 @@
                     Toko kasur dan perlengkapan tidur terpercaya. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga.
                 </p>
                 <div class="flex gap-4">
-                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all">
+                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="Facebook">
                         <i class="fa-brands fa-facebook-f w-5 h-5 footer-social-icon"></i>
                     </a>
-                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all">
+                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="Instagram">
                         <i class="fa-brands fa-instagram w-5 h-5 footer-social-icon"></i>
                     </a>
-                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all">
+                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="Twitter">
                         <i class="fa-brands fa-x-twitter w-5 h-5 footer-social-icon"></i>
                     </a>
                 </div>
@@ -41,9 +41,9 @@
                 <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Perusahaan</h4>
                 <ul class="space-y-4">
                     <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Tentang Kami</a></li>
-                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Syarat &amp; Ketentuan</a></li>
+                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Syarat Dan Ketentuan</a></li>
                     <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Kebijakan Privasi</a></li>
-                    <li><a href="{{ route('blog') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Blog &amp; Tips Tidur</a></li>
+                    <li><a href="{{ route('blog') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Blog Dan Tips Tidur</a></li>
                 </ul>
             </div>
 

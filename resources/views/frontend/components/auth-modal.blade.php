@@ -67,6 +67,7 @@
             <button 
                 @click="isAuthOpen = false"
                 class="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-full transition-colors z-10 focus:outline-none"
+                aria-label="Tutup"
             >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -154,8 +155,43 @@
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <label class="flex-1"><input type="radio" value="email" x-model="forgotChannel" checked class="sr-only peer"><div class="text-center py-2.5 px-4 bg-brand-light border border-brand-muted rounded-xl font-bold text-sm text-gray-700 peer-checked:bg-brand-gold peer-checked:text-white peer-checked:border-brand-gold transition-all cursor-pointer hover:bg-brand-gold hover:text-white hover:border-brand-gold">Email</div></label>
-                            <label class="flex-1"><input type="radio" value="sms" x-model="forgotChannel" class="sr-only peer"><div class="text-center py-2.5 px-4 bg-brand-light border border-brand-muted rounded-xl font-bold text-sm text-gray-700 peer-checked:bg-brand-gold peer-checked:text-white peer-checked:border-brand-gold transition-all cursor-pointer hover:bg-brand-gold hover:text-white hover:border-brand-gold">SMS</div></label>
+                            <label class="flex-1 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="forgotChannel"
+                                    value="email"
+                                    x-model="forgotChannel"
+                                    class="hidden"
+                                >
+
+                                <div
+                                    :class="forgotChannel === 'email'
+                                        ? 'bg-brand-dark text-brand-gold border-brand-dark'
+                                        : 'bg-white text-gray-500 border-brand-muted'"
+                                    class="text-center py-3 px-4 rounded-xl border font-semibold transition-all"
+                                >
+                                    Email
+                                </div>
+                            </label>
+
+                            <label class="flex-1 cursor-pointer">
+                                <input
+                                    type="radio"
+                                    name="forgotChannel"
+                                    value="sms"
+                                    x-model="forgotChannel"
+                                    class="hidden"
+                                >
+
+                                <div
+                                    :class="forgotChannel === 'sms'
+                                        ? 'bg-brand-dark text-brand-gold border-brand-dark'
+                                        : 'bg-white text-gray-500 border-brand-muted'"
+                                    class="text-center py-3 px-4 rounded-xl border font-semibold transition-all"
+                                >
+                                    SMS
+                                </div>
+                            </label>
                         </div>
                         <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50"><span x-show="!isSubmitting">Lanjutkan</span><span x-show="isSubmitting">Memproses...</span></button>
                         <button type="button" @click="isForgotPassword = false; isLoginForm = true" class="w-full py-2.5 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">&larr; Kembali ke Sign In</button>

@@ -3,24 +3,36 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
-use App\Services\ProductService;
+use App\Models\Frontend\ProductsCatalog\Product;
+use App\Models\Frontend\ProductsCatalog\ProductCategory;
 
 class HomeController extends Controller
 {
-    private ProductService $productService;
-
-    public function __construct(ProductService $productService)
-    {
-        $this->productService = $productService;
-    }
-
     public function index()
     {
-        $bestsellers = $this->productService->getBestsellers();
-        $recommended = array_merge($this->productService->all(), array_slice($this->productService->all(), 0, 2));
-        $featured = $this->productService->getFeatured();
+        $bestsellers = Product::where('deleted', false)
+            ->where('best_seller', true)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(4)
+            ->get();
 
-        return view('frontend.home', compact('bestsellers', 'recommended', 'featured'));
+        $recommended = Product::where('deleted', false)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(6)
+            ->get();
+
+        $featured = Product::where('deleted', false)
+            ->where('is_new', true)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->first();
+
+        $categories = ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->withCount('children')
+            ->take(6)
+            ->get();
+
+        return view('frontend.home', compact('bestsellers', 'recommended', 'featured', 'categories'));
     }
 }
 

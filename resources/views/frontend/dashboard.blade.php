@@ -6,9 +6,14 @@
         'email' => 'budi@gmail.com',
         'type' => 'Member Premium'
     ]);
+    $activeTab = request()->query('tab', 'devices');
+    $wishlistProducts = App\Models\Frontend\ProductsCatalog\Product::whereIn('id', session()->get('wishlist', []))
+        ->with(['brand', 'images', 'variants'])
+        ->get();
 @endphp
 
 @section('title', 'Dashboard Akun Saya - IMG')
+@section('robots', 'noindex,nofollow')
 
 @section('content')
     <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh] font-sans">
@@ -36,6 +41,21 @@
                     </div>
                 </div>
 
+                <div class="border-t border-brand-muted pt-6 space-y-2">
+                    <a href="{{ route('dashboard', ['tab' => 'devices']) }}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'devices' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
+                        <i class="fa-solid fa-devices w-4 h-4"></i> Perangkat Aktif
+                    </a>
+                    <a href="{{ route('dashboard', ['tab' => 'wishlist']) }}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'wishlist' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
+                        <i class="fa-solid fa-heart w-4 h-4"></i> Wishlist
+                    </a>
+                    <a href="{{ route('dashboard', ['tab' => 'orders']) }}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'orders' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
+                        <i class="fa-solid fa-shopping-bag w-4 h-4"></i> Riwayat Pesanan
+                    </a>
+                </div>
+
                 <div class="border-t border-brand-muted pt-6">
                     <form action="{{ route('logout') }}" method="POST">
                         @csrf
@@ -52,12 +72,80 @@
 
             <!-- Right: Account activity -->
             <div class="w-full lg:w-2/3 space-y-8">
+                @if($activeTab === 'wishlist')
+                    <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm">
+                        <h3 class="text-xl font-extrabold text-brand-dark mb-6">Wishlist Produk</h3>
+
+                        @if($wishlistProducts->isEmpty())
+                            <div class="text-center py-12">
+                                <div class="w-16 h-16 bg-brand-light rounded-full flex items-center justify-center text-brand-gold mx-auto mb-4">
+                                    <i class="fa-regular fa-heart w-8 h-8"></i>
+                                </div>
+                                <p class="text-gray-500">Belum ada produk di wishlist. Tambahkan produk favorit Anda!</p>
+                            </div>
+                        @else
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                @foreach($wishlistProducts as $product)
+                                    @include('frontend.components.product-card-dynamic', ['product' => $product])
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @else
                 <div class="bg-gradient-to-r from-brand-dark to-brand-darker text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 border border-brand-gold/20">
                     <div class="space-y-2 text-center md:text-left">
                         <h3 class="text-xl font-bold text-brand-gold">Spesial Loyalty Member!</h3>
                         <p class="text-sm text-brand-light/70 max-w-md">Gunakan voucher cashback Rp 500k khusus untuk transaksi kedua kasur springbed.</p>
                     </div>
                     <a href="{{ route('promos') }}" class="px-6 py-3 bg-brand-gold text-brand-dark hover:bg-brand-light font-bold rounded-xl transition-all shadow shadow-brand-dark/20 text-sm">Lihat Voucher</a>
+                </div>
+
+                <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <h3 class="text-xl font-extrabold text-brand-dark">Perangkat Aktif</h3>
+                            <p class="text-sm text-gray-500 mt-1">Maksimal 5 perangkat aktif. Perangkat terlama akan otomatis dikeluarkan saat batas terlampaui.</p>
+                        </div>
+                        <span class="inline-flex w-fit items-center rounded-full bg-brand-gold/15 px-3 py-1 text-xs font-extrabold text-brand-gold-dark">
+                            {{ $activeDeviceSessions->count() }}/5
+                        </span>
+                    </div>
+
+                    <div class="mt-5 space-y-3">
+                        @forelse($activeDeviceSessions as $device)
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border p-4 {{ $device['is_current'] ? 'border-brand-gold bg-brand-light' : 'border-brand-muted' }}">
+                                <div class="flex items-start gap-3 min-w-0 flex-1">
+                                    <div class="w-10 h-10 rounded-full bg-brand-dark text-brand-gold flex items-center justify-center flex-shrink-0">
+                                        <i class="fa-solid fa-mobile-screen-button"></i>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                            <p class="font-extrabold text-brand-dark truncate">{{ $device['device_name'] }}</p>
+                                            @if($device['is_current'])
+                                                <span class="inline-flex w-fit items-center rounded-full bg-green-100 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-green-700">Perangkat Ini</span>
+                                            @endif
+                                        </div>
+                                        <p class="text-sm text-gray-500">{{ $device['ip_address'] ?? 'IP tidak tersedia' }}</p>
+                                        <p class="text-sm text-gray-500 truncate">{{ $device['user_agent'] ? (strlen($device['user_agent']) > 90 ? substr($device['user_agent'], 0, 90) . '...' : $device['user_agent']) : 'Browser tidak terdeteksi' }}</p>
+                                        <p class="text-xs text-gray-400 mt-1">Terakhir aktif {{ $device['last_active_at'] ? $device['last_active_at']->diffForHumans() : 'baru saja' }}</p>
+                                    </div>
+                                </div>
+
+                                @if(!$device['is_current'])
+                                    <form action="{{ route('devices.logout', $device['id']) }}" method="POST" onsubmit="return confirm('Keluarkan perangkat ini dari akun Anda?');">
+                                        @csrf
+                                        <button type="submit" class="w-full sm:w-auto px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 text-sm font-extrabold transition-colors">
+                                            Keluarkan
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="rounded-2xl border border-brand-muted bg-brand-light p-4 text-sm text-gray-500">
+                                Belum ada perangkat aktif yang tercatat.
+                            </div>
+                        @endforelse
+                    </div>
                 </div>
 
                 <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm">
@@ -96,7 +184,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        @endif
     </div>
 @endsection
 

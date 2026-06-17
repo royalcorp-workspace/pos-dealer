@@ -1,6 +1,7 @@
 @extends('frontend.layouts.app')
 
 @section('title', 'Verifikasi Email - IMG')
+@section('robots', 'noindex,nofollow')
 
 @section('content')
     <div class="min-h-screen bg-brand-light/40 flex items-center justify-center px-4 py-12">

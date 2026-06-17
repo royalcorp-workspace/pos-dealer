@@ -58,10 +58,11 @@
                         <i class="fa-solid fa-comments w-5 h-5 text-brand-gold"></i>
                         Ulasan Pembeli
                     </h4>
-                    <button 
-                        @click="selectedProductForReview = null"
-                        class="p-2 text-gray-400 hover:text-brand-dark bg-gray-50 hover:bg-gray-100 rounded-full transition-colors focus:outline-none"
-                    >
+<button 
+                            @click="selectedProductForReview = null"
+                            class="p-2 text-gray-400 hover:text-brand-dark bg-gray-50 hover:bg-gray-100 rounded-full transition-colors focus:outline-none"
+                            aria-label="Tutup"
+                        >
                         <i class="fa-solid fa-xmark w-5 h-5"></i>
                     </button>
                 </div>

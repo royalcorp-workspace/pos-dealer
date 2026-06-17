@@ -12,18 +12,17 @@ use App\Models\RefreshToken;
 use App\Models\User;
 use App\Services\AuthAuditService;
 use App\Services\AuthTokenService;
+use App\Services\DeviceSessionService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
-use Kreait\Firebase\Contract\Auth as FirebaseAuthContract;
 
 class AuthController extends Controller
 {
     public function __construct(
         private readonly AuthTokenService $tokens,
-        private readonly AuthAuditService $audit
+        private readonly AuthAuditService $audit,
+        private readonly DeviceSessionService $deviceSessions
     ) {
     }
 
@@ -193,8 +192,11 @@ class AuthController extends Controller
 
         $this->recordAttempt($user, $email, $ip, true);
 
-        $access = $this->tokens->issueAccessToken($user);
-        $refreshModel = $this->tokens->issueRefreshToken($user, $request);
+        $deviceId = $this->deviceSessions->deviceId($request);
+        $access = $this->tokens->issueAccessToken($user, $deviceId);
+        $refreshModel = $this->tokens->issueRefreshToken($user, $request, $deviceId);
+        $this->deviceSessions->register($request, $user, null, null, $refreshModel->getKey());
+        $this->deviceSessions->enforceLimit($user, null, $deviceId);
 
         $this->audit->log($user, 'login_success', $request, []);
 
@@ -225,8 +227,11 @@ class AuthController extends Controller
         }
 
         $user = User::query()->findOrFail($refresh->user_id);
+        $deviceId = $refresh->device_id ?: $this->deviceSessions->deviceId($request);
 
-        $out = $this->tokens->refresh($token, $user, $request);
+        $out = $this->tokens->refresh($token, $user, $request, $deviceId);
+        $this->deviceSessions->register($request, $user, null, null, RefreshToken::query()->where('token_hash', $this->tokens->hashRefreshToken($out['refresh_token']))->value('id'));
+        $this->deviceSessions->enforceLimit($user, null, $deviceId);
         $this->audit->log($user, 'token_refresh', $request, []);
 
         return response()->json($out);
@@ -244,12 +249,69 @@ class AuthController extends Controller
         $user = null;
         if ($refresh) {
             $user = User::query()->find($refresh->user_id);
+            $deviceId = $refresh->device_id;
             $this->tokens->revokeRefreshToken($refresh);
+            if ($deviceId !== null) {
+                $this->deviceSessions->remove($deviceId, null, true);
+            }
         }
 
         $this->audit->log($user, 'logout', $request, []);
 
         return response()->json(['message' => 'Logged out']);
+    }
+
+    public function devices(Request $request)
+    {
+        $refresh = $this->resolveRefreshToken($request);
+        if (!$refresh) {
+            return response()->json(['message' => 'Invalid refresh token'], 401);
+        }
+
+        $user = User::query()->find($refresh->user_id);
+        $currentDeviceId = $refresh->device_id ?: $this->deviceSessions->deviceId($request);
+
+        return response()->json([
+            'devices' => $this->deviceSessions->list($user, null, $currentDeviceId),
+        ]);
+    }
+
+    public function logoutDevice(Request $request, string $device)
+    {
+        $refresh = $this->resolveRefreshToken($request);
+        if (!$refresh) {
+            return response()->json(['message' => 'Invalid refresh token'], 401);
+        }
+
+        $currentDeviceId = $refresh->device_id ?: $this->deviceSessions->deviceId($request);
+        $removed = $this->deviceSessions->remove($device, $currentDeviceId, $device === $currentDeviceId);
+
+        if (!$removed) {
+            return response()->json(['message' => 'Device session not found'], 404);
+        }
+
+        return response()->json(['message' => 'Device logged out']);
+    }
+
+    private function resolveRefreshToken(Request $request): ?RefreshToken
+    {
+        $data = $request->validate([
+            'refresh_token' => ['required', 'string'],
+        ]);
+
+        $token = (string) $data['refresh_token'];
+        $tokenHash = $this->tokens->hashRefreshToken($token);
+
+        $refresh = RefreshToken::query()
+            ->where('token_hash', $tokenHash)
+            ->where('revoked', false)
+            ->first();
+
+        if (!$refresh || $refresh->expires_at->getTimestamp() < time()) {
+            return null;
+        }
+
+        return $refresh;
     }
 }
 

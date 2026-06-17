@@ -1,12 +1,74 @@
 <!DOCTYPE html>
 <html lang="id" class="h-full">
 <head>
+    @php
+        $seoTitle = trim($__env->yieldContent('title')) ?: config('seo.title');
+        $seoDescription = trim($__env->yieldContent('meta_description')) ?: config('seo.description');
+        $seoKeywords = trim($__env->yieldContent('meta_keywords')) ?: config('seo.keywords');
+        $seoAuthor = trim($__env->yieldContent('author')) ?: config('seo.author');
+        $seoUrl = trim($__env->yieldContent('canonical')) ?: request()->url();
+        $seoImage = trim($__env->yieldContent('og_image')) ?: config('seo.og_image');
+        $seoRobots = trim($__env->yieldContent('robots')) ?: config('seo.robots');
+        $seoType = trim($__env->yieldContent('og_type')) ?: 'website';
+
+        $localBusinessSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => config('seo.business.type'),
+            '@id' => url('/#localbusiness'),
+            'name' => config('seo.business.name'),
+            'url' => url('/'),
+            'logo' => url(config('seo.business.logo')),
+            'image' => config('seo.business.image'),
+            'description' => config('seo.description'),
+            'telephone' => config('seo.business.telephone'),
+            'email' => config('seo.business.email'),
+            'priceRange' => config('seo.business.price_range'),
+            'address' => [
+                '@type' => 'PostalAddress',
+                'streetAddress' => config('seo.business.address.street'),
+                'addressLocality' => config('seo.business.address.locality'),
+                'addressRegion' => config('seo.business.address.region'),
+                'postalCode' => config('seo.business.address.postal_code'),
+                'addressCountry' => config('seo.business.address.country'),
+            ],
+            'openingHoursSpecification' => [
+                [
+                    '@type' => 'OpeningHoursSpecification',
+                    'dayOfWeek' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+                    'opens' => explode('-', explode(' ', config('seo.business.opening_hours'))[1] ?? '10:00-22:00')[0] ?? '10:00',
+                    'closes' => explode('-', explode(' ', config('seo.business.opening_hours'))[1] ?? '10:00-22:00')[1] ?? '22:00',
+                ]
+            ],
+            'sameAs' => config('seo.business.social_links'),
+        ];
+    @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'IMG - International Mattress Gallery')</title>
-    <meta name="description" content="@yield('meta_description', 'Toko kasur dan perlengkapan tidur terpercaya. Temukan kasur impian Anda di International Mattress Gallery.')">
-    
+    <title>{{ $seoTitle }}</title>
+    <meta name="description" content="{{ $seoDescription }}">
+    <meta name="keywords" content="{{ $seoKeywords }}">
+    <meta name="author" content="{{ $seoAuthor }}">
+    <meta name="robots" content="{{ $seoRobots }}">
+    <link rel="canonical" href="{{ $seoUrl }}">
+
+    <meta property="og:locale" content="id_ID">
+    <meta property="og:type" content="{{ $seoType }}">
+    <meta property="og:title" content="{{ $seoTitle }}">
+    <meta property="og:description" content="{{ $seoDescription }}">
+    <meta property="og:url" content="{{ $seoUrl }}">
+    <meta property="og:image" content="{{ $seoImage }}">
+    <meta property="og:site_name" content="{{ config('seo.business.name') }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ $seoTitle }}">
+    <meta name="twitter:description" content="{{ $seoDescription }}">
+    <meta name="twitter:image" content="{{ $seoImage }}">
+
+    @stack('jsonld')
+    <script type="application/ld+json">
+    @json($localBusinessSchema)
+    </script>
+
     <!-- Google Fonts: match React app imports (Inter weights + Playfair for headings) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -371,12 +433,36 @@
             transform: translateX(1px);
         }
 
+        /* Loading Animation */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.8);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--brand-gold);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         .category-icon-box {
             background-color: var(--brand-light) !important;
             color: var(--brand-gold) !important;
         }
         .category-card:hover .category-icon-box {
             background-color: var(--brand-gold) !important;
+        }
+        .category-card:hover .category-icon-box svg {
             color: #ffffff !important;
         }
         .fa-thin.fa-grid-2 {
@@ -447,11 +533,11 @@
     @open-review.window="selectedProductForReview = $event.detail; console.log($event.detail)"
     @open-review="selectedProductForReview = $event.detail; console.log($event.detail)"
 >
-    <!-- Header Component -->
+     <!-- Header Component -->
     @include('frontend.components.header')
 
     <!-- Main Content -->
-    <main class="flex-1 w-full">
+    <main id="main-content" class="flex-1 w-full" tabindex="-1">
         @yield('content')
     </main>
 
@@ -463,7 +549,28 @@
     @include('frontend.components.auth-modal')
     @include('frontend.components.review-modal')
 
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
     <script>
+        window.addEventListener('beforeunload', function() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        });
+
+        function showLoading() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        document.addEventListener('submit', function(e) {
+            if (!e.target.matches('form[action*="cart/add"], form[action*="checkout"], form[action*="login"], form[action*="logout"]')) return;
+            setTimeout(hideLoading, 3000);
+        });
+
         function openProductReview(event, productId) {
             const holder = event && event.currentTarget ? event.currentTarget.closest('[data-product-review]') : null;
             const productEl = holder || (productId ? document.querySelector(`[data-product-id="${productId}"]`) : null);
@@ -485,6 +592,35 @@
             }
 
             window.dispatchEvent(new CustomEvent('open-review', { detail: product, bubbles: true }));
+        }
+
+        function toggleWishlist(el) {
+            const productId = el.dataset.productId;
+            showLoading();
+            fetch("{{ route('cart.toggle-wishlist') }}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ product_id: productId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    const icon = el.querySelector('i');
+                    if (data.in_wishlist) {
+                        icon.classList.remove('fa-regular');
+                        icon.classList.add('fa-solid', 'text-brand-gold');
+                    } else {
+                        icon.classList.remove('fa-solid', 'text-brand-gold');
+                        icon.classList.add('fa-regular');
+                    }
+                }
+            })
+            .catch(err => { hideLoading(); console.error('Wishlist error:', err); });
         }
 
         function initHeroMotion() {
@@ -519,6 +655,8 @@
         window.addEventListener('load', initHeroMotion);
         window.addEventListener('DOMContentLoaded', initHeroMotion);
     </script>
+
+    @stack('scripts')
 </body>
 
 </html>

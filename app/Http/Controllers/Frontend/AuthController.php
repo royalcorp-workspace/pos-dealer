@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\DeviceSessionService;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Http\Request;
@@ -10,6 +12,11 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        private readonly DeviceSessionService $deviceSessions
+    ) {
+    }
+
     public function login(Request $request)
     {
         try {
@@ -27,21 +34,28 @@ class AuthController extends Controller
             throw $e;
         }
 
+        $email = (string) $request->input('email');
+        $user = User::query()->where('email', $email)->first();
+
         session()->put('is_logged_in', true);
         session()->put('user', [
             'name' => 'Budi Santoso',
-            'email' => $request->input('email'),
+            'email' => $email,
             'type' => 'Member Premium'
         ]);
+
+        $this->deviceSessions->register($request, $user, $email);
+        $revokedCount = $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 
         if ($request->expectsJson() || $request->is('login')) {
             return response()->json([
                 'success' => true,
-                'user' => session()->get('user')
+                'user' => session()->get('user'),
+                'revoked_devices' => $revokedCount,
             ]);
         }
 
-        return redirect()->route('dashboard')->with('success', 'Selamat datang kembali!');
+        return redirect()->route('dashboard')->with('success', $revokedCount > 0 ? 'Login berhasil. Perangkat lama telah dikeluarkan.' : 'Selamat datang kembali!');
     }
 
     public function register(Request $request)
@@ -61,25 +75,33 @@ class AuthController extends Controller
             throw $e;
         }
 
+        $email = (string) $request->input('email');
+        $user = User::query()->where('email', $email)->first();
+
         session()->put('is_logged_in', true);
         session()->put('user', [
             'name' => 'Budi Santoso',
-            'email' => $request->input('email'),
+            'email' => $email,
             'type' => 'Member Premium'
         ]);
+
+        $this->deviceSessions->register($request, $user, $email);
+        $revokedCount = $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 
         if ($request->expectsJson() || $request->is('register')) {
             return response()->json([
                 'success' => true,
-                'user' => session()->get('user')
+                'user' => session()->get('user'),
+                'revoked_devices' => $revokedCount,
             ]);
         }
 
-        return redirect()->route('dashboard')->with('success', 'Akun berhasil dibuat!');
+        return redirect()->route('dashboard')->with('success', $revokedCount > 0 ? 'Akun berhasil dibuat. Perangkat lama telah dikeluarkan.' : 'Akun berhasil dibuat!');
     }
 
     public function logout(Request $request)
     {
+        $this->deviceSessions->removeCurrent($request);
         session()->forget(['is_logged_in', 'user', 'access_token', 'refresh_token']);
 
         if ($request->wantsJson()) {
@@ -89,6 +111,28 @@ class AuthController extends Controller
         }
 
         return redirect()->route('home')->with('success', 'Anda telah keluar.');
+    }
+
+    public function logoutDevice(Request $request, string $device)
+    {
+        if (!session()->get('is_logged_in')) {
+            return redirect()->route('home')->with('show_login', true);
+        }
+
+        $user = session()->get('user');
+        if (!is_array($user)) {
+            return redirect()->route('home')->with('show_login', true);
+        }
+
+        $email = (string) ($user['email'] ?? '');
+        $dbUser = User::query()->where('email', $email)->first();
+        $removed = $this->deviceSessions->remove($device, $this->deviceSessions->deviceId($request), false);
+
+        if ($removed) {
+            $this->deviceSessions->enforceLimit($dbUser, $email, $this->deviceSessions->deviceId($request));
+        }
+
+        return redirect()->route('dashboard')->with('success', $removed ? 'Perangkat berhasil dikeluarkan.' : 'Perangkat tidak ditemukan.');
     }
 
     public function googleCallback()
@@ -116,6 +160,10 @@ class AuthController extends Controller
             'email' => $email,
             'type' => 'Google Member',
         ]);
+
+        $user = User::query()->where('email', $email)->first();
+        $this->deviceSessions->register($request, $user, $email);
+        $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 
         return response()->json([
             'success' => true,

@@ -40,7 +40,7 @@ class PasswordResetController extends Controller
         $channel = $data['channel'] ?? 'email';
         $user = User::query()->where('email', $data['email'])->first();
 
-if ($user) {
+        if ($user) {
             $otp = str_pad((string) random_int(0, (int) (10 ** $this->otpLength() - 1)), $this->otpLength(), '0', STR_PAD_LEFT);
 
             PasswordReset::create([

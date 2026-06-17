@@ -4,34 +4,33 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
-class LoginAttempt extends Model
+class DeviceSession extends Model
 {
-    protected $table = 'login_attempts';
+    protected $table = 'device_sessions';
 
     protected $keyType = 'string';
     public $incrementing = false;
 
     protected $fillable = [
+        'id',
         'user_id',
+        'user_email',
+        'session_id',
+        'refresh_token_id',
+        'device_name',
+        'device_type',
         'ip_address',
-        'email',
-        'success',
-        'attempted_at',
-        'locked_until',
+        'user_agent',
+        'last_active_at',
     ];
 
-    public $timestamps = false;
-
     protected $casts = [
-        'success' => 'boolean',
-        'attempted_at' => 'datetime',
-        'locked_until' => 'datetime',
-        'user_id' => 'string',
+        'last_active_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -46,5 +45,10 @@ class LoginAttempt extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function refreshToken(): HasOne
+    {
+        return $this->hasOne(RefreshToken::class, 'device_id');
     }
 }

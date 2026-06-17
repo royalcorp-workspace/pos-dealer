@@ -1,5 +1,8 @@
 @extends('frontend.layouts.app')
 
+@section('title', 'OTP Terkirim - IMG')
+@section('robots', 'noindex,nofollow')
+
 @section('content')
     <div class="min-h-screen bg-brand-light/40 flex items-center justify-center px-4 py-12">
         <div class="w-full max-w-md bg-white rounded-3xl shadow-xl p-8 sm:p-10 text-center">

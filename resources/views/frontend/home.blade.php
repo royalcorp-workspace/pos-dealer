@@ -1,14 +1,94 @@
 @extends('frontend.layouts.app')
 
-@section('title', 'Toko Kasur & Perlengkapan Tidur Premium - IMG')
+@section('title', 'Toko Kasur Dan Perlengkapan Tidur Premium - IMG')
+@section('meta_description', 'Toko kasur dan perlengkapan tidur premium di IMG. Temukan springbed, kasur, bantal, dan aksesori tidur terbaik dengan garansi resmi, cicilan 0%, serta konsultasi gratis.')
+@section('canonical', route('home'))
+@section('og_image', 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800')
 
 @section('content')
+    @php
+        $bestSellerItems = $bestsellers->map(function ($product, $index) {
+            return [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'url' => route('products.show', $product->slug),
+                'name' => $product->name,
+            ];
+        })->values()->toArray();
+
+        $categoryItems = ($categories ?? collect())->map(function ($category, $index) {
+            return [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'url' => route('category.show', $category->slug),
+                'name' => $category->name,
+            ];
+        })->values()->toArray();
+
+        $websiteSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'WebSite',
+            '@id' => route('home') . '#website',
+            'name' => 'IMG International Mattress Gallery',
+            'url' => route('home'),
+            'description' => 'Toko kasur dan perlengkapan tidur premium dengan koleksi springbed, bantal, dan aksesori tidur berkualitas.',
+            'publisher' => [
+                '@type' => 'Organization',
+                'name' => 'IMG International Mattress Gallery',
+                'url' => route('home'),
+            ],
+        ];
+
+        $homeBreadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                [
+                    '@type' => 'ListItem',
+                    'position' => 1,
+                    'name' => 'Home',
+                ],
+            ],
+        ];
+
+        $bestSellerListSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => 'Best Seller Kasur IMG',
+            'numberOfItems' => count($bestSellerItems),
+            'itemListElement' => $bestSellerItems,
+        ];
+
+        $categoryListSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'ItemList',
+            'name' => 'Kategori Spesial IMG',
+            'numberOfItems' => count($categoryItems),
+            'itemListElement' => $categoryItems,
+        ];
+    @endphp
+
+    @push('jsonld')
+        <script type="application/ld+json">
+        @json($websiteSchema)
+        </script>
+        <script type="application/ld+json">
+        @json($homeBreadcrumbSchema)
+        </script>
+        <script type="application/ld+json">
+        @json($bestSellerListSchema)
+        </script>
+        <script type="application/ld+json">
+        @json($categoryListSchema)
+        </script>
+    @endpush
+
     <!-- Hero Section -->
     <section class="w-full relative bg-brand-light overflow-hidden font-sans">
         <div class="container mx-auto px-4 sm:px-6 py-8 sm:py-12 lg:py-20 flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
             <!-- Text Content -->
             <div class="w-full lg:w-1/2 space-y-6 text-center lg:text-left pt-8 lg:pt-0">
-                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-muted text-brand-darker text-xs font-bold uppercase tracking-wider mb-2 border border-brand-gold/20 motion-enter motion-enter-delay-0 hero-badge">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-muted text-brand-dark text-xs font-bold uppercase tracking-wider mb-2 border border-brand-gold/20 motion-enter motion-enter-delay-0 hero-badge">
                     <span class="w-2 h-2 rounded-full bg-brand-gold animate-pulse"></span>
                     EXTRA DISCOUNT UP TO 40%
                 </div>
@@ -119,18 +199,18 @@
             
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
                 @php
-                    $quickCategories = ["Kasur Spring", "Kasur Busa", "Bed Linen", "Accessories", "Sofabed", "Perlengkapan Bayi"];
+                    $quickCategories = $categories ?? collect();
                 @endphp
                 @foreach($quickCategories as $index => $cat)
                     <a 
-                        href="{{ route('products.index', ['type' => 'category', 'value' => $cat]) }}" 
+                        href="{{ route('category.show', $cat->slug) }}" 
                         class="flex flex-col items-center justify-center p-6 bg-white border border-brand-muted rounded-2xl hover:border-brand-gold hover:shadow-lg hover:-translate-y-1 transition-all group focus:outline-none"
                     >
-                        <div class="w-16 h-16 bg-brand-light rounded-full mb-4 flex items-center justify-center text-brand-gold group-hover:bg-brand-dark group-hover:scale-110 transition-all duration-300">
+                        <div class="w-16 h-16 bg-brand-light rounded-full mb-4 flex items-center justify-center text-brand-gold-dark group-hover:bg-brand-dark group-hover:scale-110 transition-all duration-300">
                             <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/></svg>
                         </div>
-                        <span class="font-bold text-brand-dark text-center text-sm group-hover:text-brand-gold-dark">{{ $cat }}</span>
-                        <span class="text-xs text-gray-400 mt-1">{{ 20 + $index * 15 }} Products</span>
+                        <span class="font-bold text-brand-dark text-center text-sm group-hover:text-brand-gold-dark">{{ $cat->name }}</span>
+                        <span class="text-xs text-gray-500 mt-1">{{ $cat->children->count() + 10 }} Products</span>
                     </a>
                 @endforeach
             </div>
@@ -154,7 +234,7 @@
             
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 @foreach($bestsellers as $product)
-                    @include('frontend.components.product-card', ['product' => $product])
+                    @include('frontend.components.product-card-dynamic', ['product' => $product])
                 @endforeach
             </div>
         </div>
@@ -192,16 +272,15 @@
                         <span class="text-brand-light/80 ml-2 text-sm">(128 Ulasan)</span>
                     </div>
                     
-                    <h3 class="text-2xl lg:text-3xl font-bold leading-tight text-white">{{ $featured['name'] }}</h3>
-                    <p class="text-brand-light/70">{{ $featured['description'] }}</p>
+                    <h3 class="text-2xl lg:text-3xl font-bold leading-tight text-white">{{ $featured->name ?? 'No Product' }}</h3>
+                    <p class="text-brand-light/70">{{ $featured->short_description ?? $featured->description ?? '' }}</p>
                     
                     <div class="pt-4 flex items-center gap-6 border-t border-brand-gold/20">
                         <div class="flex flex-col">
-                            <span class="text-sm text-brand-light/50 line-through">Rp 2.800.000</span>
-                            <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featured['price'], 0, ',', '.') }}</span>
+                            <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featured->variants->min('price') ?? $featured->base_price ?? 0, 0, ',', '.') }}</span>
                         </div>
                         <a 
-                            href="{{ route('products.show', $featured['id']) }}"
+                            href="{{ route('products.show', $featured->slug ?? '') }}"
                             class="bg-brand-gold text-brand-dark hover:bg-brand-light font-bold px-6 py-3 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-2"
                         >
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 7h12l-1 12H7L6 7Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -223,7 +302,7 @@
             
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 @foreach($recommended as $product)
-                    @include('frontend.components.product-card', ['product' => $product])
+                    @include('frontend.components.product-card-dynamic', ['product' => $product])
                 @endforeach
             </div>
             

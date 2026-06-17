@@ -3,29 +3,29 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
-use App\Services\ProductService;
+use App\Models\Frontend\ProductsCatalog\Brand;
+use App\Models\Frontend\ProductsCatalog\ProductCategory;
 use Illuminate\Http\Request;
 
 class PageController extends Controller
 {
-    private ProductService $productService;
-
-    public function __construct(ProductService $productService)
-    {
-        $this->productService = $productService;
-    }
-
     public function brands()
     {
-        $brands = $this->productService->getBrands();
+        $brands = Brand::where('deleted', false)
+            ->withCount('products')
+            ->orderBy('sort_order')
+            ->get();
         return view('frontend.brands', compact('brands'));
     }
 
     public function categories()
     {
-        $categories = $this->productService->getCategories();
-        $babySubcategories = $this->productService->getBabySubcategories();
-        return view('frontend.categories', compact('categories', 'babySubcategories'));
+        $categories = ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->with('children.children')
+            ->orderBy('sort_order')
+            ->get();
+        return view('frontend.categories', compact('categories'));
     }
 
     public function promos()
@@ -94,10 +94,22 @@ class PageController extends Controller
         ];
 
         $faqs = [
-            'Bagaimana cara mengklaim garansi?',
-            'Apakah bisa tukar tambah kasur lama?',
-            'Apa saja metode pembayaran yang tersedia?',
-            'Berapa lama estimasi pengiriman untuk pesanan saya?',
+            [
+                'question' => 'Bagaimana cara mengklaim garansi?',
+                'answer' => 'Hubungi layanan pelanggan IMG dengan menyertakan bukti pembelian, foto produk, dan detail keluhan. Tim kami akan memandu proses klaim garansi sesuai ketentuan produk.',
+            ],
+            [
+                'question' => 'Apakah bisa tukar tambah kasur lama?',
+                'answer' => 'Program tukar tambah dapat berubah sesuai periode promo. Hubungi IMG melalui WhatsApp atau telepon untuk mengecek ketersediaan program di wilayah Anda.',
+            ],
+            [
+                'question' => 'Apa saja metode pembayaran yang tersedia?',
+                'answer' => 'IMG menyediakan pembayaran melalui transfer bank, e-wallet, dan metode pembayaran lainnya sesuai ketersediaan saat checkout.',
+            ],
+            [
+                'question' => 'Berapa lama estimasi pengiriman untuk pesanan saya?',
+                'answer' => 'Estimasi pengiriman tergantung lokasi dan ketersediaan produk. Untuk area Jabodetabek, pengiriman biasanya lebih cepat dan dapat dikonfirmasi saat pemesanan.',
+            ],
         ];
 
         return view('frontend.help', compact('contacts', 'faqs'));
@@ -123,4 +135,3 @@ class PageController extends Controller
         return response()->view('errors.500', [], 500);
     }
 }
-

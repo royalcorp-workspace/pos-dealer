@@ -12,6 +12,8 @@ Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('refresh', [AuthController::class, 'refresh']);
     Route::post('logout', [AuthController::class, 'logout']);
+    Route::get('devices', [AuthController::class, 'devices']);
+    Route::post('devices/{device}/logout', [AuthController::class, 'logoutDevice']);
 
     Route::post('forgot-password', [PasswordResetController::class, 'forgot']);
     Route::post('reset-password', [PasswordResetController::class, 'reset']);

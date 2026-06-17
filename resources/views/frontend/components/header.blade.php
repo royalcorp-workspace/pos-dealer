@@ -2,14 +2,24 @@
     $cart = session()->get('cart', []);
     $cartItemCount = collect($cart)->sum('quantity');
     $cartTotal = collect($cart)->sum(function($item) {
-        return $item['price'] * $item['quantity'];
+        return ($item['price'] ?? 0) * ($item['quantity'] ?? 0);
     });
     $isLoggedIn = session()->get('is_logged_in', false);
     $user = session()->get('user');
 
-    $brands = ["Lady Americana", "Elite Springbed", "Royal Foam", "Tote Bed", "Moro Baby", "Serenity"];
-    $categories = ["Kasur Spring", "Kasur Busa", "Bed Linen", "Accessories", "Sofabed", "Perlengkapan Bayi"];
-    $babySubcategories = ["Bolster", "Pillow", "Blanket", "Pyjamas"];
+    try {
+        $brands = \App\Models\Frontend\ProductsCatalog\Brand::where('deleted', false)
+            ->orderBy('sort_order')
+            ->get();
+        $categories = \App\Models\Frontend\ProductsCatalog\ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->with('children.children')
+            ->orderBy('sort_order')
+            ->get();
+    } catch (\Throwable $e) {
+        $brands = collect();
+        $categories = collect();
+    }
 @endphp
 
 <header class="w-full bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm font-sans" x-data="{ activeMegaMenu: null }">
@@ -20,6 +30,7 @@
             <button 
                 class="md:hidden text-gray-700 hover:text-brand-gold transition-colors focus:outline-none"
                 @click="isMobileMenuOpen = !isMobileMenuOpen"
+                aria-label="Buka menu"
             >
                 <!-- menu icon -->
                 <svg x-show="!isMobileMenuOpen" class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -44,7 +55,7 @@
                     placeholder="Cari kasur, bantal, atau brand impianmu..." 
                     class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-5 pr-12 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-all placeholder:text-gray-400"
                 />
-                <button type="submit" class="absolute right-1 top-1 p-1.5 bg-brand-dark hover:bg-brand-darker text-white rounded-full transition-colors">
+                <button type="submit" class="absolute right-1 top-1 p-1.5 bg-brand-dark hover:bg-brand-darker text-white rounded-full transition-colors" aria-label="Cari">
                     <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
                 </button>
             </form>
@@ -52,6 +63,11 @@
 
         <!-- Right Actions -->
         <div class="flex items-center gap-2 sm:gap-5">
+            <!-- Wishlist Button -->
+            <a href="{{ route('dashboard', ['tab' => 'wishlist']) }}" class="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none" aria-label="Wishlist">
+                <i class="fa-regular fa-heart w-5 h-5 text-brand-dark"></i>
+            </a>
+
             <!-- Language Picker -->
             <button class="hidden sm:flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-brand-gold transition-colors py-1">
                 <i class="fa-solid fa-globe w-4 h-4"></i>
@@ -117,16 +133,23 @@
                 placeholder="Cari produk..." 
                 class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-4 pr-12 py-2 focus:outline-none focus:ring-2 focus:ring-brand-gold/50"
             />
-            <button type="submit" class="absolute right-1 top-1 p-1 bg-brand-dark text-white rounded-full">
+            <button type="submit" class="absolute right-1 top-1 p-1 bg-brand-dark text-white rounded-full" aria-label="Cari">
                 <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
             </button>
         </form>
     </div>
 
     <!-- Mega Menu / Categories Navigation (Desktop) -->
-    <nav class="hidden md:block w-full border-t border-gray-100 bg-white">
+    <nav class="hidden md:block w-full border-t border-gray-100 bg-white" aria-label="Navigasi utama">
         <div class="container mx-auto px-6">
             <ul class="flex items-center gap-8 h-14 relative">
+                <!-- Home -->
+                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                    <a href="{{ route('home') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
+                        Home
+                    </a>
+                </li>
+
                 <!-- Brands Mega Menu Trigger -->
                 <li 
                     class="h-full flex items-center cursor-pointer"
@@ -150,10 +173,10 @@
                         <div class="grid grid-cols-6 gap-6">
                             @foreach($brands as $brand)
                                 <a 
-                                    href="{{ route('products.index', ['type' => 'brand', 'value' => $brand]) }}" 
+                                    href="{{ route('products.index', ['type' => 'brand', 'value' => $brand->slug]) }}" 
                                     class="group flex justify-center items-center p-4 border border-brand-muted rounded-lg hover:border-brand-gold hover:bg-brand-light transition-all focus:outline-none w-full text-center"
                                 >
-                                    <span class="font-medium text-gray-700 text-sm group-hover:text-brand-dark">{{ $brand }}</span>
+                                    <span class="font-medium text-gray-700 text-sm group-hover:text-brand-dark">{{ $brand->name }}</span>
                                 </a>
                             @endforeach
                         </div>
@@ -184,20 +207,20 @@
                             @foreach($categories as $category)
                                 <div class="space-y-3">
                                     <a 
-                                        href="{{ route('products.index', ['type' => 'category', 'value' => $category]) }}" 
+                                        href="{{ route('category.show', $category->slug) }}" 
                                         class="font-bold text-gray-900 hover:text-brand-gold-dark flex items-center justify-between border-b border-gray-100 pb-2 w-full text-left"
                                     >
-                                        {{ $category }}
+                                        {{ $category->name }}
                                     </a>
-                                    @if($category === "Perlengkapan Bayi")
+                                    @if($category->children->isNotEmpty())
                                         <ul class="space-y-2 mt-2">
-                                            @foreach($babySubcategories as $sub)
+                                            @foreach($category->children->take(4) as $child)
                                                 <li>
                                                     <a 
-                                                        href="{{ route('products.index', ['type' => 'category', 'value' => $category]) }}" 
+                                                        href="{{ route('category.show', $child->slug) }}" 
                                                         class="text-sm text-gray-500 hover:text-brand-gold transition-colors text-left"
                                                     >
-                                                        {{ $sub }}
+                                                        {{ $child->name }}
                                                     </a>
                                                 </li>
                                             @endforeach
@@ -257,16 +280,20 @@
         class="md:hidden border-t border-gray-100 bg-white overflow-hidden"
     >
         <div class="p-4 space-y-6">
+            <a href="{{ route('home') }}" class="text-sm text-gray-600 font-semibold text-left flex justify-between items-center" @click="isMobileMenuOpen = false">
+                Home
+                <span class="text-gray-400 -rotate-90 inline-block transition-transform">&rarr;</span>
+            </a>
             <div>
                 <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">Brands</h4>
                 <div class="grid grid-cols-2 gap-2">
                     @foreach($brands as $brand)
                         <a 
-                            href="{{ route('products.index', ['type' => 'brand', 'value' => $brand]) }}" 
+                            href="{{ route('products.index', ['type' => 'brand', 'value' => $brand->slug]) }}" 
                             class="text-sm text-gray-600 py-1.5 text-left"
                             @click="isMobileMenuOpen = false"
                         >
-                            {{ $brand }}
+                            {{ $brand->name }}
                         </a>
                     @endforeach
                 </div>
@@ -276,14 +303,14 @@
                 <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">Kategori</h4>
                 <div class="grid grid-cols-1 gap-2">
                     @foreach($categories as $category)
-                                <a 
-                                    href="{{ route('products.index', ['type' => 'category', 'value' => $category]) }}" 
-                                    class="text-sm text-gray-600 py-2 border-b border-gray-50 flex justify-between items-center group text-left"
-                                    @click="isMobileMenuOpen = false"
-                                >
-                                    {{ $category }}
-                                    <span class="text-gray-400 group-hover:text-gray-600 -rotate-90 inline-block transition-transform">&rarr;</span>
-                                </a>
+                        <a 
+                            href="{{ route('category.show', $category->slug) }}" 
+                            class="text-sm text-gray-600 py-2 border-b border-gray-50 flex justify-between items-center group text-left"
+                            @click="isMobileMenuOpen = false"
+                        >
+                            {{ $category->name }}
+                            <span class="text-gray-400 group-hover:text-gray-600 -rotate-90 inline-block transition-transform">&rarr;</span>
+                        </a>
                     @endforeach
                 </div>
             </div>
