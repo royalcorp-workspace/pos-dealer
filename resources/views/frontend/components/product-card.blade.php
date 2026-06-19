@@ -3,6 +3,14 @@
 @php
     $isSoldOut = $product['isSoldOut'] ?? false;
     $isVariable = $product['isVariable'] ?? false;
+    $reviewProduct = $product;
+    $reviewProduct['reviews'] = $reviewProduct['reviews'] ?? [];
+    $reviewProduct['reviewsCount'] = $reviewProduct['reviewsCount'] ?? 0;
+    $reviewProduct['originalPrice'] = $reviewProduct['originalPrice'] ?? ($reviewProduct['isVariable'] ? ($reviewProduct['minPrice'] ?? $reviewProduct['price']) : $reviewProduct['price']);
+    $reviewProduct['originalMinPrice'] = $reviewProduct['originalMinPrice'] ?? $reviewProduct['originalPrice'];
+    $reviewProduct['originalMaxPrice'] = $reviewProduct['originalMaxPrice'] ?? $reviewProduct['originalPrice'];
+    $reviewProduct['hasDiscount'] = isset($reviewProduct['originalPrice']) && ($reviewProduct['originalPrice'] != $reviewProduct['price'] || isset($reviewProduct['discountBadge']));
+    $reviewProduct['discountLabel'] = $reviewProduct['discountLabel'] ?? ($reviewProduct['discountBadge'] ? trim(str_replace('Hot', '', $reviewProduct['discountBadge'])) : null);
 @endphp
 
 <div 
@@ -39,9 +47,9 @@
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>
                 </button>
                 <button 
-                    data-product-review="{{ json_encode($product, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
+                    data-product-review="{{ json_encode($reviewProduct, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
                     data-product-id="{{ $product['id'] }}"
-                    @click="window.openProductReview($event, '{{ $product['id'] }}')"
+                    @click="$dispatch('open-review', JSON.parse($el.dataset.productReview))"
                     class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none"
                     aria-label="Lihat ulasan"
                 >
@@ -68,7 +76,7 @@
             class="product-card__rating flex items-center gap-1.5 mb-auto cursor-pointer hover:bg-brand-light p-1 -ml-1 rounded transition-colors w-fit"
             data-product-review="{{ json_encode($product, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
             data-product-id="{{ $product['id'] }}"
-            @click="window.openProductReview($event, '{{ $product['id'] }}')"
+            @click="$dispatch('open-review', JSON.parse($el.dataset.productReview))"
         >
             <div class="flex items-center text-brand-gold-dark">
                 <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>

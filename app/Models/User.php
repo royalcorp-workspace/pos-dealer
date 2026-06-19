@@ -7,6 +7,8 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
@@ -50,7 +52,23 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
         ];
+    }
+
+    public function getAuthPassword()
+    {
+        return $this->password_hash;
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(\App\Models\Frontend\Customer\Address::class, 'user_id', 'id');
+    }
+
+    public function primaryAddress(): HasOne
+    {
+        return $this->hasOne(\App\Models\Frontend\Customer\Address::class, 'user_id', 'id')
+            ->where('is_primary', true)
+            ->with('subDistrict');
     }
 }

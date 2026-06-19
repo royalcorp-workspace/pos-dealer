@@ -22,7 +22,7 @@ class Product extends Model
     protected static function boot(): void
     {
         parent::boot();
-        static::addGlobalScope('not-deleted', fn($q) => $q->where('deleted', false));
+        static::addGlobalScope('not-deleted', fn($q) => $q->where('products.deleted', false));
     }
 
     protected $fillable = [
@@ -93,5 +93,11 @@ class Product extends Model
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(ProductTag::class, 'product_tag_relations', 'product_id', 'tag_id');
+    }
+
+    public function priceProductSettings(): BelongsToMany
+    {
+        return $this->belongsToMany(\App\Models\Frontend\Promo\PriceProductSetting::class, 'price_product_setting_items', 'product_id', 'price_product_setting_id')
+            ->withPivot('discount_type', 'discount_value');
     }
 }

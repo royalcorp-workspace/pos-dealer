@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Frontend\Order;
+use App\Models\Frontend\ProductsCatalog\Address;
 
 class Customer extends Model
 {
@@ -14,13 +15,14 @@ class Customer extends Model
     public $incrementing = false;
 
     protected $fillable = [
+        'user_id',
         'name',
         'email',
         'phone',
-        'address',
-        'city',
-        'postal_code',
         'meta',
+        'creator',
+        'editor',
+        'deleted',
     ];
 
     protected function casts(): array
@@ -29,11 +31,23 @@ class Customer extends Model
             'meta' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
+            'deleted' => 'boolean',
         ];
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+        static::addGlobalScope('active', fn ($q) => $q->where('deleted', false));
     }
 
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(Address::class, 'user_id', 'user_id');
     }
 }

@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\GoogleAuthController;
+use App\Http\Controllers\Api\PaymentGatewayController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\ReviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -21,5 +23,13 @@ Route::prefix('auth')->group(function () {
     Route::post('google', [GoogleAuthController::class, 'googleSignIn']);
     Route::get('google', [GoogleAuthController::class, 'redirectToGoogle']);
     Route::get('google/callback', [GoogleAuthController::class, 'handleGoogleCallback']);
+
+    Route::prefix('payment')->group(function () {
+        Route::get('methods', [PaymentGatewayController::class, 'methods'])->name('payment.methods');
+        Route::post('create', [PaymentGatewayController::class, 'create'])->name('payment.create');
+        Route::post('callback', [PaymentGatewayController::class, 'callback'])->name('payment.callback');
+        Route::get('status/{reference}', [PaymentGatewayController::class, 'status'])->name('payment.status');
+    });
 });
 
+Route::get('products/{productId}/reviews', [ReviewController::class, 'index'])->name('api.reviews.index');

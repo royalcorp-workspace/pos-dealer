@@ -30,9 +30,9 @@
                 <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Layanan Konsumen</h4>
                 <ul class="space-y-4">
                     <li><a href="{{ route('help') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Pusat Bantuan</a></li>
-                    <li><a href="{{ route('help') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Hubungi Kami</a></li>
-                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Informasi Pengiriman</a></li>
-                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Klaim Garansi</a></li>
+                    <li><a href="{{ route('warranty') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Klaim Garansi</a></li>
+                    <li><a href="{{ route('returns') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Cara Pengembalian</a></li>
+                    <li><a href="{{ route('order.tracking') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Informasi Pengiriman</a></li>
                 </ul>
             </div>
 
@@ -40,9 +40,9 @@
             <div>
                 <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Perusahaan</h4>
                 <ul class="space-y-4">
-                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Tentang Kami</a></li>
-                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Syarat Dan Ketentuan</a></li>
-                    <li><a href="#" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Kebijakan Privasi</a></li>
+                    <li><a href="{{ route('about') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Tentang Kami</a></li>
+                    <li><a href="{{ route('terms') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Syarat Dan Ketentuan</a></li>
+                    <li><a href="{{ route('privacy') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Kebijakan Privasi</a></li>
                     <li><a href="{{ route('blog') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Blog Dan Tips Tidur</a></li>
                 </ul>
             </div>

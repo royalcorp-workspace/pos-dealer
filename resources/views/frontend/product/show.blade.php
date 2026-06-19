@@ -17,7 +17,13 @@
         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
         $firstVariantName = $variantsData->first()->variant_name ?? '';
         $totalStock = $variantsData->sum('stock_qty');
-        $price = $hasVariants ? $variantsData->first()->price : $basePrice;
+        $originalPrice = $hasVariants ? (float) $variantsData->first()->price : $basePrice;
+        $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalPrice;
+        $staticPromo = \App\Services\StaticPromoService::forProduct($product);
+        $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
+        $displayMaxPrice = $hasMultiplePrices ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
+        $promoOriginalPrice = $staticPromo ? $originalPrice : null;
+        $promoOriginalMaxPrice = $staticPromo && $hasMultiplePrices ? $originalMaxPrice : null;
         $availability = $totalStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
         $images = collect([$product->thumbnail_url])
             ->merge($product->images->map(fn($image) => $image->image_url ?? ($image->image ? asset('storage/' . $image->image) : null)))
@@ -30,49 +36,31 @@
         $categoryUrl = $product->category?->slug ? route('category.show', $product->category->slug) : route('categories');
         $brandUrl = $product->brand?->slug ? route('products.index', ['type' => 'brand', 'value' => $product->brand->slug]) : route('brands');
         $productUrl = route('products.show', $product->slug);
-        $offer = [
-            '@type' => 'Offer',
-            '@id' => $productUrl . '#offers',
-            'url' => $productUrl,
-            'priceCurrency' => 'IDR',
-            'price' => $price,
-            'availability' => $availability,
-            'itemCondition' => 'https://schema.org/NewCondition',
-            'seller' => [
-                '@type' => 'Organization',
-                'name' => 'IMG International Mattress Gallery',
-                'url' => route('home'),
-            ],
-        ];
+$wishlist = session()->get('wishlist', []);
+        $isInWishlist = in_array($product->id, $wishlist);
         $productSchema = [
-            '@context' => 'https://schema.org',
+            '@context' => 'https://schema.org/',
             '@type' => 'Product',
-            '@id' => $productUrl,
             'name' => $product->name,
             'image' => $images,
             'description' => $product->short_description ?: $product->description ?: $product->name,
+            'sku' => $product->sku ?? $product->id,
             'brand' => [
                 '@type' => 'Brand',
-                'name' => $brandName,
+                'name' => $brandName
             ],
-            'category' => $categoryName,
-            'sku' => $product->id,
-            'offers' => $offer,
+            'offers' => [
+                '@type' => 'Offer',
+                'url' => $productUrl,
+                'priceCurrency' => 'IDR',
+                'price' => $price,
+                'availability' => $availability,
+                'seller' => [
+                    '@type' => 'Organization',
+                    'name' => 'IMG'
+                ]
+            ]
         ];
-        if ($hasVariants) {
-            $productSchema['hasVariant'] = $variantsData->map(fn($variant) => [
-                '@type' => 'Product',
-                'name' => $product->name . ' - ' . $variant->variant_name,
-                'sku' => (string) $variant->id,
-                'offers' => [
-                    '@type' => 'Offer',
-                    'priceCurrency' => 'IDR',
-                    'price' => $variant->price,
-                    'availability' => ($variant->stock_qty ?? 0) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-                    'itemCondition' => 'https://schema.org/NewCondition',
-                ],
-            ])->values()->toArray();
-        }
         $breadcrumbSchema = [
             '@context' => 'https://schema.org',
             '@type' => 'BreadcrumbList',
@@ -81,59 +69,29 @@
                     '@type' => 'ListItem',
                     'position' => 1,
                     'name' => 'Home',
-                    'item' => route('home'),
+                    'item' => route('home')
                 ],
                 [
                     '@type' => 'ListItem',
                     'position' => 2,
-                    'name' => $categoryName,
-                    'item' => $categoryUrl,
+                    'name' => $product->category->name ?? 'Kategori',
+                    'item' => $categoryUrl
                 ],
                 [
                     '@type' => 'ListItem',
                     'position' => 3,
-                    'name' => $brandName,
-                    'item' => $brandUrl,
+                    'name' => $product->brand->name ?? 'Unknown Brand',
+                    'item' => $brandUrl
                 ],
                 [
                     '@type' => 'ListItem',
                     'position' => 4,
                     'name' => $product->name,
-                ],
-            ],
-        ];
-
-        $productFaqSchema = [
-            '@context' => 'https://schema.org',
-            '@type' => 'FAQPage',
-            'mainEntity' => [
-                [
-                    '@type' => 'Question',
-                    'name' => "Apakah kasur " . $product->name . " cocok untuk penderita sakit punggung?",
-                    'acceptedAnswer' => [
-                        '@type' => 'Answer',
-                        'text' => "Ya. Dengan dukungan sistem pegas berkualitas tinggi dan lapisan penopang premium, " . $product->name . " dirancang untuk menjaga kesejajaran tulang belakang secara alami, sehingga sangat membantu mengurangi dan mencegah sakit punggung."
-                    ]
-                ],
-                [
-                    '@type' => 'Question',
-                    'name' => "Berapa tahun garansi yang diberikan untuk " . $product->name . "?",
-                    'acceptedAnswer' => [
-                        '@type' => 'Answer',
-                        'text' => $product->name . " dilengkapi dengan garansi resmi pegas hingga 15 tahun dari produsen untuk menjamin daya tahan dan kenyamanan jangka panjang Anda."
-                    ]
-                ],
-                [
-                    '@type' => 'Question',
-                    'name' => "Apakah ada layanan pengiriman gratis untuk pembelian kasur ini?",
-                    'acceptedAnswer' => [
-                        '@type' => 'Answer',
-                        'text' => "Kami menyediakan layanan gratis ongkos kirim (Free Ongkir) untuk area Jabodetabek serta pemasangan langsung di kamar tidur Anda oleh tim profesional kami."
-                    ]
+                    'item' => $productUrl
                 ]
             ]
         ];
-    @endphp
+        @endphp
     <div class="container mx-auto px-4 md:px-6 py-8">
         <!-- Breadcrumbs -->
         <nav class="flex items-center gap-2 text-sm text-gray-500 mb-8 font-sans">
@@ -205,8 +163,8 @@
                     <div class="flex items-center text-brand-gold">
                         <i class="fa-solid fa-star w-5 h-5 fill-current"></i>
                     </div>
-                    <span class="font-bold text-brand-dark">0.0</span>
-                    <span class="text-sm text-gray-400 hover:text-brand-gold-dark underline-offset-2 hover:underline">(0 Ulasan)</span>
+                    <span class="font-bold text-brand-dark">{{ number_format($product->average_rating, 1) }}</span>
+                    <span class="text-sm text-gray-400 hover:text-brand-gold-dark underline-offset-2 hover:underline">({{ $product->review_count }} Ulasan)</span>
                 </div>
 
                 <!-- Price Card -->
@@ -217,39 +175,19 @@
                         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
                         $firstVariantName = $variantsData->first()->variant_name ?? '';
                     @endphp
-                    <span class="text-3xl font-extrabold text-brand-dark tracking-tight" id="product-price">Rp {{ $hasVariants ? number_format($variantsData->first()->price, 0, ',', '.') : number_format($basePrice, 0, ',', '.') }}</span>
+                    @if($staticPromo)
+                        <div class="flex flex-col gap-1 mb-2">
+                            <span class="text-sm text-gray-400 line-through">
+                                Rp {{ number_format($promoOriginalPrice, 0, ',', '.') }}
+                                @if($hasMultiplePrices) - Rp {{ number_format($promoOriginalMaxPrice, 0, ',', '.') }} @endif
+                            </span>
+                            <span class="text-sm font-bold text-red-600">Hemat {{ $staticPromo['label'] }}</span>
+                        </div>
+                    @endif
+                    <span class="text-3xl font-extrabold text-brand-dark tracking-tight" id="product-price">Rp {{ number_format($price, 0, ',', '.') }}@if($hasMultiplePrices) - Rp {{ number_format($displayMaxPrice, 0, ',', '.') }}@endif</span>
                     <span class="block text-sm text-brand-gold-dark mt-2" id="price-label">Harga untuk ukuran: {{ $firstVariantName }}</span>
                 </div>
 
-                <!-- AI Quick Summary (Generative Engine Optimization) -->
-                <div class="mb-8 p-5 bg-brand-light/50 border border-brand-gold/30 rounded-2xl">
-                    <div class="flex items-center gap-2 text-brand-gold-dark mb-3">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>
-                        <h4 class="font-bold text-xs uppercase tracking-wider">{{ config('seo.geo_optimize.ai_summary_title') }}</h4>
-                    </div>
-                    <ul class="space-y-2 text-sm text-gray-700">
-                        <li class="flex justify-between border-b border-dashed border-gray-200 pb-1.5">
-                            <span class="text-gray-500 font-medium">Seri Produk</span>
-                            <strong class="text-brand-dark">{{ $product->name }}</strong>
-                        </li>
-                        <li class="flex justify-between border-b border-dashed border-gray-200 pb-1.5">
-                            <span class="text-gray-500 font-medium">Merek Resmi</span>
-                            <strong class="text-brand-dark">{{ $brandName }}</strong>
-                        </li>
-                        <li class="flex justify-between border-b border-dashed border-gray-200 pb-1.5">
-                            <span class="text-gray-500 font-medium">Garansi Pegas</span>
-                            <strong class="text-brand-dark">Resmi 15 Tahun</strong>
-                        </li>
-                        <li class="flex justify-between border-b border-dashed border-gray-200 pb-1.5">
-                            <span class="text-gray-500 font-medium">Sistem Pegas</span>
-                            <strong class="text-brand-dark">Pocket Spring Dan Orthopedic Support</strong>
-                        </li>
-                        <li class="flex justify-between">
-                            <span class="text-gray-500 font-medium">Sumber Data</span>
-                            <span class="text-xs text-gray-400 italic">{{ config('seo.geo_optimize.citation_source') }}</span>
-                        </li>
-                    </ul>
-                </div>
 
                 <!-- Product Purchase Form -->
                 <form action="{{ route('cart.add') }}" method="POST">
@@ -265,13 +203,14 @@
                                     <button 
                                         type="button"
                                         data-variant-id="{{ $variant->id }}"
-                                        data-variant-price="{{ $variant->price }}"
+                                        data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->price, $staticPromo) }}"
+                                        data-variant-original-price="{{ $variant->price }}"
                                         onclick="selectVariant(this)"
                                         class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 {{ $i === 0 ? 'border-brand-gold bg-brand-light text-brand-dark' : 'border-brand-muted bg-white text-gray-600' }}"
                                     >
                                         {{ $variant->variant_name }}
                                         @if($variant->stock_qty <= 0)
-                                            <div class="text-xs text-gray-400 mt-1">Habis</div>
+                                            <div class="text-xs text-gray-400 mt-1">Sold Out</div>
                                         @endif
                                     </button>
                                 @endforeach
@@ -305,12 +244,12 @@
                                     </button>
                                     <button 
                                         type="button"
-                                        class="h-12 w-12 flex items-center justify-center border-2 border-brand-muted rounded-xl text-gray-400 hover:border-brand-gold hover:text-brand-gold transition-colors focus:outline-none"
+                                        class="h-12 w-12 flex items-center justify-center border-2 border-brand-muted rounded-xl {{ $isInWishlist ? 'text-brand-gold border-brand-gold' : 'text-gray-400' }} hover:border-brand-gold hover:text-brand-gold transition-colors focus:outline-none"
                                         data-product-id="{{ $product->id }}"
                                         onclick="toggleWishlist(this)"
                                         title="Favorit"
                                     >
-                                        <i class="fa-regular fa-heart w-5 h-5"></i>
+                                        <i class="fa-{{ $isInWishlist ? 'solid' : 'regular' }} fa-heart w-5 h-5"></i>
                                     </button>
                                 </div>
                             </div>
@@ -345,6 +284,21 @@
                     </div>
                 </div>
 
+                <!-- Reviews Section -->
+                <div class="border-t border-brand-muted pt-8 mt-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-brand-dark">Ulasan Produk</h3>
+                        <div class="flex gap-1">
+                            <button type="button" onclick="filterReviews(0)" class="px-2 py-1 text-xs rounded-full bg-brand-gold text-white">Semua</button>
+                            <button type="button" onclick="filterReviews(5)" class="px-2 py-1 text-xs rounded-full bg-brand-light hover:bg-brand-gold">5 Bintang</button>
+                            <button type="button" onclick="filterReviews(4)" class="px-2 py-1 text-xs rounded-full bg-brand-light hover:bg-brand-gold">4 Bintang</button>
+                        </div>
+                    </div>
+                    <div id="reviews-list" class="space-y-4">
+                        <p class="text-gray-500">Belum ada ulasan untuk produk ini.</p>
+                    </div>
+                </div>
+
                 <!-- Description -->
                 <div class="border-t border-brand-muted pt-8">
                     <h3 class="text-xl font-bold text-brand-dark mb-4">Deskripsi Produk</h3>
@@ -355,24 +309,6 @@
                     </div>
                 </div>
 
-                <!-- Tanya Jawab Seputar {{ $product->name }} (GEO) -->
-                <div class="border-t border-brand-muted pt-8 mt-8">
-                    <h3 class="text-xl font-bold text-brand-dark mb-6 font-serif">Tanya Jawab Seputar {{ $product->name }}</h3>
-                    <div class="space-y-4">
-                        <div class="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                            <h4 class="font-bold text-brand-dark mb-2 text-sm">Apakah kasur {{ $product->name }} cocok untuk penderita sakit punggung?</h4>
-                            <p class="text-xs text-gray-600 leading-relaxed">Ya. Dengan dukungan sistem pegas berkualitas tinggi dan lapisan penopang premium, {{ $product->name }} dirancang untuk menjaga kesejajaran tulang belakang secara alami, sehingga sangat membantu mengurangi dan mencegah sakit punggung.</p>
-                        </div>
-                        <div class="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                            <h4 class="font-bold text-brand-dark mb-2 text-sm">Berapa tahun garansi yang diberikan untuk {{ $product->name }}?</h4>
-                            <p class="text-xs text-gray-600 leading-relaxed">{{ $product->name }} dilengkapi dengan garansi resmi pegas hingga 15 tahun dari produsen untuk menjamin daya tahan dan kenyamanan jangka panjang Anda.</p>
-                        </div>
-                        <div class="bg-white border border-gray-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-                            <h4 class="font-bold text-brand-dark mb-2 text-sm">Apakah ada layanan pengiriman gratis untuk pembelian kasur ini?</h4>
-                            <p class="text-xs text-gray-600 leading-relaxed">Kami menyediakan layanan gratis ongkos kirim (Free Ongkir) untuk area Jabodetabek serta pemasangan langsung di kamar tidur Anda oleh tim profesional kami.</p>
-                        </div>
-                    </div>
-                </div>
 
                 <div class="border-t border-brand-muted pt-8 mt-8">
                     <h3 class="text-xl font-bold text-brand-dark mb-4">Informasi Penting</h3>
@@ -406,9 +342,7 @@
         <script type="application/ld+json">
         @json($breadcrumbSchema)
         </script>
-        <script type="application/ld+json">
-        @json($productFaqSchema)
-        </script>
+
     @endpush
 @endsection
 

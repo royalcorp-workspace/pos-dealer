@@ -13,18 +13,6 @@ return [
     'og_image' => env('SEO_OG_IMAGE', 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800'),
     'robots' => env('SEO_ROBOTS', 'index, follow'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Generative Engine Optimization (GEO) Settings
-    |--------------------------------------------------------------------------
-    | Parameters to fine-tune product details, summaries, and Q&As 
-    | for AI agents and LLM search crawls.
-    */
-    'geo_optimize' => [
-        'ai_summary_title' => 'Spesifikasi Ringkas (AI Summary)',
-        'citation_source' => 'International Mattress Gallery Official Warranty & Product Specifications',
-        'enable_faq_schema' => true,
-    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -66,6 +66,13 @@
             'numberOfItems' => count($categoryItems),
             'itemListElement' => $categoryItems,
         ];
+
+        $featuredPromo = $featured ? \App\Services\StaticPromoService::forProduct($featured) : null;
+        $featuredOriginalPrice = $featured ? (($featured->variants->isNotEmpty() ? (float) $featured->variants->min('price') : (float) ($featured->base_price ?? 0))) : 0;
+        $featuredPrice = $featured ? \App\Services\StaticPromoService::discountedPrice($featuredOriginalPrice, $featuredPromo) : 0;
+        $featuredOriginalMaxPrice = $featured && $featured->variants->isNotEmpty() && $featured->variants->max('price') ? (float) $featured->variants->max('price') : $featuredOriginalPrice;
+        $featuredPriceMax = $featured ? \App\Services\StaticPromoService::discountedPrice($featuredOriginalMaxPrice, $featuredPromo) : 0;
+        $featuredHasPriceRange = $featured && $featured->variants->isNotEmpty() && $featured->variants->min('price') != $featured->variants->max('price');
     @endphp
 
     @push('jsonld')
@@ -277,7 +284,14 @@
                     
                     <div class="pt-4 flex items-center gap-6 border-t border-brand-gold/20">
                         <div class="flex flex-col">
-                            <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featured->variants->min('price') ?? $featured->base_price ?? 0, 0, ',', '.') }}</span>
+                            @if($featuredPromo)
+                                <span class="text-sm text-brand-light/70 line-through">
+                                    Rp {{ number_format($featuredOriginalPrice, 0, ',', '.') }}
+                                    @if($featuredHasPriceRange) - Rp {{ number_format($featuredOriginalMaxPrice, 0, ',', '.') }} @endif
+                                </span>
+                                <span class="text-sm font-bold text-red-300">Hemat {{ $featuredPromo['label'] }}</span>
+                            @endif
+                            <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featuredPrice, 0, ',', '.') }}@if($featuredHasPriceRange) - Rp {{ number_format($featuredPriceMax, 0, ',', '.') }}@endif</span>
                         </div>
                         <a 
                             href="{{ route('products.show', $featured->slug ?? '') }}"

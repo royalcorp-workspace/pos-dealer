@@ -20,6 +20,7 @@ class OrderItem extends Model
         'quantity',
         'unit_price',
         'total',
+        'item_notes',
         'meta',
     ];
 

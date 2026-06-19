@@ -6,10 +6,48 @@
     $isSoldOut = !$isVariable ? false : !$hasStock;
     $minPrice = $product->variants->min('price');
     $maxPrice = $product->variants->max('price');
-    $price = $isVariable && $minPrice ? $minPrice : $product->base_price ?? 0;
-    $originalPrice = $isVariable && $maxPrice && $minPrice !== $maxPrice ? $maxPrice : null;
+    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) ($product->base_price ?? 0);
+    $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+    $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+    $staticPromo = \App\Services\StaticPromoService::forProduct($product);
+    $price = $originalMinPrice;
+    $displayOriginalPrice = $hasPriceRange ? $originalMaxPrice : null;
+    $promoOriginalMinPrice = null;
+    $promoOriginalMaxPrice = null;
+
+    if ($staticPromo) {
+        $price = \App\Services\StaticPromoService::discountedPrice($originalMinPrice, $staticPromo);
+        $displayOriginalPrice = $hasPriceRange ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
+        $promoOriginalMinPrice = $originalMinPrice;
+        $promoOriginalMaxPrice = $originalMaxPrice;
+    }
+
+    $reviewMinPrice = $isVariable ? \App\Services\StaticPromoService::discountedPrice((float) ($minPrice ?? 0), $staticPromo) : (float) $price;
+    $reviewMaxPrice = $isVariable && $hasPriceRange ? \App\Services\StaticPromoService::discountedPrice((float) ($maxPrice ?? 0), $staticPromo) : (float) $price;
+
+    $reviewPayload = [
+        'id' => (string) $product->id,
+        'name' => $product->name,
+        'image' => $product->thumbnail_url ?? 'https://via.placeholder.com/400x300',
+        'rating' => (float) ($product->rating ?? 0),
+        'reviewsCount' => (int) ($product->reviewsCount ?? 0),
+        'isVariable' => $isVariable,
+        'price' => (float) $price,
+        'minPrice' => $reviewMinPrice,
+        'maxPrice' => $reviewMaxPrice,
+        'originalPrice' => $originalMinPrice,
+        'originalMinPrice' => $originalMinPrice,
+        'originalMaxPrice' => $originalMaxPrice,
+        'hasDiscount' => (bool) $staticPromo,
+        'discountLabel' => $staticPromo['label'] ?? null,
+        'reviews' => [],
+    ];
 @endphp
 
+@php
+    $wishlist = session()->get('wishlist', []);
+    $isInWishlist = in_array($product->id, $wishlist);
+@endphp
 <div 
     class="product-card group relative bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 flex flex-col h-full font-sans {{ $isSoldOut ? 'opacity-80' : '' }}"
     itemscope
@@ -28,6 +66,11 @@
         
         <!-- Badges -->
         <div class="absolute top-3 left-3 flex flex-col gap-2">
+            @if($staticPromo)
+                <span class="bg-red-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-sm shadow-sm tracking-wider uppercase">
+                    Diskon {{ $staticPromo['label'] }}
+                </span>
+            @endif
             @if($product->best_seller)
                 <span class="bg-brand-dark text-white text-[11px] font-bold px-2.5 py-1 rounded-sm shadow-sm tracking-wider uppercase">
                     Best Seller
@@ -54,10 +97,13 @@
                 class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none"
                 aria-label="Tambah ke favorit"
             >
-                <i class="fa-regular fa-heart w-4 h-4"></i>
+                <i class="fa-{{ $isInWishlist ? 'solid' : 'regular' }} fa-heart w-4 h-4 {{ $isInWishlist ? 'text-brand-gold' : '' }}"></i>
             </button>
             <button 
                 type="button"
+                data-product-review="{{ json_encode($reviewPayload, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
+                data-product-id="{{ $product->id }}"
+                @click="$dispatch('open-review', JSON.parse($el.dataset.productReview))"
                 class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none"
                 aria-label="Lihat ulasan"
             >
@@ -91,12 +137,17 @@
         @endif
 
         <!-- Rating -->
-        <div class="flex items-center gap-1.5 mb-auto cursor-pointer hover:bg-brand-light p-1 -ml-1 rounded transition-colors w-fit">
+        <div 
+            class="product-card__rating flex items-center gap-1.5 mb-auto cursor-pointer hover:bg-brand-light p-1 -ml-1 rounded transition-colors w-fit"
+            data-product-review="{{ json_encode($reviewPayload, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
+            data-product-id="{{ $product->id }}"
+            @click="$dispatch('open-review', JSON.parse($el.dataset.productReview))"
+        >
             <div class="flex items-center text-brand-gold-dark">
                 <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>
             </div>
-            <span class="text-sm font-medium text-gray-700">{{ $product->rating ?? 0 }}</span>
-            <span class="text-xs text-gray-500 hover:text-brand-gold-dark underline-offset-2 hover:underline">(0 Ulasan)</span>
+            <span class="text-sm font-medium text-gray-700">{{ $reviewPayload['rating'] }}</span>
+            <span class="text-xs text-gray-500 hover:text-brand-gold-dark underline-offset-2 hover:underline">({{ $reviewPayload['reviewsCount'] }} Ulasan)</span>
         </div>
 
         <!-- Pricing -->
@@ -104,8 +155,15 @@
             <meta itemprop="priceCurrency" content="IDR" />
             <meta itemprop="price" content="{{ number_format($price, 0, ',', '.') }}" />
             <link itemprop="availability" href="{{ $hasStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' }}" />
-            <span class="font-bold text-lg text-brand-dark tracking-tight">
+            @if($staticPromo)
+                <span class="text-xs text-gray-400 line-through">
+                    Rp {{ number_format($promoOriginalMinPrice, 0, ',', '.') }}
+                    @if($hasPriceRange) - Rp {{ number_format($promoOriginalMaxPrice, 0, ',', '.') }} @endif
+                </span>
+            @endif
+            <span class="font-bold text-lg {{ $staticPromo ? 'text-red-600' : 'text-brand-dark' }} tracking-tight">
                 Rp {{ number_format($price, 0, ',', '.') }}
+                @if($hasPriceRange) - Rp {{ number_format($displayOriginalPrice, 0, ',', '.') }} @endif
             </span>
         </div>
 

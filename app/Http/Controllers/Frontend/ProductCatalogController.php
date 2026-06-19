@@ -30,6 +30,13 @@ class ProductCatalogController extends Controller
             $filterValue = $categorySlug;
         }
         
+        // Handle brand slug in URL path
+        $brandSlug = $request->route()->parameter('brandSlug');
+        if ($brandSlug && !$filterType) {
+            $filterType = 'brand';
+            $filterValue = $brandSlug;
+        }
+        
         $minPrice = $request->query('min_price', 0);
         $maxPrice = $request->query('max_price');
         $inStock = $request->query('in_stock');

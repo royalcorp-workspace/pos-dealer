@@ -69,14 +69,14 @@
                 <div class="category-card bg-white border-2 border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-2xl p-6 flex flex-col justify-between cursor-pointer group h-48 relative overflow-hidden">
                     <div class="relative z-10 w-full">
                         <div class="mb-4">
-<div class="category-icon-box w-12 h-12 rounded-xl flex items-center justify-center transition-all overflow-hidden relative group-hover:bg-brand-gold">
-                            <svg class="w-6 h-6 transition-colors group-hover:text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect class="fill-current" x="3" y="3" width="7" height="7" rx="1"/>
-                                <rect class="fill-current" x="14" y="3" width="7" height="7" rx="1"/>
-                                <rect class="fill-current" x="3" y="14" width="7" height="7" rx="1"/>
-                                <rect class="fill-current" x="14" y="14" width="7" height="7" rx="1"/>
-                            </svg>
-                        </div>
+                            <div class="category-icon-box w-12 h-12 rounded-xl flex items-center justify-center transition-all overflow-hidden relative group-hover:bg-brand-gold">
+                                <svg class="w-6 h-6 transition-colors group-hover:text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect class="fill-current" x="3" y="3" width="7" height="7" rx="1"/>
+                                    <rect class="fill-current" x="14" y="3" width="7" height="7" rx="1"/>
+                                    <rect class="fill-current" x="3" y="14" width="7" height="7" rx="1"/>
+                                    <rect class="fill-current" x="14" y="14" width="7" height="7" rx="1"/>
+                                </svg>
+                            </div>
                         </div>
                         <h3 class="text-xl font-bold mb-2 group-hover:text-brand-gold">
                             <a href="{{ route('category.show', $category->slug) }}" class="block w-full transition-colors group-hover:text-brand-gold">

@@ -511,6 +511,10 @@
         }
     </style>
     
+    <!-- App JS (must load before Alpine so window.* helpers are defined when Alpine initialises) -->
+    <script src="{{ asset('js/frontend/app.js') }}"></script>
+    <script src="{{ asset('js/frontend/auth-modal.js') }}"></script>
+
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     
@@ -520,18 +524,33 @@
     <!-- Motion One (used by React motion/react) - attempt to reproduce exact animations -->
     <script defer src="https://cdn.jsdelivr.net/npm/motion@10.15.3/dist/motion.global.min.js"></script>
 </head>
+@php
+    $whatsappNumber = preg_replace('/[^0-9]/', '', '+62 811-1234-5678');
+    $whatsappUrl = 'https://wa.me/' . $whatsappNumber;
+@endphp
 <body 
     class="min-h-screen bg-brand-light/30 flex flex-col font-sans text-brand-dark selection:bg-brand-gold/30"
+    data-route-home="{{ route('home') }}"
+    data-route-cart-toggle-wishlist="{{ route('cart.toggle-wishlist') }}"
+    data-route-cart-add="{{ route('cart.add') }}"
+    data-route-cart-update="{{ route('cart.update', '__ID__') }}"
+    data-route-thankyou="{{ route('thankyou') }}"
+    data-route-auth-google-session="{{ route('auth.google.session') }}"
     x-data="{ 
         isCartOpen: false, 
         isAuthOpen: {{ session()->has('show_login') ? 'true' : 'false' }}, 
         selectedProductForReview: null,
-        isMobileMenuOpen: false
+        isMobileMenuOpen: false,
+        cartNotice: false,
+        cartNoticeMessage: 'Produk berhasil masuk keranjang',
+        cartNoticeTimer: null
     }"
     @open-cart.window="isCartOpen = true"
     @open-auth.window="isAuthOpen = true"
     @open-review.window="selectedProductForReview = $event.detail; console.log($event.detail)"
     @open-review="selectedProductForReview = $event.detail; console.log($event.detail)"
+    @cart-added.window="cartNoticeMessage = $event.detail && $event.detail.message ? $event.detail.message : 'Produk berhasil masuk keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 2500)"
+    @cart-add-failed.window="cartNoticeMessage = 'Gagal menambahkan produk ke keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 3000)"
 >
      <!-- Header Component -->
     @include('frontend.components.header')
@@ -549,114 +568,40 @@
     @include('frontend.components.auth-modal')
     @include('frontend.components.review-modal')
 
-    <div id="loading-overlay" class="loading-overlay">
-        <div class="loading-spinner"></div>
+    <div
+        x-show="cartNotice"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 translate-y-2"
+        x-transition:enter-end="opacity-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 translate-y-0"
+        x-transition:leave-end="opacity-0 translate-y-2"
+        x-cloak
+        class="fixed top-5 right-4 z-[70] w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-brand-gold/30 bg-white p-4 shadow-2xl"
+    >
+        <div class="flex items-start gap-3">
+            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+                <i class="fa-solid fa-check w-5 h-5"></i>
+            </div>
+            <div class="min-w-0 flex-1">
+                <h4 class="font-extrabold text-brand-dark text-sm">Berhasil Masuk Keranjang</h4>
+                <p class="mt-1 text-sm text-gray-600" x-text="cartNoticeMessage"></p>
+            </div>
+        </div>
     </div>
 
-    <script>
-        window.addEventListener('beforeunload', function() {
-            document.getElementById('loading-overlay').style.display = 'flex';
-        });
+    <a 
+        href="{{ $whatsappUrl }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="fixed bottom-6 right-6 z-[80] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-2xl transition-transform hover:scale-105 hover:bg-green-600 focus:outline-none focus:ring-4 focus:ring-green-500/30"
+        aria-label="Hubungi kami via WhatsApp"
+    >
+        <i class="fa-brands fa-whatsapp text-3xl"></i>
+    </a>
 
-        function showLoading() {
-            document.getElementById('loading-overlay').style.display = 'flex';
-        }
 
-        function hideLoading() {
-            document.getElementById('loading-overlay').style.display = 'none';
-        }
-
-        document.addEventListener('submit', function(e) {
-            if (!e.target.matches('form[action*="cart/add"], form[action*="checkout"], form[action*="login"], form[action*="logout"]')) return;
-            setTimeout(hideLoading, 3000);
-        });
-
-        function openProductReview(event, productId) {
-            const holder = event && event.currentTarget ? event.currentTarget.closest('[data-product-review]') : null;
-            const productEl = holder || (productId ? document.querySelector(`[data-product-id="${productId}"]`) : null);
-            const product = productEl ? JSON.parse(productEl.getAttribute('data-product-review')) : null;
-
-            if (!product) {
-                console.warn('Produk ulasan tidak ditemukan:', productId);
-                return;
-            }
-
-            const body = document.querySelector('body');
-            if (body && body.__x) {
-                body.__x.$data.selectedProductForReview = product;
-            }
-
-            const modal = document.querySelector('[data-review-modal]');
-            if (modal && modal.__x) {
-                modal.__x.$data.selectedProductForReview = product;
-            }
-
-            window.dispatchEvent(new CustomEvent('open-review', { detail: product, bubbles: true }));
-        }
-
-        function toggleWishlist(el) {
-            const productId = el.dataset.productId;
-            showLoading();
-            fetch("{{ route('cart.toggle-wishlist') }}", {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ product_id: productId })
-            })
-            .then(r => r.json())
-            .then(data => {
-                hideLoading();
-                if (data.success) {
-                    const icon = el.querySelector('i');
-                    if (data.in_wishlist) {
-                        icon.classList.remove('fa-regular');
-                        icon.classList.add('fa-solid', 'text-brand-gold');
-                    } else {
-                        icon.classList.remove('fa-solid', 'text-brand-gold');
-                        icon.classList.add('fa-regular');
-                    }
-                }
-            })
-            .catch(err => { hideLoading(); console.error('Wishlist error:', err); });
-        }
-
-        function initHeroMotion() {
-            // If Motion One (motion) is available, run precise animations to match React
-            try {
-                if (window.motion && typeof window.motion.animate === 'function') {
-                    const m = window.motion;
-                    // badge
-                    const badge = document.querySelector('.hero-badge');
-                    if (badge) m.animate(badge, { opacity: [0,1], transform: ['translateY(20px)','translateY(0)'] }, { duration: 500, easing: 'cubic-bezier(.4,0,.2,1)', delay: 0 });
-                    // title
-                    const title = document.querySelector('.hero-title');
-                    if (title) m.animate(title, { opacity: [0,1], transform: ['translateY(20px)','translateY(0)'] }, { duration: 500, easing: 'cubic-bezier(.4,0,.2,1)', delay: 100 });
-                    // copy
-                    const copy = document.querySelector('.hero-copy');
-                    if (copy) m.animate(copy, { opacity: [0,1], transform: ['translateY(20px)','translateY(0)'] }, { duration: 500, easing: 'cubic-bezier(.4,0,.2,1)', delay: 200 });
-                    // cta
-                    const cta = document.querySelector('.hero-cta');
-                    if (cta) m.animate(cta, { opacity: [0,1], transform: ['translateY(20px)','translateY(0)'] }, { duration: 500, easing: 'cubic-bezier(.4,0,.2,1)', delay: 300 });
-                    // image container scale
-                    const image = document.querySelector('.hero-image');
-                    if (image) m.animate(image, { opacity: [0,1], transform: ['scale(0.95)','scale(1)'] }, { duration: 700, easing: 'cubic-bezier(.4,0,.2,1)', delay: 200 });
-                    return;
-                }
-            } catch (e) {
-                console.warn('Motion init failed', e);
-            }
-            // fallback: ensure CSS animations are allowed (they run by default)
-            // remove any class that might prevent animations
-        }
-
-        window.addEventListener('load', initHeroMotion);
-        window.addEventListener('DOMContentLoaded', initHeroMotion);
-    </script>
 
     @stack('scripts')
-</body>
-
+  </body>
 </html>

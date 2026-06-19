@@ -1,15 +1,20 @@
 @extends('frontend.layouts.app')
 
 @php
-    $user = session()->get('user', [
-        'name' => 'Budi Santoso',
-        'email' => 'budi@gmail.com',
-        'type' => 'Member Premium'
-    ]);
+    $user = session()->get('user', []);
     $activeTab = request()->query('tab', 'devices');
     $wishlistProducts = App\Models\Frontend\ProductsCatalog\Product::whereIn('id', session()->get('wishlist', []))
         ->with(['brand', 'images', 'variants'])
         ->get();
+    $orderStatusLabels = \App\Models\Frontend\Order::statusLabels();
+    $paymentStatusLabels = [
+        1 => 'Belum Dibayar',
+        2 => 'Dibayar',
+        3 => 'Gagal',
+        4 => 'Refund',
+    ];
+    $addresses = $addresses ?? collect();
+    $formatRupiah = fn($value) => 'Rp ' . number_format((float) $value, 0, ',', '.');
 @endphp
 
 @section('title', 'Dashboard Akun Saya - IMG')
@@ -50,9 +55,13 @@
                         class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'wishlist' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
                         <i class="fa-solid fa-heart w-4 h-4"></i> Wishlist
                     </a>
-                    <a href="{{ route('dashboard', ['tab' => 'orders']) }}"
-                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'orders' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
-                        <i class="fa-solid fa-shopping-bag w-4 h-4"></i> Riwayat Pesanan
+                    <a href="{{ route('dashboard', ['tab' => 'vouchers']) }}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'vouchers' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
+                        <i class="fa-solid fa-ticket w-4 h-4"></i> Voucher Saya
+                    </a>
+                    <a href="{{ route('dashboard', ['tab' => 'addresses']) }}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'addresses' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
+                        <i class="fa-solid fa-location-dot w-4 h-4"></i> Alamat Saya
                     </a>
                 </div>
 
@@ -72,7 +81,62 @@
 
             <!-- Right: Account activity -->
             <div class="w-full lg:w-2/3 space-y-8">
-                @if($activeTab === 'wishlist')
+                @if($activeTab === 'addresses')
+                    <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                            <div>
+                                <h3 class="text-xl font-extrabold text-brand-dark">Alamat Saya</h3>
+                                <p class="text-sm text-gray-500 mt-1">Kelola alamat pengiriman Anda.</p>
+                            </div>
+                            <button type="button" onclick="openAddressModal()" class="inline-flex justify-center items-center gap-2 px-5 py-3 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-sm transition-colors">
+                                <i class="fa-solid fa-plus w-4 h-4"></i>
+                                Tambah Alamat
+                            </button>
+                        </div>
+
+                        <div class="grid gap-4">
+                            @forelse($addresses as $address)
+                                <div class="relative rounded-2xl border {{ $address->is_primary ? 'border-brand-gold bg-brand-light/40' : 'border-brand-muted bg-white' }} p-5 transition-colors">
+                                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                                        <div class="space-y-2">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <h4 class="font-extrabold text-brand-dark">{{ $address->label }}</h4>
+                                                @if($address->is_primary)
+                                                    <span class="inline-flex items-center rounded-full bg-brand-gold/20 text-brand-gold-dark text-[10px] font-extrabold px-2.5 py-1 uppercase tracking-wider">Utama</span>
+                                                @endif
+                                            </div>
+                                            <div class="text-sm text-gray-700">
+                                                <p>{{ $address->recipient_name }}</p>
+                                                <p>{{ $address->phone }}</p>
+                                                <p>{{ $address->address }}</p>
+                                                <p>{{ $address->postal_code }} {{ $address->subDistrict->name ?? '' }}, {{ $address->city->name ?? '' }}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2 sm:flex-col sm:items-end">
+                                            <button type="button" onclick="editAddress('{{ $address->id }}', '{{ $address->label }}', '{{ $address->recipient_name }}', '{{ $address->phone }}', '{{ $address->address }}')" class="px-4 py-2 rounded-xl border border-brand-muted bg-white text-brand-dark hover:bg-brand-light text-sm font-extrabold transition-colors">
+                                                Ubah
+                                            </button>
+                                            @unless($address->is_primary)
+                                                <form action="{{ route('dashboard.addresses.primary', $address->id) }}" method="POST" onsubmit="return confirm('Jadikan alamat ini sebagai utama?');">
+                                                    @csrf
+                                                    <button type="submit" class="px-4 py-2 rounded-xl border border-brand-gold/30 bg-brand-gold/10 text-brand-gold-dark hover:bg-brand-gold/20 text-sm font-extrabold transition-colors">
+                                                        Jadikan Utama
+                                                    </button>
+                                                </form>
+                                            @endunless
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="text-center py-12">
+                                    <p class="text-gray-500">Belum ada alamat tersimpan.</p>
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    @include('frontend.dashboard-addresses')
+                @elseif($activeTab === 'wishlist')
                     <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm">
                         <h3 class="text-xl font-extrabold text-brand-dark mb-6">Wishlist Produk</h3>
 
@@ -95,7 +159,7 @@
                 <div class="bg-gradient-to-r from-brand-dark to-brand-darker text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 border border-brand-gold/20">
                     <div class="space-y-2 text-center md:text-left">
                         <h3 class="text-xl font-bold text-brand-gold">Spesial Loyalty Member!</h3>
-                        <p class="text-sm text-brand-light/70 max-w-md">Gunakan voucher cashback Rp 500k khusus untuk transaksi kedua kasur springbed.</p>
+                        <p class="text-sm text-brand-light/70 max-w-md">Dapatkan promo diskon dan gratis ongkir untuk transaksi berikutnya.</p>
                     </div>
                     <a href="{{ route('promos') }}" class="px-6 py-3 bg-brand-gold text-brand-dark hover:bg-brand-light font-bold rounded-xl transition-all shadow shadow-brand-dark/20 text-sm">Lihat Voucher</a>
                 </div>
@@ -149,39 +213,78 @@
                 </div>
 
                 <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm">
-                    <h3 class="text-xl font-extrabold text-brand-dark mb-6">Riwayat Pesanan</h3>
-
-                    <div class="overflow-x-auto -mx-6 sm:-mx-8">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-brand-light text-gray-400 text-xs font-bold uppercase tracking-wider border-b border-brand-muted">
-                                    <th class="py-4 px-6 sm:px-8">ID Pesanan</th>
-                                    <th class="py-4 px-4">Tanggal</th>
-                                    <th class="py-4 px-4">Produk</th>
-                                    <th class="py-4 px-4">Total</th>
-                                    <th class="py-4 px-6 sm:px-8">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100 text-sm text-brand-dark">
-                                <tr class="hover:bg-brand-light/30 transition-colors">
-                                    <td class="py-5 px-6 sm:px-8 font-mono font-bold text-brand-gold-dark">ORD-2026-001</td>
-                                    <td class="py-5 px-4 text-gray-500 whitespace-nowrap">01 Juni 2026</td>
-                                    <td class="py-5 px-4">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded bg-gray-50 overflow-hidden flex-shrink-0">
-                                                <img src="{{ $mockProduct['image'] }}" alt="" class="w-full h-full object-cover" />
-                                            </div>
-                                            <span class="font-semibold leading-snug line-clamp-1 max-w-[200px]">{{ $mockProduct['name'] }}</span>
-                                        </div>
-                                    </td>
-                                    <td class="py-5 px-4 font-bold">Rp 3.500.000</td>
-                                    <td class="py-5 px-6 sm:px-8">
-                                        <span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">Dikirim</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+                        <div>
+                            <h3 class="text-xl font-extrabold text-brand-dark">Riwayat Pesanan</h3>
+                            <p class="text-sm text-gray-500 mt-1">Order ulang produk dari pesanan sebelumnya dengan satu klik.</p>
+                        </div>
                     </div>
+
+                    @forelse($orders as $order)
+                        <div class="rounded-2xl border border-brand-muted p-4 sm:p-5 mb-4 last:mb-0 hover:border-brand-gold/40 transition-colors">
+                            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
+                                        <span class="font-mono font-extrabold text-brand-gold-dark">{{ $order->id }}</span>
+                                        <span class="text-xs text-gray-400">{{ $order->created_at ? $order->created_at->format('d M Y H:i') : '-' }}</span>
+                                    </div>
+
+                                    <div class="space-y-2 text-sm text-brand-dark">
+                                        @forelse($order->items as $item)
+                                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3">
+                                                <span class="truncate">{{ $item->quantity }}x {{ $item->name }}</span>
+                                                <span class="text-gray-500">{{ $formatRupiah($item->total) }}</span>
+                                            </div>
+                                        @empty
+                                            <p class="text-gray-500">Tidak ada item pada pesanan ini.</p>
+                                        @endforelse
+                                    </div>
+                                </div>
+
+<div class="flex flex-col sm:items-end gap-3 lg:min-w-[220px]">
+                                     <div class="flex flex-wrap justify-center sm:justify-end gap-2">
+                                         <span class="bg-brand-gold/15 text-brand-gold-dark text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                             {{ $orderStatusLabels[$order->status] ?? 'Unknown' }}
+                                         </span>
+                                         <span class="bg-gray-100 text-gray-600 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                             {{ $paymentStatusLabels[$order->payment_status] ?? 'Unknown' }}
+                                         </span>
+                                     </div>
+
+                                     <div class="text-right">
+                                         <p class="text-xs text-gray-500">Total</p>
+                                         <p class="text-lg font-extrabold text-brand-dark">{{ $formatRupiah($order->total) }}</p>
+                                     </div>
+
+                                     <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                         @if(in_array($order->status, [0, 1, 2]))
+                                             <form action="{{ route('order.cancel', $order->id) }}" method="POST" onsubmit="return confirm('Batalkan order ini?');" class="inline">
+                                                 @csrf
+                                                 <button type="submit" class="w-full sm:w-auto px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-extrabold text-sm transition-colors">
+                                                     <i class="fa-solid fa-xmark w-4 h-4 mr-1"></i>
+                                                     Batalkan
+                                                 </button>
+                                             </form>
+                                         @endif
+
+                                         @if($order->status === 7)
+                                             <form action="{{ route('order.reorder', $order->id) }}" method="POST" onsubmit="return confirm('Order ulang produk dari pesanan ini?');" class="inline">
+                                                 @csrf
+                                                 <button type="submit" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-sm transition-colors">
+                                                     <i class="fa-solid fa-rotate-right w-4 h-4 mr-1"></i>
+                                                     Order Ulang
+                                                 </button>
+                                             </form>
+                                         @endif
+                                     </div>
+                                 </div>
+                            </div>
+                        </div>
+                    @empty
+                        <div class="rounded-2xl border border-brand-muted bg-brand-light p-6 text-center text-sm text-gray-500">
+                            Belum ada riwayat pesanan.
+                        </div>
+                    @endforelse
                 </div>
             </div>
         @endif

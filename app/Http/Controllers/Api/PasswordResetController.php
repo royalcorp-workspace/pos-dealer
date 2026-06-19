@@ -61,7 +61,7 @@ class PasswordResetController extends Controller
                 ));
             }
 
-            return response()->json(['message' => 'If account exists, OTP has been sent', 'success' => true]);
+            return response()->json(['  ' => 'If account exists, OTP has been sent', 'success' => true]);
         }
 
         return response()->json(['message' => 'If account exists, OTP has been sent', 'success' => true]);

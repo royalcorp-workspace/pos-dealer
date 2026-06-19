@@ -84,14 +84,15 @@
 
     @push('jsonld')
         <script type="application/ld+json">
-        @json($productCollectionSchema)
+            @json($productCollectionSchema)
         </script>
         <script type="application/ld+json">
-        @json($productBreadcrumbSchema)
+            @json($productBreadcrumbSchema)
         </script>
     @endpush
 
-    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh]" x-data="{ activeCategory: null, activeBrand: null }">
+    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh]" x-data="{ viewMode: localStorage.getItem('productViewMode') || 'grid' }" 
+        @product-view-mode.window="viewMode = $event.detail">
         <!-- Listing Header -->
         <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4 border-b border-gray-100 pb-6 font-sans">
             <div>
@@ -108,20 +109,18 @@
                     <i class="fa-solid fa-filter w-4 h-4"></i> Filter
                 </button>
                 <div class="flex items-center border border-brand-muted rounded-lg overflow-hidden bg-white">
-                    <button class="px-3 py-2 bg-brand-light text-brand-dark focus:outline-none">
+                    <button type="button" @click="viewMode = 'grid'; localStorage.setItem('productViewMode', 'grid')" 
+                        :class="{'bg-brand-light text-brand-dark': viewMode === 'grid', 'text-gray-400 hover:text-brand-dark hover:bg-gray-50': viewMode !== 'grid'}" 
+                        class="px-3 py-2 focus:outline-none transition-colors" aria-label="Tampilan grid">
                         <i class="fa-solid fa-border-all w-4 h-4"></i>
                     </button>
-                    <button class="px-3 py-2 text-gray-400 hover:text-brand-dark hover:bg-gray-50 transition-colors focus:outline-none">
+                    <button type="button" @click="viewMode = 'list'; localStorage.setItem('productViewMode', 'list')" 
+                        :class="{'bg-brand-light text-brand-dark': viewMode === 'list', 'text-gray-400 hover:text-brand-dark hover:bg-gray-50': viewMode !== 'list'}" 
+                        class="px-3 py-2 focus:outline-none transition-colors" aria-label="Tampilan list">
                         <i class="fa-solid fa-list w-4 h-4"></i>
                     </button>
                 </div>
             </div>
-        </div>
-
-        <div class="bg-white border border-brand-muted rounded-3xl p-6 mb-8">
-            <p class="text-gray-600 leading-relaxed">
-                {{ $filterDescription }} Gunakan filter di samping untuk menyaring produk berdasarkan kategori, brand, rentang harga, stok, dan atribut agar lebih mudah menemukan kasur yang sesuai.
-            </p>
         </div>
 
         <div class="flex flex-col lg:flex-row gap-8">
@@ -203,7 +202,7 @@
                             $isActive = $filterType === 'category' && $filterValue === $category->slug;
                         @endphp
                         <div class="mb-3">
-<a href="{{ route('category.show', $category->slug) }}"
+                            <a href="{{ route('category.show', $category->slug) }}"
                                 class="flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium transition-colors {{ $isActive ? 'bg-brand-gold/20 text-brand-dark' : 'text-gray-700 hover:bg-brand-light hover:text-brand-dark' }}"
                             >
                                 <span>{{ $category->name }}</span>
@@ -225,9 +224,9 @@
                                         @if($grandchildren->isNotEmpty())
                                             <div class="ml-3 mt-1 space-y-1">
                                                 @foreach($grandchildren as $grandchild)
-<a href="{{ route('category.show', $grandchild->slug) }}"
-                                                            class="block py-1 px-3 rounded text-xs text-gray-400 hover:text-brand-dark"
-                                                        >
+                                                    <a href="{{ route('category.show', $grandchild->slug) }}"
+                                                        class="block py-1 px-3 rounded text-xs text-gray-400 hover:text-brand-dark"
+                                                    >
                                                         {{ $grandchild->name }}
                                                     </a>
                                                 @endforeach
@@ -243,11 +242,19 @@
 
             <!-- Main Content -->
             <div class="flex-1">
-                <!-- Products Grid -->
+                <!-- Products Grid/List -->
                 @if($products->count() > 0)
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Grid View -->
+                    <div x-show="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         @foreach($products as $product)
                             @include('frontend.components.product-card-dynamic', ['product' => $product])
+                        @endforeach
+                    </div>
+
+                    <!-- List View -->
+                    <div x-show="viewMode === 'list'" class="flex flex-col gap-4" style="display: none;">
+                        @foreach($products as $product)
+                            @include('frontend.components.product-card-list', ['product' => $product])
                         @endforeach
                     </div>
 

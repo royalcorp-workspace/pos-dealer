@@ -6,6 +6,8 @@
     });
     $isLoggedIn = session()->get('is_logged_in', false);
     $user = session()->get('user');
+    $wishlist = session()->get('wishlist', []);
+    $wishlistCount = count($wishlist);
 
     try {
         $brands = \App\Models\Frontend\ProductsCatalog\Brand::where('deleted', false)
@@ -39,7 +41,7 @@
             </button>
             <a href="{{ route('home') }}" class="text-3xl lg:text-4xl font-extrabold tracking-tight text-brand-dark flex items-center gap-2 font-serif text-left">
                 IMG
-                <span class="text-xs lg:text-sm font-sans tracking-widest text-brand-gold uppercase leading-tight ml-2 border-l-2 border-brand-gold pl-2">
+                <span class="text-xs lg:text-sm font-sans tracking-widest text-brand-gold-dark uppercase leading-tight ml-2 border-l-2 border-brand-gold pl-2">
                     International<br/>Mattress Gallery
                 </span>
             </a>
@@ -64,8 +66,20 @@
         <!-- Right Actions -->
         <div class="flex items-center gap-2 sm:gap-5">
             <!-- Wishlist Button -->
-            <a href="{{ route('dashboard', ['tab' => 'wishlist']) }}" class="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none" aria-label="Wishlist">
-                <i class="fa-regular fa-heart w-5 h-5 text-brand-dark"></i>
+            <a 
+                id="wishlist-link"
+                href="{{ route('dashboard', ['tab' => 'wishlist']) }}" 
+                class="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none relative" 
+                aria-label="Wishlist ({{ $wishlistCount }} Produk)"
+            >
+                <div class="relative">
+                    <i id="wishlist-icon" class="fa-{{ $wishlistCount > 0 ? 'solid' : 'regular' }} fa-heart w-5 h-5 {{ $wishlistCount > 0 ? 'text-brand-gold' : 'text-brand-dark' }}"></i>
+                    @if($wishlistCount > 0)
+                        <span id="wishlist-count-badge" class="absolute -top-1 -right-1 bg-brand-gold text-white text-[10px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center shadow-sm">
+                            {{ $wishlistCount }}
+                        </span>
+                    @endif
+                </div>
             </a>
 
             <!-- Language Picker -->
@@ -108,14 +122,14 @@
                     <div class="relative">
                     <i class="fa-solid fa-cart-shopping w-5 h-5 text-brand-dark group-hover:text-brand-gold transition-colors"></i>
                     @if($cartItemCount > 0)
-                        <span class="absolute -top-2 -right-2 bg-brand-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                        <span id="cart-count-badge" class="absolute -top-2 -right-2 bg-brand-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
                             {{ $cartItemCount }}
                         </span>
                     @endif
                 </div>
                 <div class="hidden sm:flex flex-col items-start leading-none">
                     <span class="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Keranjang</span>
-                    <span class="text-sm font-bold text-brand-dark group-hover:text-brand-gold-dark transition-colors">
+                    <span id="header-cart-total" class="text-sm font-bold text-brand-dark group-hover:text-brand-gold-dark transition-colors">
                         Rp {{ number_format($cartTotal, 0, ',', '.') }}
                     </span>
                 </div>
@@ -173,7 +187,7 @@
                         <div class="grid grid-cols-6 gap-6">
                             @foreach($brands as $brand)
                                 <a 
-                                    href="{{ route('products.index', ['type' => 'brand', 'value' => $brand->slug]) }}" 
+                                    href="{{ route('brands.show', $brand->slug) }}" 
                                     class="group flex justify-center items-center p-4 border border-brand-muted rounded-lg hover:border-brand-gold hover:bg-brand-light transition-all focus:outline-none w-full text-center"
                                 >
                                     <span class="font-medium text-gray-700 text-sm group-hover:text-brand-dark">{{ $brand->name }}</span>
@@ -253,12 +267,6 @@
                 </li>
                 
                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                    <a href="{{ route('blog') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                        Blog
-                    </a>
-                </li>
-
-                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
                     <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
                         Bantuan
                     </a>
@@ -288,11 +296,11 @@
                 <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">Brands</h4>
                 <div class="grid grid-cols-2 gap-2">
                     @foreach($brands as $brand)
-                        <a 
-                            href="{{ route('products.index', ['type' => 'brand', 'value' => $brand->slug]) }}" 
-                            class="text-sm text-gray-600 py-1.5 text-left"
-                            @click="isMobileMenuOpen = false"
-                        >
+<a 
+                             href="{{ route('brands.show', $brand->slug) }}" 
+                             class="text-sm text-gray-600 py-1.5 text-left"
+                             @click="isMobileMenuOpen = false"
+                         >
                             {{ $brand->name }}
                         </a>
                     @endforeach

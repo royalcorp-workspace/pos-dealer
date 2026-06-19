@@ -70,4 +70,14 @@ class Product extends Model
     {
         return $this->hasMany(Review::class);
     }
+
+    public function getAverageRatingAttribute(): float
+    {
+        return Review::avgRating($this->id);
+    }
+
+    public function getReviewCountAttribute(): int
+    {
+        return $this->reviews()->where('is_published', true)->where('is_approved', true)->count();
+    }
 }

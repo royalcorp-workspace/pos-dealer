@@ -4,11 +4,25 @@
 @section('robots', 'noindex,nofollow')
 
 @section('content')
-    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh] font-sans">
+    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh] font-sans" data-route-thankyou="{{ route('thankyou') }}">
         <h1 class="text-3xl font-extrabold text-brand-dark mb-8 font-serif">Pemilihan Pembayaran</h1>
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2">
+                @php
+                    $customer = $orderData['customer'] ?? [];
+                    $customerName = $customer['name'] ?? session()->get('user', [])['name'] ?? '';
+                    $customerPhone = $customer['phone'] ?? session()->get('user', [])['phone'] ?? '';
+                @endphp
+                @if($address || $customerName)
+                    <div class="bg-white border border-brand-muted rounded-2xl p-6 mb-6">
+                        <h2 class="font-bold text-brand-dark mb-4">Alamat Pengiriman</h2>
+                        <p class="text-gray-700">{{ $address->recipient_name ?? $customerName }}</p>
+                        <p class="text-gray-500">{{ $address->phone ?? $customerPhone }}</p>
+                        <p class="text-gray-500">{{ $address->address ?? ($customer['address'] ?? '') }}, {{ $address->subDistrict->city->name ?? '' }} {{ $address->postal_code ?? '' }}</p>
+                    </div>
+                @endif
+
                 <div class="bg-white border border-brand-muted rounded-2xl p-6 mb-6">
                     <h2 class="font-bold text-brand-dark mb-4">Metode Pembayaran</h2>
                     
@@ -48,20 +62,42 @@
                 <div class="bg-white border border-brand-muted rounded-2xl p-6">
                     <h2 class="font-bold text-brand-dark mb-4">Detail Pesanan</h2>
                     <div class="space-y-3">
-                        @foreach($cart as $item)
+                        <div class="flex justify-between items-center py-2 border-b">
+                            <span class="text-gray-700">Subtotal</span>
+                            <span class="font-semibold">Rp {{ number_format($orderData['subtotal'] ?? 0, 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between items-center py-2 border-b">
+                            <span class="text-gray-700">Ongkos Kirim</span>
+                            <span class="font-semibold">Rp {{ number_format($orderData['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between items-center py-2 border-b">
+                            <span class="text-gray-700">Diskon</span>
+                            <span class="font-semibold text-red-600">- Rp {{ number_format($orderData['total_discount'] ?? 0, 0, ',', '.') }}</span>
+                        </div>
+                        
+                        @php
+                            $selectedMethod = collect($paymentMethods)->firstWhere('code', $orderData['payment_method'] ?? null);
+                            $charge = 0;
+                            if ($selectedMethod && !empty($selectedMethod['has_charge'])) {
+                                $totalBeforeCharge = $orderData['total'] ?? 0;
+                                $charge = $selectedMethod['charge_type'] ?? 1 == 1 ? ($totalBeforeCharge * $selectedMethod['charge_value'] / 100) : $selectedMethod['charge_value'];
+                            }
+                        @endphp
+                        @if($charge > 0)
                             <div class="flex justify-between items-center py-2 border-b">
-                                <span class="text-gray-700">{{ $item['name'] ?? 'Produk' }}</span>
-                                <span class="font-semibold">Rp {{ number_format(($item['price'] ?? 0) * ($item['quantity'] ?? 1), 0, ',', '.') }}</span>
+                                <span class="text-gray-700">Biaya Tambahan</span>
+                                <span class="font-semibold">Rp {{ number_format($charge, 0, ',', '.') }}</span>
                             </div>
-                        @endforeach
+                        @endif
+                        
                         <div class="flex justify-between pt-4">
                             <span class="font-bold text-lg">Total</span>
-                            <span class="font-bold text-xl text-brand-dark">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                            <span class="font-bold text-xl text-brand-dark">Rp {{ number_format($orderData['total'] + $charge, 0, ',', '.') }}</span>
                         </div>
                     </div>
                 </div>
             </div>
-
+            
             <div class="lg:col-span-1">
                 <div class="bg-white border border-brand-muted rounded-2xl p-6 sticky top-6">
                     <button 
@@ -71,7 +107,18 @@
                     >
                         Bayar Sekarang
                     </button>
-                    <a href="{{ route('checkout') }}" class="w-full py-2 text-center text-gray-500 hover:text-brand-dark transition-colors text-sm block">
+                    
+                    @php $orderId = $orderData['id'] ?? null; @endphp
+                    @if($orderId)
+                        <form method="POST" action="{{ route('order.cancel', $orderId) }}" onsubmit="return confirm('Batalkan order ini?');">
+                            @csrf
+                            <button type="submit" class="w-full py-2 text-center text-red-600 hover:text-red-700 transition-colors text-sm">
+                                Batalkan Order
+                            </button>
+                        </form>
+                    @endif
+                    
+                    <a href="{{ route('checkout') }}" class="w-full py-2 text-center text-gray-500 hover:text-brand-dark transition-colors text-sm block mt-2">
                         Kembali ke Checkout
                     </a>
                 </div>
@@ -79,19 +126,3 @@
         </div>
     </div>
 @endsection
-
-@push('scripts')
-<script>
-function processPayment() {
-    const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
-    if (!selectedMethod) {
-        alert('Pilih metode pembayaran terlebih dahulu');
-        return;
-    }
-    showLoading();
-    setTimeout(function() {
-        window.location.href = '{{ route('thankyou') }}';
-    }, 500);
-}
-</script>
-@endpush

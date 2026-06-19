@@ -1,7 +1,7 @@
 @extends('frontend.layouts.app')
 
 @section('title', 'Promo Spesial - IMG')
-@section('meta_description', 'Dapatkan promo kasur, springbed, dan perlengkapan tidur premium di IMG. Nikmati diskon, cashback, dan gratis ongkir untuk kenyamanan tidur Anda.')
+@section('meta_description', 'Dapatkan promo kasur, springbed, dan perlengkapan tidur premium di IMG. Nikmati diskon dan gratis ongkir untuk kenyamanan tidur Anda.')
 @section('canonical', route('promos'))
 
 @section('content')
