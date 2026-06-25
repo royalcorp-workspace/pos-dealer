@@ -513,6 +513,7 @@
     
     <!-- App JS (must load before Alpine so window.* helpers are defined when Alpine initialises) -->
     <script src="{{ asset('js/frontend/app.js') }}"></script>
+    <script src="{{ asset('js/frontend/cart-drawer.js') }}"></script>
     <script src="{{ asset('js/frontend/auth-modal.js') }}"></script>
 
     <!-- Alpine.js -->
