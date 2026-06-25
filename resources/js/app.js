@@ -1,1 +1,11 @@
 import './bootstrap';
+import './frontend/app';
+import './frontend/cart-drawer';
+import './frontend/auth-modal';
+import './frontend/addresses';
+import './frontend/auth-callback';
+import './frontend/checkout';
+import './frontend/product';
+import './frontend/payment';
+import './frontend/auth-reset-password';
+import './frontend/auth-forgot-password';

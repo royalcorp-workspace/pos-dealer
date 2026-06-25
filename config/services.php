@@ -35,4 +35,33 @@ return [
         ],
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect_uri' => env('GOOGLE_REDIRECT_URI'),
+    ],
+
+    'expeditions' => [
+        'sap' => [
+            'base_url' => env('SAP_EXPEDITION_BASE_URL'),
+            'token' => env('SAP_EXPEDITION_TOKEN'),
+        ],
+        'jne' => [
+            'base_url' => env('JNE_EXPEDITION_BASE_URL'),
+            'token' => env('JNE_EXPEDITION_TOKEN'),
+        ],
+        'jt' => [
+            'base_url' => env('JT_EXPEDITION_BASE_URL'),
+            'token' => env('JT_EXPEDITION_TOKEN'),
+        ],
+        'sicepat' => [
+            'base_url' => env('SICEPAT_EXPEDITION_BASE_URL'),
+            'token' => env('SICEPAT_EXPEDITION_TOKEN'),
+        ],
+        'anteraja' => [
+            'base_url' => env('ANTERAJA_EXPEDITION_BASE_URL'),
+            'token' => env('ANTERAJA_EXPEDITION_TOKEN'),
+        ],
+    ],
+
 ];

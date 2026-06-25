@@ -1,4 +1,6 @@
-@import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+@import "tailwindcss";
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -6,6 +8,38 @@
 @source '../**/*.js';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-serif: "Playfair Display", ui-serif, Georgia, cambria, serif;
+    --color-brand-dark: #2b1d12;
+    --color-brand-darker: #1a1009;
+    --color-brand-gold: #c09d6b;
+    --color-brand-gold-dark: #ad8a58;
+    --color-brand-light: #fdfbf7;
+    --color-brand-muted: #f2ebd9;
 }
+
+@utility scrollbar-none {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+
+/* Blog card hover tuning (match React list hover behavior) */
+/* Blog card hover tuning (match React list hover behavior) */
+.blog-card:hover {
+    border-color: var(--brand-gold) !important;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1) !important;
+    transform: translateY(-4px) !important;
+}
+
+.blog-card:hover .blog-card__title,
+.blog-card:hover .blog-card__link {
+    color: var(--brand-gold) !important;
+}
+
+
+
+
+
