@@ -149,6 +149,56 @@
         });
     };
 
+    window.validateAndApplyCartVoucher = function () {
+        var input = document.getElementById('manual-cart-voucher-input');
+        var code = input.value.trim().toUpperCase();
+        var feedback = document.getElementById('manual-cart-voucher-feedback');
+        if (!code) {
+            if (feedback) feedback.innerHTML = '<span class="text-red-500">Masukkan kode voucher.</span>';
+            return;
+        }
+
+        var cartFooter = document.getElementById('cart-footer');
+        var productIds = cartFooter ? JSON.parse(cartFooter.dataset.productIds || '[]') : [];
+        var categoryIds = cartFooter ? JSON.parse(cartFooter.dataset.categoryIds || '[]') : [];
+        var cartTotal = window.currentCartTotal || currentCartTotal;
+
+        if (feedback) feedback.innerHTML = '<span class="text-gray-500">Memvalidasi...</span>';
+
+        fetch('/voucher/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                code: code,
+                cart_total: cartTotal,
+                product_ids: productIds,
+                category_ids: categoryIds
+            })
+        })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            if (data.valid) {
+                var existingButton = document.querySelector('.coupon-option[data-code="' + code + '"]');
+                if (existingButton) {
+                    window.selectCartCoupon(existingButton);
+                    if (feedback) feedback.innerHTML = '<span class="text-green-600">Voucher berhasil diterapkan!</span>';
+                } else {
+                    if (feedback) feedback.innerHTML = '<span class="text-red-500">Voucher tidak tersedia untuk keranjang Anda.</span>';
+                }
+                if (input) input.value = '';
+            } else {
+                if (feedback) feedback.innerHTML = '<span class="text-red-500">' + data.message + '</span>';
+            }
+        })
+        .catch(function () {
+            if (feedback) feedback.innerHTML = '<span class="text-red-500">Gagal memvalidasi voucher.</span>';
+        });
+    };
+
     function restoreSavedCoupon() {
         const saved = localStorage.getItem('selectedCartCoupon');
         if (!saved) return;

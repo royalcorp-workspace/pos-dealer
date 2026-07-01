@@ -34,6 +34,15 @@ class CheckoutController extends Controller
         $savedAddressesSafe = collect();
         $checkoutFormData = Session::get('checkout_form_data', []);
         $cartBackup = Session::get('cart_backup', []);
+        $subDistricts = \App\Models\Frontend\Location\SubDistrict::with('city')
+            ->orderBy('sub_district')
+            ->get()
+            ->map(fn($sd) => [
+                'id' => $sd->id,
+                'label' => $sd->sub_district . ', ' . ($sd->city->name ?? ''),
+                'postal_code' => $sd->postal_code,
+                'city' => $sd->city->name ?? '',
+            ]);
 
         if (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
@@ -50,6 +59,7 @@ class CheckoutController extends Controller
                     'city' => $a->subDistrict->city->name ?? '',
                     'address' => $a->address,
                     'postal_code' => $a->postal_code,
+                    'sub_district_id' => $a->sub_district_id,
                 ];
             });
         }
@@ -59,7 +69,7 @@ class CheckoutController extends Controller
             Session::forget('cart_backup');
         }
 
-        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData'));
+        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'subDistricts'));
     }
 
     public function store(Request $request)
@@ -158,7 +168,11 @@ class CheckoutController extends Controller
             'notes' => null,
         ]);
 
+        $productIds = collect($cart)->pluck('product_id')->filter()->unique()->toArray();
+        [$globalSettings, $perProductSettings, $volumeSettings] = $this->getPriceProductSettings($productIds);
+
         foreach ($cart as $item) {
+            $itemDiscount = $this->calculateItemPriceProductSettingDiscount($item, $globalSettings, $perProductSettings, $volumeSettings);
             OrderItem::create([
                 'id' => Str::uuid(),
                 'order_id' => $order->id,
@@ -167,6 +181,8 @@ class CheckoutController extends Controller
                 'name' => $item['name'],
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['price'],
+                'discount_nominal' => $itemDiscount['nominal'] ?? 0,
+                'discount_percent' => $itemDiscount['percent'] ?? 0,
                 'total' => $item['price'] * $item['quantity'],
                 'item_notes' => $item['item_note'] ?? ($itemNotes[$item['id']] ?? ''),
             ]);
@@ -470,60 +486,94 @@ class CheckoutController extends Controller
     private function calculatePriceProductSettingDiscount(array $cart, float $cartTotal): float
     {
         $productIds = collect($cart)->pluck('product_id')->filter()->unique()->toArray();
-        $globalSettings = PriceProductSetting::active()->where('type', 1)->where('scope', 1)->get();
-        $perProductSettings = PriceProductSetting::active()->where('type', 1)->where('scope', 2)
-            ->whereHas('products', fn($q) => $q->whereIn('products.id', $productIds))
-            ->get();
-        
-        // Volume discount settings
-        $volumeSettings = PriceProductSetting::active()->where('type', 2)->get();
+        [$globalSettings, $perProductSettings, $volumeSettings] = $this->getPriceProductSettings($productIds);
 
         $discount = 0;
         foreach ($cart as $item) {
-            $itemTotal = ($item['price'] ?? 0) * ($item['quantity'] ?? 0);
-            $quantity = $item['quantity'] ?? 0;
+            $discount += $this->calculateItemPriceProductSettingDiscount($item, $globalSettings, $perProductSettings, $volumeSettings)['total'];
+        }
+        return min($discount, $cartTotal);
+    }
 
-            // Check volume tiers
-            foreach ($volumeSettings as $vs) {
-                $volumeTiers = $vs->volume_tiers ?? [];
-                if (!empty($volumeTiers) && is_array($volumeTiers)) {
-                    foreach ($volumeTiers as $tier) {
-                        $minQty = $tier['min_quantity'] ?? 0;
-                        $maxQty = $tier['max_quantity'] ?? PHP_INT_MAX;
-                        if ($quantity >= $minQty && $quantity <= $maxQty) {
-                            $itemDiscount = $this->calculateDiscountValue(
-                                $tier['discount_type'] ?? $vs->discount_type,
-                                $tier['discount_value'] ?? $vs->discount_value,
-                                $itemTotal,
-                                $vs->max_discount
-                            );
-                            $discount += $itemDiscount;
+    private function getPriceProductSettings(array $productIds): array
+    {
+        $globalSettings = PriceProductSetting::active()->where('type', 1)->where('scope', 1)
+            ->whereHas('products', fn($q) => $q->whereIn('products.id', $productIds))
+            ->get();
+        $perProductSettings = PriceProductSetting::active()->where('type', 1)->where('scope', 2)
+            ->whereHas('products', fn($q) => $q->whereIn('products.id', $productIds))
+            ->get();
+        $volumeSettings = PriceProductSetting::active()->where('type', 2)->get();
+
+        return [$globalSettings, $perProductSettings, $volumeSettings];
+    }
+
+    private function calculateItemPriceProductSettingDiscount(array $item, $globalSettings, $perProductSettings, $volumeSettings): array
+    {
+        $itemTotal = ($item['price'] ?? 0) * ($item['quantity'] ?? 0);
+        $quantity = $item['quantity'] ?? 0;
+        $discount = 0;
+        $nominal = 0;
+
+        foreach ($volumeSettings as $vs) {
+            $volumeTiers = $vs->volume_tiers ?? [];
+            if (!empty($volumeTiers) && is_array($volumeTiers)) {
+                foreach ($volumeTiers as $tier) {
+                    $minQty = $tier['min_quantity'] ?? 0;
+                    $maxQty = $tier['max_quantity'] ?? PHP_INT_MAX;
+                    if ($quantity >= $minQty && $quantity <= $maxQty) {
+                        $discountAmount = $this->calculateDiscountValue(
+                            (int) ($tier['discount_type'] ?? $vs->discount_type),
+                            (float) ($tier['discount_value'] ?? $vs->discount_value),
+                            $itemTotal,
+                            (float) ($vs->max_discount ?? $itemTotal)
+                        );
+                        $discount += $discountAmount;
+                        if ((int) ($tier['discount_type'] ?? $vs->discount_type) === 2) {
+                            $nominal += $discountAmount;
                         }
                     }
                 }
             }
+        }
 
-            foreach ($globalSettings as $pps) {
-                $discount += $this->calculateDiscountValue(
-                    $pps->discount_type,
-                    $pps->discount_value,
-                    $itemTotal,
-                    $pps->max_discount
-                );
-            }
-
-            $itemPps = $perProductSettings->filter(fn($p) => $p->products->contains('id', $item['product_id']));
-            foreach ($itemPps as $pps) {
-                $pivot = $pps->products->first(fn($p) => $p->id === $item['product_id'])->pivot;
-                $discount += $this->calculateDiscountValue(
-                    $pivot->discount_type ?? $pps->discount_type,
-                    $pivot->discount_value ?? $pps->discount_value,
-                    $itemTotal,
-                    $pps->max_discount
-                );
+        foreach ($globalSettings as $pps) {
+            $discountAmount = $this->calculateDiscountValue(
+                $pps->discount_type,
+                (float) $pps->discount_value,
+                $itemTotal,
+                (float) ($pps->max_discount ?? $itemTotal)
+            );
+            $discount += $discountAmount;
+            if ((int) $pps->discount_type === 2) {
+                $nominal += $discountAmount;
             }
         }
-        return min($discount, $cartTotal);
+
+        $itemPps = $perProductSettings->filter(fn($p) => $p->products->contains('id', $item['product_id']));
+        foreach ($itemPps as $pps) {
+            $pivot = $pps->products->first(fn($p) => $p->id === $item['product_id'])->pivot;
+            $discountAmount = $this->calculateDiscountValue(
+                (int) ($pivot->discount_type ?? $pps->discount_type),
+                (float) ($pivot->discount_value ?? $pps->discount_value),
+                $itemTotal,
+                (float) ($pps->max_discount ?? $itemTotal)
+            );
+            $discount += $discountAmount;
+            if ((int) ($pivot->discount_type ?? $pps->discount_type) === 2) {
+                $nominal += $discountAmount;
+            }
+        }
+
+        $total = min($discount, $itemTotal);
+        $percentAmount = max(0, $total - $nominal);
+        $percent = $itemTotal > 0 ? round(($percentAmount / $itemTotal) * 100, 2) : 0;
+
+        return [
+            'total' => $total,
+            'nominal' => $nominal,
+            'percent' => $percent,
+        ];
     }
 
     private function calculateDiscountValue($type, float $value, float $itemTotal, ?float $maxDiscount): float

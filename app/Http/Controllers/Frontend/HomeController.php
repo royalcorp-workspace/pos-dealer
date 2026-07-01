@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Frontend;
 use App\Http\Controllers\Controller;
 use App\Models\Frontend\ProductsCatalog\Product;
 use App\Models\Frontend\ProductsCatalog\ProductCategory;
+use Illuminate\Http\Request;
 
 class HomeController extends Controller
 {
@@ -18,8 +19,10 @@ class HomeController extends Controller
 
         $recommended = Product::where('deleted', false)
             ->with(['brand', 'category', 'images', 'variants', 'tags'])
-            ->take(6)
+            ->take(8)
             ->get();
+
+        $recommendedTotal = Product::where('deleted', false)->count();
 
         $featured = Product::where('deleted', false)
             ->where('is_new', true)
@@ -32,7 +35,28 @@ class HomeController extends Controller
             ->take(6)
             ->get();
 
-        return view('frontend.home', compact('bestsellers', 'recommended', 'featured', 'categories'));
+        return view('frontend.home', compact('bestsellers', 'recommended', 'featured', 'categories', 'recommendedTotal'));
+    }
+
+    public function loadMore(Request $request)
+    {
+        $offset = $request->query('offset', 8);
+        $limit = $request->query('limit', 4);
+
+        $products = Product::where('deleted', false)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->skip($offset)
+            ->take($limit)
+            ->get();
+
+        $html = '';
+        foreach ($products as $product) {
+            $html .= view('frontend.components.product-card-dynamic', ['product' => $product])->render();
+        }
+
+        return response()->json([
+            'html' => $html,
+            'count' => $products->count(),
+        ]);
     }
 }
-

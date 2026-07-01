@@ -10,7 +10,9 @@
 @section('content')
     @php
         $variantsData = $product->variants;
+        $colorsData = $product->colors;
         $hasVariants = $variantsData->isNotEmpty();
+        $hasColors = $colorsData->isNotEmpty();
         $basePrice = (float)($product->base_price ?? 0);
         $minPrice = $variantsData->min('price');
         $maxPrice = $variantsData->max('price');
@@ -219,6 +221,31 @@ $wishlist = session()->get('wishlist', []);
                         <input type="hidden" name="variant_id" id="variant-id-input" value="{{ $variantsData->first()->id }}">
                     @endif
 
+                    <!-- Options (Colors) -->
+                    @if($hasColors)
+                        <div class="mb-8">
+                            <h3 class="font-bold text-brand-dark mb-4">Pilih Warna</h3>
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                @foreach($colorsData as $i => $color)
+                                    <button 
+                                        type="button"
+                                        data-color-id="{{ $color->id }}"
+                                        data-color-name="{{ $color->color_name }}"
+                                        data-color-code="{{ $color->color_code ?? '' }}"
+                                        onclick="selectColor(this)"
+                                        class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 {{ $i === 0 ? 'border-brand-gold bg-brand-light text-brand-dark' : 'border-brand-muted bg-white text-gray-600' }}"
+                                    >
+                                        {{ $color->color_name }}
+                                        @if($color->color_code)
+                                            <span class="block w-6 h-6 rounded-full mt-1 mx-auto border border-gray-300" style="background-color: {{ $color->color_code }};"></span>
+                                        @endif
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+                        <input type="hidden" name="color_id" id="color-id-input" value="{{ $colorsData->first()->id }}">
+                    @endif
+
                     @php
                         $totalStock = $product->variants->sum('stock_qty');
                     @endphp
@@ -371,6 +398,28 @@ function selectVariant(el) {
     const variantInput = document.getElementById('variant-id-input');
     if (variantInput) {
         variantInput.value = el.dataset.variantId;
+    }
+}
+
+function selectColor(el) {
+    document.querySelectorAll('[data-color-id]').forEach(btn => {
+        btn.classList.remove('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+        btn.classList.add('border-brand-muted', 'bg-white', 'text-gray-600');
+    });
+    el.classList.remove('border-brand-muted', 'bg-white', 'text-gray-600');
+    el.classList.add('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+    
+    const priceLabel = document.getElementById('price-label');
+    if (priceLabel) {
+        const selectedVariant = document.querySelector('[data-variant-id].border-brand-gold');
+        const variantName = selectedVariant ? selectedVariant.textContent.trim().split('\n')[0] : '';
+        const colorName = el.dataset.colorName;
+        priceLabel.textContent = 'Harga untuk ukuran: ' + variantName + ', warna: ' + colorName;
+    }
+    
+    const colorInput = document.getElementById('color-id-input');
+    if (colorInput) {
+        colorInput.value = el.dataset.colorId;
     }
 }
 

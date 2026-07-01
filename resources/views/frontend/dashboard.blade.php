@@ -231,9 +231,20 @@
 
                                     <div class="space-y-2 text-sm text-brand-dark">
                                         @forelse($order->items as $item)
-                                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3">
-                                                <span class="truncate">{{ $item->quantity }}x {{ $item->name }}</span>
-                                                <span class="text-gray-500">{{ $formatRupiah($item->total) }}</span>
+                                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
+                                                <div class="min-w-0 flex-1">
+                                                    <span class="truncate block">{{ $item->quantity }}x {{ $item->name }}</span>
+                                                    <span class="text-xs text-gray-500">{{ $formatRupiah($item->unit_price ?? 0) }} / item</span>
+                                                </div>
+                                                <div class="text-left sm:text-right">
+                                                    @if(($item->discount_percent ?? 0) > 0)
+                                                        <span class="text-xs text-red-500 block">Diskon {{ $item->discount_percent }}%</span>
+                                                    @endif
+                                                    @if(($item->discount_nominal ?? 0) > 0)
+                                                        <span class="text-xs text-red-500 block">-{{ $formatRupiah($item->discount_nominal) }}</span>
+                                                    @endif
+                                                    <span class="text-gray-700 font-medium">{{ $formatRupiah(max(0, ($item->total ?? 0) - (($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) - ($item->discount_nominal ?? 0))) }}</span>
+                                                </div>
                                             </div>
                                         @empty
                                             <p class="text-gray-500">Tidak ada item pada pesanan ini.</p>

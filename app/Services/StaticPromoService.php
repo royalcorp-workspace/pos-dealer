@@ -30,6 +30,7 @@ class StaticPromoService
         $globalPromo = PriceProductSetting::active()
             ->where('type', 1)
             ->where('scope', 1)
+            ->whereHas('products', fn($q) => $q->where('products.id', $product->id)->where('products.deleted', false))
             ->first();
 
         if ($globalPromo) {

@@ -3,9 +3,12 @@
 @section('title', 'Terima Kasih - IMG')
 
 @php
-    $order = [
-        'id' => session('order_id') ?? 'ORD-' . date('Ymd') . '-' . rand(1000, 9999),
-    ];
+    $orderId = $order->order_number ?? $orderData['order_number'] ?? session('order_id') ?? 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
+    $paymentMethod = $order->payment_method ?? $orderData['payment_method'] ?? '-';
+    $total = $order->total ?? $orderData['total'] ?? 0;
+    $status = $order->status ?? 1;
+    $statusLabel = \App\Models\Frontend\Order::statusLabels()[$status] ?? 'Menunggu Pembayaran';
+    $statusBadge = $order->status_badge_class ?? 'bg-yellow-100 text-yellow-700';
 @endphp
 
 @section('content')
@@ -25,15 +28,19 @@
                 <div class="space-y-2 text-sm">
                     <div class="flex justify-between">
                         <span class="text-gray-500">ID Pesanan</span>
-                        <span class="font-mono font-bold text-brand-gold-dark">{{ $order['id'] }}</span>
+                        <span class="font-mono font-bold text-brand-gold-dark">{{ $orderId }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-gray-500">Metode Pembayaran</span>
-                        <span class="font-medium">Bank Transfer</span>
+                        <span class="font-medium">{{ ucwords(str_replace(['_', '-'], ' ', $paymentMethod)) }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-gray-500">Status</span>
-                        <span class="font-medium text-brand-gold">Menunggu Pembayaran</span>
+                        <span class="font-medium px-2 py-1 rounded-full text-xs {{ $statusBadge }}">{{ $statusLabel }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Total</span>
+                        <span class="font-bold text-brand-dark">Rp {{ number_format($total, 0, ',', '.') }}</span>
                     </div>
                 </div>
             </div>

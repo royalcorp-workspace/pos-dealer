@@ -47,6 +47,9 @@
                         <div>
                             <span class="text-[10px] uppercase font-bold tracking-wider text-gray-400">{{ $item['brand'] }}</span>
                             <h4 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 mt-0.5">{{ $item['name'] }}</h4>
+                            @if(isset($item['color_name']) && $item['color_name'])
+                                <div class="text-xs text-brand-gold-dark mt-1 font-medium">Warna: {{ $item['color_name'] }}</div>
+                            @endif
                             @if(isset($item['size']) && $item['size'])
                                 <div class="text-xs text-brand-gold-dark mt-1 font-medium">{{ $item['size'] }}</div>
                             @endif
@@ -89,7 +92,7 @@
         @endforeach
     </div>
 
-    <div id="cart-footer" class="p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-4">
+    <div id="cart-footer" class="p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-4" data-product-ids='@json($cartProductIds)' data-category-ids='@json($cartCategoryIds)'>
         <button
             type="button"
             onclick="toggleCartCouponPanel()"
@@ -109,6 +112,12 @@
         </button>
 
         <div id="cart-coupon-panel" class="hidden space-y-3">
+            <div class="flex gap-2">
+                <input type="text" id="manual-cart-voucher-input" placeholder="Kode voucher" class="flex-1 px-3 py-2 border border-brand-muted rounded-xl text-sm focus:outline-none focus:border-brand-gold uppercase" maxlength="20">
+                <button type="button" onclick="validateAndApplyCartVoucher()" class="px-4 py-2 bg-brand-dark text-brand-gold rounded-xl font-bold text-xs hover:bg-brand-darker transition-colors whitespace-nowrap">Gunakan</button>
+            </div>
+            <div id="manual-cart-voucher-feedback" class="text-xs"></div>
+
             @foreach($cartCoupons as $coupon)
                 @php
                     $typeLabel = match($coupon->type) {

@@ -217,4 +217,14 @@ class AuthController extends Controller
             'email' => request()->query('email', ''),
         ]);
     }
+
+    public function showRegister()
+    {
+        return view('frontend.register', [
+            'email' => request()->query('email', ''),
+            'name' => request()->query('name', ''),
+            'google_id' => request()->query('google_id', ''),
+            'firebase_token' => request()->query('firebase_token', ''),
+        ]);
+    }
 }

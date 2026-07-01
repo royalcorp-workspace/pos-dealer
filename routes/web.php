@@ -13,6 +13,7 @@ use App\Http\Controllers\Frontend\ProductCatalogController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/home/load-more', [HomeController::class, 'loadMore'])->name('home.load-more');
 Route::get('/home', fn () => redirect()->route('home'))->name('home.redirect');
 
 Route::get('/sitemap.xml', [PageController::class, 'sitemap'])->name('sitemap');
@@ -53,11 +54,13 @@ Route::get('/order-preview', [CheckoutController::class, 'orderPreview'])->name(
 Route::get('/order-tracking', [OrderTrackingController::class, 'index'])->name('order.tracking');
 
 Route::get('/payment', [CheckoutController::class, 'payment'])->name('payment');
+Route::post('/payment/process', [CheckoutController::class, 'processPayment'])->name('payment.process');
 
 Route::get('/thankyou', [CheckoutController::class, 'thankYou'])->name('thankyou');
 
 Route::get('/register-success', [CheckoutController::class, 'registerSuccess'])->name('register.success');
 
+Route::get('/register', [AuthController::class, 'showRegister'])->name('register.show');
 Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('forgot-password.show');
 Route::get('/password-otp-sent', [CheckoutController::class, 'passwordOtpSent'])->name('password-otp.sent');
 Route::get('/reset-password', [AuthController::class, 'showResetPassword'])->name('reset-password.show');

@@ -69,11 +69,23 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        $isGoogleSignup = $request->filled('google_id');
+
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:6'],
-            'name' => ['nullable', 'string', 'max:255'],
+            'password' => [$isGoogleSignup ? 'nullable' : 'required', 'string', 'min:8', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/'],
+            'password_confirmation' => [$isGoogleSignup ? 'nullable' : 'required', 'same:password'],
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:20'],
+            'sub_district_id' => ['required', 'uuid', 'exists:sub_districts,id'],
+            'address' => ['required', 'string', 'max:500'],
+            'google_id' => ['nullable', 'string'],
+            'firebase_token' => ['nullable', 'string'],
         ]);
+
+        if (empty($data['password']) && empty($data['google_id'])) {
+            return response()->json(['message' => 'Password is required if not using Google Sign In'], 422);
+        }
 
         $exists = User::query()->where('email', $data['email'])->exists();
         if ($exists) {
@@ -82,30 +94,71 @@ class AuthController extends Controller
 
         $user = User::create([
             'id' => Str::uuid()->toString(),
-            'name' => $data['name'] ?? 'Member',
+            'name' => $data['name'],
             'email' => $data['email'],
-            'password_hash' => Hash::make($data['password']),
-            'email_verified' => false,
-            'email_verified_at' => null,
+            'password_hash' => !empty($data['password']) ? Hash::make($data['password']) : null,
+            'google_id' => $data['google_id'] ?? null,
+            'firebase_token' => $data['firebase_token'] ?? null,
+            'email_verified' => !empty($data['google_id']),
+            'email_verified_at' => !empty($data['google_id']) ? now() : null,
         ]);
 
-
-        // Create email verification token (24h, once-use)
-        $token = Str::random(64);
-        EmailVerification::create([
-            'user_id' => $user->getAttribute('id'),
-            'token' => $token,
-            'expires_at' => now()->addHours(24),
-            'used' => false,
+        \App\Models\Frontend\Customer\Customer::create([
+            'user_id' => $user->id,
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'],
         ]);
 
-        // Send verification email
-        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+        $subDistrict = \App\Models\Frontend\Location\SubDistrict::find($data['sub_district_id']);
+        if ($subDistrict) {
+            \App\Models\Frontend\Customer\Address::create([
+                'id' => Str::uuid()->toString(),
+                'user_id' => $user->id,
+                'sub_district_id' => $data['sub_district_id'],
+                'city_id' => $subDistrict->city_id,
+                'label' => 'Rumah',
+                'recipient_name' => $data['name'],
+                'phone' => $data['phone'],
+                'address' => $data['address'],
+                'postal_code' => $subDistrict->postal_code,
+                'is_primary' => true,
+            ]);
+        }
+
+        if (empty($data['google_id'])) {
+            $token = Str::random(64);
+            EmailVerification::create([
+                'user_id' => $user->getAttribute('id'),
+                'token' => $token,
+                'expires_at' => now()->addHours(24),
+                'used' => false,
+            ]);
+            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+            return response()->json([
+                'message' => 'User created. Verification email sent to your inbox.'
+            ], 201);
+        }
+
+        $deviceId = $this->deviceSessions->deviceId($request);
+        $access = $this->tokens->issueAccessToken($user, $deviceId);
+        $refreshModel = $this->tokens->issueRefreshToken($user, $request, $deviceId);
+        $this->deviceSessions->register($request, $user, null, null, $refreshModel->getKey());
+        $this->deviceSessions->enforceLimit($user, null, $deviceId);
+
+        $this->audit->log($user, 'login_success', $request, [
+            'provider' => 'google',
+            'google_id' => $data['google_id'],
+        ]);
 
         return response()->json([
-            'message' => 'User created. Verification email sent to your inbox.'
+            'message' => 'User created successfully.',
+            'access_token' => $access,
+            'refresh_token' => (string) $refreshModel->getAttribute('raw_token'),
+            'token_type' => 'Bearer',
+            'expires_in' => 3600,
+            'redirect' => '/dashboard'
         ], 201);
-
     }
 
     public function verifyEmail(Request $request)

@@ -41,6 +41,12 @@ return [
         'redirect_uri' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'firebase' => [
+        'api_key' => env('FIREBASE_API_KEY'),
+        'project_id' => env('FIREBASE_PROJECT_ID'),
+        'auth_domain' => env('FIREBASE_AUTH_DOMAIN'),
+    ],
+
     'expeditions' => [
         'sap' => [
             'base_url' => env('SAP_EXPEDITION_BASE_URL'),

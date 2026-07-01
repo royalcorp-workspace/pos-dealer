@@ -59,7 +59,7 @@ class ProductCatalogController extends Controller
             ->get();
 
         $query = Product::where('deleted', false)
-            ->with(['brand', 'category', 'images', 'variants', 'tags']);
+            ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
 
         // Apply existing type/value filters
         if ($filterType && $filterValue) {
@@ -141,7 +141,7 @@ class ProductCatalogController extends Controller
 
     public function show(Product $product)
     {
-        $product->load(['brand', 'category', 'images', 'variants', 'tags']);
+        $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
         
         return view('frontend.product.show', compact('product'));
     }
