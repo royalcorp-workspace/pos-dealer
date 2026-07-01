@@ -134,6 +134,7 @@ class CartController extends Controller
                 'cart' => $cart,
                 'cart_count' => $this->getCartCount($cart),
                 'cart_total' => $this->getCartTotal($cart),
+                'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
             ]);
         }
 
@@ -155,6 +156,7 @@ class CartController extends Controller
                 'cart' => $cart,
                 'cart_count' => $this->getCartCount($cart),
                 'cart_total' => $this->getCartTotal($cart),
+                'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
             ]);
         }
 
@@ -185,10 +187,108 @@ class CartController extends Controller
 
         $courier = $request->input('courier');
         $itemNotes = (array) $request->input('item_notes', []);
-        $subtotal = $this->getCartTotal($cart);
+        $recalculatedCart = [];
+        $subtotal = 0.0;
+        foreach ($cart as $key => $item) {
+            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+            $originalPrice = 0.0;
+            if ($variantId) {
+                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                if ($variantModel) {
+                    $originalPrice = (float) $variantModel->price;
+                }
+            }
+            if ($originalPrice <= 0.0) {
+                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                if ($productModel) {
+                    $originalPrice = (float) $productModel->base_price;
+                }
+            }
+            if ($originalPrice <= 0.0) {
+                $originalPrice = (float) $item['price'];
+            }
+            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
+            $item['price'] = $res['promotional_price'];
+            $recalculatedCart[$key] = $item;
+            $subtotal += $res['promotional_price'] * (int) $item['quantity'];
+        }
+        $cart = $recalculatedCart;
         $shippingCost = self::SHIPPING_PRICES[$courier] ?? 0;
         $voucherCodes = $this->parseVoucherCodes($request);
-        $voucherDiscount = max(0, min((float) ($request->input('voucher_discount') ?? 0), $subtotal + $shippingCost));
+
+        // Hitung voucher diskon dari backend supaya voucher persentase
+        // benar-benar mengurangi total (dan konsisten dengan checkout).
+        $voucherDiscount = 0;
+        if (!empty($voucherCodes)) {
+            $userId = session()->get('is_logged_in')
+                ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+                : null;
+
+            $vouchers = \App\Models\Frontend\Promo\Voucher::active()
+                ->with(['products', 'categories'])
+                ->where(function ($query) use ($voucherCodes) {
+                    foreach ($voucherCodes as $code) {
+                        $query->orWhereRaw('LOWER(code) = ?', [strtolower($code)]);
+                    }
+                })
+                ->get()
+                ->keyBy(fn($v) => strtoupper($v->code));
+
+            $orderedVouchers = collect($voucherCodes)
+                ->map(fn($code) => $vouchers->get(strtoupper($code)))
+                ->filter()
+                ->values();
+
+            $discountSum = 0;
+            foreach ($orderedVouchers as $voucher) {
+                if (!$voucher->canBeUsedBy($userId)) continue;
+
+                // eligible subtotal mengikuti scope voucher
+                $eligibleSubtotal = 0.0;
+                if ((int) $voucher->scope === 2) {
+                    $eligibleProductIds = $voucher->products()->where('deleted', false)->pluck('products.id')->unique()->toArray();
+                    $eligibleSubtotal = (float) collect($cart)
+                        ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
+                        ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                } elseif ((int) $voucher->scope === 3) {
+                    $eligibleProductIds = $voucher->categories()->where('deleted', false)
+                        ->with('products')
+                        ->get()
+                        ->flatMap(fn($category) => $category->products->where('deleted', false)->pluck('id'))
+                        ->unique()
+                        ->toArray();
+
+                    $eligibleSubtotal = (float) collect($cart)
+                        ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
+                        ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                } else {
+                    $eligibleSubtotal = (float) collect($cart)
+                        ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                }
+
+                if ($eligibleSubtotal < (float) ($voucher->min_purchase ?? 0)) continue;
+
+                // nilai diskon sesuai type
+                if ((int) $voucher->type === 1) {
+                    $maxDiscount = ($voucher->max_discount !== null && (float) $voucher->max_discount > 0)
+                        ? (float) $voucher->max_discount
+                        : PHP_FLOAT_MAX;
+
+                    $discountValue = min(($eligibleSubtotal * (float) $voucher->value / 100), $maxDiscount);
+                } elseif ((int) $voucher->type === 2) {
+                    $discountValue = min((float) $voucher->value, $eligibleSubtotal);
+                } elseif ((int) $voucher->type === 3) {
+                    $discountValue = min((float) $voucher->value, (float) $shippingCost);
+                } else {
+                    $discountValue = 0.0;
+                }
+
+                $discountSum += (float) $discountValue;
+            }
+
+            $voucherDiscount = max(0, min((float) $discountSum, $subtotal + $shippingCost));
+        }
+
 
         $preview = [
             'customer' => $request->only(['name', 'email', 'phone', 'city', 'address', 'postal_code']),
@@ -335,9 +435,27 @@ class CartController extends Controller
 
     private function getCartTotal(array $cart): float
     {
-        $total = 0;
+        $total = 0.0;
         foreach ($cart as $item) {
-            $total += ($item['price'] * $item['quantity']);
+            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+            $originalPrice = 0.0;
+            if ($variantId) {
+                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                if ($variantModel) {
+                    $originalPrice = (float) $variantModel->price;
+                }
+            }
+            if ($originalPrice <= 0.0) {
+                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                if ($productModel) {
+                    $originalPrice = (float) $productModel->base_price;
+                }
+            }
+            if ($originalPrice <= 0.0) {
+                $originalPrice = (float) $item['price'];
+            }
+            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
+            $total += $res['promotional_price'] * (int) $item['quantity'];
         }
         return $total;
     }

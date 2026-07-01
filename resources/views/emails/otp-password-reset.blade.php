@@ -13,4 +13,3 @@ Jika Anda tidak meminta reset password, abaikan email ini.
 
 Terima kasih.
 @endcomponent
-

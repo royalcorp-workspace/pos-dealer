@@ -101,7 +101,18 @@ class Voucher extends Model
         if (!$this->isValid()) return false;
         if ($this->valid_for_new_customer && $userId) return false;
         if ($this->usage_limit_per_user && $userId) {
-            $userUsages = $this->usages()->where('user_id', $userId)->count();
+            $userUsages = $this->usages()
+                ->where('user_id', $userId)
+                ->whereExists(function ($query) {
+                    $query->select(\Illuminate\Support\Facades\DB::raw(1))
+                        ->from('orders')
+                        ->where(function ($q) {
+                            $q->whereRaw('CAST(orders.id AS VARCHAR) = voucher_usages.order_id')
+                              ->orWhereRaw('orders.order_number = voucher_usages.order_id');
+                        })
+                        ->whereIn('orders.status', [2, 3, 4, 5]);
+                })
+                ->count();
             if ($userUsages >= $this->usage_limit_per_user) return false;
         }
         return true;

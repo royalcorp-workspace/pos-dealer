@@ -237,7 +237,7 @@
                     <div class="flex-1 border-t border-gray-100"></div>
                 </div>
                 <div x-show="!isForgotPassword" x-cloak class="grid grid-cols-2 gap-4">
-<button type="button" data-google-signin class="flex items-center justify-center gap-2 py-3 px-4 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl font-bold text-gray-700 text-sm transition-colors cursor-pointer focus:outline-none">
+                <button type="button" data-google-signin class="flex items-center justify-center gap-2 py-3 px-4 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl font-bold text-gray-700 text-sm transition-colors cursor-pointer focus:outline-none">
                     <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.58c2.1-1.92 3.31-4.74 3.31-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-1.02 7.28-2.77l-3.58-2.77c-.99.69-2.26 1.1-3.7 1.1-2.87 0-5.3-1.96-6.16-4.63H2.13v2.85C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 13.93c-.22-.65-.35-1.36-.35-2.09s.13-1.44.35-2.09V6.9H2.13C1.43 8.35 1 9.92 1 11.64c0 1.73.43 3.3 1.13 4.74l3.71-2.45z"/><path fill="#EA4335" d="M12 5.58c1.62 0 3.06.58 4.21 1.66l3.15-3.15C17.45 2.29 14.97 1 12 1 7.7 1 3.99 3.47 2.13 6.9l3.71 2.85c.86-2.67 3.29-4.17 6.16-4.17z"/></svg>
                     Google
                 </button>

@@ -32,13 +32,16 @@ class DashboardController extends Controller
 
         $mockProduct = $this->productService->all()[0];
         $user = session()->get('user', []);
+        
         $activeDeviceSessions = $this->deviceSessions->list(
             null,
             (string) ($user['email'] ?? ''),
             $this->deviceSessions->deviceId($request)
         );
-        $orders = $this->getOrdersForCurrentUser((string) ($user['email'] ?? ''));
-        $addresses = Address::where('user_id', $user['id'] ?? $user['sub'] ?? null)
+        $userId = $user['id'] ?? $user['sub'] ?? null;
+      
+        $orders = $this->getOrdersForCurrentUser((string) ($user['email'] ?? ''), $userId);
+        $addresses = Address::where('user_id', $userId)
             ->with(['subDistrict', 'city'])
             ->latest()
             ->get();
@@ -175,13 +178,19 @@ class DashboardController extends Controller
         return redirect()->route('dashboard.addresses')->with('success', 'Alamat utama berhasil diubah.');
     }
 
-    private function getOrdersForCurrentUser(string $email)
+    private function getOrdersForCurrentUser(string $email, $userId = null)
     {
         if (!Schema::hasTable('orders') || !Schema::hasTable('order_items')) {
             return collect();
         }
 
-        $customer = Customer::where('email', $email)->first();
+        $customer = null;
+        if ($userId) {
+            $customer = Customer::where('user_id', $userId)->first();
+        }
+        if (!$customer && $email) {
+            $customer = Customer::where('email', $email)->first();
+        }
 
         if (!$customer) {
             return collect();

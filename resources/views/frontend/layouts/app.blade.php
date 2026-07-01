@@ -452,7 +452,7 @@
         .loading-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.9);
             z-index: 9999;
             display: none;
             align-items: center;
@@ -541,7 +541,9 @@
     <script defer src="https://cdn.jsdelivr.net/npm/motion@10.15.3/dist/motion.global.min.js"></script>
 </head>
 @php
-    $whatsappNumber = preg_replace('/[^0-9]/', '', '+62 811-1234-5678');
+    $whatsappNumber = isset($about) && isset($about->social_media['whatsapp'])
+        ? preg_replace('/[^0-9]/', '', $about->social_media['whatsapp'])
+        : '6281112345678';
     $whatsappUrl = 'https://wa.me/' . $whatsappNumber;
 @endphp
 <body 
@@ -575,6 +577,11 @@
     <main id="main-content" class="flex-1 w-full" tabindex="-1">
         @yield('content')
     </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
 
     <!-- Footer Component -->
     @include('frontend.components.footer')

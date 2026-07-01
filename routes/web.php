@@ -9,8 +9,12 @@ use App\Http\Controllers\Frontend\DashboardController;
 use App\Http\Controllers\Frontend\HomeController;
 use App\Http\Controllers\Frontend\OrderTrackingController;
 use App\Http\Controllers\Frontend\PageController;
+use App\Http\Controllers\Frontend\PaymentMethodController;
 use App\Http\Controllers\Frontend\ProductCatalogController;
+use App\Http\Controllers\Frontend\ReviewController;
 use Illuminate\Support\Facades\Route;
+
+
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
 Route::get('/home/load-more', [HomeController::class, 'loadMore'])->name('home.load-more');
@@ -48,6 +52,50 @@ Route::post('/dashboard/addresses/{id}/primary', [DashboardController::class, 's
 
 Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.process');
+Route::post('/checkout/check-user', function (Illuminate\Http\Request $request) {
+    $email = $request->input('email');
+    $phone = $request->input('phone');
+    
+    $customer = null;
+    if ($email) {
+        $customer = \App\Models\Frontend\Customer\Customer::where('email', $email)->first();
+    } elseif ($phone) {
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        // Normalize 0 to 62
+        if (str_starts_with($cleanPhone, '0')) {
+            $cleanPhone = '62' . substr($cleanPhone, 1);
+        }
+        $customer = \App\Models\Frontend\Customer\Customer::where(function ($q) use ($phone, $cleanPhone) {
+            $q->where('phone', $phone)
+              ->orWhere('phone', 'like', '%' . $phone)
+              ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '+', '') = ?", [$cleanPhone]);
+        })->first();
+    }
+    
+    if ($customer) {
+        $address = \App\Models\Frontend\Customer\Address::where('user_id', $customer->user_id)
+            ->where('deleted', false)
+            ->orderBy('is_primary', 'desc')
+            ->first();
+            
+        return response()->json([
+            'registered' => true,
+            'customer' => [
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
+            ],
+            'address' => $address ? [
+                'address' => $address->address,
+                'sub_district_id' => $address->sub_district_id,
+                'city' => $address->city->name ?? ($address->subDistrict->city->name ?? ''),
+                'postal_code' => $address->postal_code,
+            ] : null
+        ]);
+    }
+    
+    return response()->json(['registered' => false]);
+})->name('checkout.check-user');
 
 Route::get('/order-preview', [CheckoutController::class, 'orderPreview'])->name('order.preview');
 

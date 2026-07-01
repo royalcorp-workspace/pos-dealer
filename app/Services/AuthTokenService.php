@@ -13,9 +13,15 @@ use Illuminate\Support\Str;
 
 class AuthTokenService
 {
-    // Durations
-    private int $accessTtlSeconds = 3600; // 1 hour
-    private int $refreshTtlSeconds = 2592000; // 30 days
+    public function accessTokenTtlSeconds(): int
+    {
+        return (int) env('JWT_ACCESS_TTL', 86400);
+    }
+
+    public function refreshTokenTtlSeconds(): int
+    {
+        return (int) env('JWT_REFRESH_TTL', 2592000);
+    }
 
     private function jwtSecret(): string
     {
@@ -40,7 +46,7 @@ class AuthTokenService
             'sub' => (string) $user->id,
             'email' => $user->email,
             'iat' => $now,
-            'exp' => $now + $this->accessTtlSeconds,
+            'exp' => $now + $this->accessTokenTtlSeconds(),
             'typ' => 'access',
         ];
 
@@ -57,7 +63,7 @@ class AuthTokenService
         $tokenHash = hash('sha256', $raw);
 
         $now = now();
-        $expiresAt = $now->copy()->addSeconds($this->refreshTtlSeconds);
+        $expiresAt = $now->copy()->addSeconds($this->refreshTokenTtlSeconds());
         $model = RefreshToken::create([
             'user_id' => $user->getAttributes()['id'],
             'device_id' => $deviceId,
@@ -122,8 +128,7 @@ class AuthTokenService
             'access_token' => $access,
             'refresh_token' => (string) $new->getAttribute('raw_token'),
             'token_type' => 'Bearer',
-            'expires_in' => $this->accessTtlSeconds,
+            'expires_in' => $this->accessTokenTtlSeconds(),
         ];
     }
 }
-

@@ -43,6 +43,12 @@ class Order extends Model
         'creator',
         'editor',
         'deleted',
+        'voucher_id',
+        'voucher_nominal',
+        'shipping_cost',
+        'shipping_cost_subsidy',
+        'shipping_addresses_id',
+        'transaction_fee',
     ];
 
     protected function casts(): array
@@ -54,6 +60,10 @@ class Order extends Model
             'tax' => 'decimal:2',
             'discount' => 'decimal:2',
             'total' => 'decimal:2',
+            'voucher_nominal' => 'decimal:2',
+            'shipping_cost' => 'decimal:2',
+            'shipping_cost_subsidy' => 'decimal:2',
+            'transaction_fee' => 'decimal:2',
             'meta' => 'array',
             'deleted' => 'boolean',
             'created_at' => 'datetime',
@@ -80,6 +90,21 @@ class Order extends Model
     public function courier(): BelongsTo
     {
         return $this->belongsTo(Courier::class);
+    }
+
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Promo\Voucher::class);
+    }
+
+    public function shippingAddressRelation(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Shipping\ShippingAddress::class, 'shipping_addresses_id');
+    }
+
+    public function paymentMethodRelation(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method');
     }
 
     public function items(): HasMany

@@ -39,7 +39,8 @@ class AuthController extends Controller
 
         session()->put('is_logged_in', true);
         session()->put('user', [
-            'name' => 'Budi Santoso',
+            'id' => $user->id ?? null,
+            'name' => $user->name ?? 'Budi Santoso',
             'email' => $email,
             'type' => 'Member Premium'
         ]);
@@ -80,7 +81,8 @@ class AuthController extends Controller
 
         session()->put('is_logged_in', true);
         session()->put('user', [
-            'name' => 'Budi Santoso',
+            'id' => $user->id ?? null,
+            'name' => $user->name ?? 'Budi Santoso',
             'email' => $email,
             'type' => 'Member Premium'
         ]);
@@ -152,16 +154,38 @@ class AuthController extends Controller
         $email = (string) ($payload->email ?? '');
         $name = (string) ($payload->name ?? ($email ? explode('@', $email)[0] : 'Member'));
 
+        $user = User::query()->where('email', $email)->first();
+
+        if (!$user) {
+            $user = User::create([
+                'id' => \Illuminate\Support\Str::uuid()->toString(),
+                'name' => $name,
+                'email' => $email,
+                'email_verified' => true,
+                'email_verified_at' => now(),
+            ]);
+        }
+
+        // Ensure customer record exists
+        $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $user->id)->first();
+        if (!$customer) {
+            \App\Models\Frontend\Customer\Customer::create([
+                'user_id' => $user->id,
+                'name' => $name,
+                'email' => $email,
+            ]);
+        }
+
         session()->put('is_logged_in', true);
         session()->put('access_token', $data['access_token']);
         session()->put('refresh_token', $data['refresh_token']);
         session()->put('user', [
+            'id' => $user->id,
             'name' => $name,
             'email' => $email,
             'type' => 'Google Member',
         ]);
 
-        $user = User::query()->where('email', $email)->first();
         $this->deviceSessions->register($request, $user, $email);
         $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 

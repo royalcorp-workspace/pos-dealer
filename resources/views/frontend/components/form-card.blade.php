@@ -10,12 +10,12 @@
     'p-6' => $padding,
     $class,
 ])>
-    @if($title || $subtitle)
+    @if ($title || $subtitle)
         <div class="mb-5">
-            @if($title)
+            @if ($title)
                 <h3 class="text-lg font-extrabold text-brand-dark tracking-tight">{{ $title }}</h3>
             @endif
-            @if($subtitle)
+            @if ($subtitle)
                 <p class="text-sm text-gray-500 mt-1">{{ $subtitle }}</p>
             @endif
         </div>

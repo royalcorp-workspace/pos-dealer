@@ -45,6 +45,11 @@ class VoucherUsage extends Model
         return $this->belongsTo(User::class, 'user_id', 'id');
     }
 
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Order::class, 'order_id', 'id');
+    }
+
     protected static function boot(): void
     {
         parent::boot();

@@ -15,4 +15,3 @@ Jika tombol tidak berfungsi, Anda bisa membuka link berikut:
 
 Terima kasih.
 @endcomponent
-

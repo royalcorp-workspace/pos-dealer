@@ -23,7 +23,7 @@ class VerifyEmailMail extends Mailable
     ) {
     }
 
-    public function envelope(): Envelope
+    public function (Envelope):
     {
         return new Envelope(
             from: new Address(config('mail.from.address'), config('mail.from.name')),
@@ -31,7 +31,7 @@ class VerifyEmailMail extends Mailable
         );
     }
 
-    public function content(): Content
+    public function (Content):
     {
         return new Content(
             markdown: 'emails.verify-email',
@@ -43,4 +43,3 @@ class VerifyEmailMail extends Mailable
         );
     }
 }
-
