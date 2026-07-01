@@ -21,6 +21,8 @@ class PaymentMethodSeeder extends Seeder
                 'charge_value' => 4,
                 'minimum_amount' => 10000,
                 'sort_order' => 1,
+                'status' => 1,
+                'deleted' => false,
             ],
             [
                 'code' => 'mandiri_bill',
@@ -33,6 +35,8 @@ class PaymentMethodSeeder extends Seeder
                 'charge_value' => 4,
                 'minimum_amount' => 10000,
                 'sort_order' => 2,
+                'status' => 1,
+                'deleted' => false,
             ],
             [
                 'code' => 'gopay',
@@ -45,6 +49,8 @@ class PaymentMethodSeeder extends Seeder
                 'charge_value' => 2,
                 'minimum_amount' => 1000,
                 'sort_order' => 3,
+                'status' => 1,
+                'deleted' => false,
             ],
             [
                 'code' => 'ovo',
@@ -57,6 +63,8 @@ class PaymentMethodSeeder extends Seeder
                 'charge_value' => 2,
                 'minimum_amount' => 1000,
                 'sort_order' => 4,
+                'status' => 1,
+                'deleted' => false,
             ],
             [
                 'code' => 'dana',
@@ -69,6 +77,8 @@ class PaymentMethodSeeder extends Seeder
                 'charge_value' => 2,
                 'minimum_amount' => 1000,
                 'sort_order' => 5,
+                'status' => 1,
+                'deleted' => false,
             ],
             [
                 'code' => 'qris',
@@ -81,6 +91,8 @@ class PaymentMethodSeeder extends Seeder
                 'charge_value' => 0.75,
                 'minimum_amount' => 1000,
                 'sort_order' => 6,
+                'status' => 1,
+                'deleted' => false,
             ],
             [
                 'code' => 'cod',
@@ -90,6 +102,8 @@ class PaymentMethodSeeder extends Seeder
                 'has_charge' => false,
                 'minimum_amount' => 0,
                 'sort_order' => 10,
+                'status' => 1,
+                'deleted' => false,
             ],
         ];
 

@@ -314,17 +314,24 @@
                 <p class="text-gray-500 mt-2 text-lg">Pilihan aksesori dan kasur populer untuk melengkapi kamar Anda.</p>
             </div>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 recommended-products-grid">
                 @foreach($recommended as $product)
                     @include('frontend.components.product-card-dynamic', ['product' => $product])
                 @endforeach
             </div>
             
+            @if($recommendedTotal > 8)
             <div class="mt-12 text-center">
-                <button class="load-more-btn group px-8 py-3.5 rounded-full font-bold text-brand-darker bg-white border-2 border-brand-dark shadow-sm transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-xl focus:outline-none">
+                <button 
+                    type="button"
+                    class="load-more-btn group px-8 py-3.5 rounded-full font-bold text-brand-darker bg-white border-2 border-brand-dark shadow-sm transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-xl focus:outline-none"
+                    data-route="{{ route('home.load-more') }}"
+                    data-offset="8"
+                >
                     Muat Lebih Banyak <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
                 </button>
             </div>
+            @endif
         </div>
     </section>
 @endsection

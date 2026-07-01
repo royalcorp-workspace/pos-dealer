@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
 use App\Models\Frontend\Customer\Address;
+use App\Models\Frontend\Customer\Customer;
 use App\Models\Frontend\Location\SubDistrict;
 use App\Models\Frontend\Order;
 use App\Services\DeviceSessionService;
@@ -76,6 +77,10 @@ class DashboardController extends Controller
 
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
+
+        if (!$userId) {
+            return redirect()->route('dashboard.addresses')->with('error', 'Data pengguna tidak valid. Silakan login kembali.');
+        }
 
         $subDistrict = SubDistrict::findOrFail($request->sub_district_id);
 
@@ -176,10 +181,15 @@ class DashboardController extends Controller
             return collect();
         }
 
-        return Order::with(['items.product', 'customer'])
+        $customer = Customer::where('email', $email)->first();
+
+        if (!$customer) {
+            return collect();
+        }
+
+        return Order::with(['items.product', 'customer', 'courier'])
+            ->where('customer_id', $customer->id)
             ->latest()
-            ->get()
-            ->filter(fn($order) => !$order->customer || $order->customer->email === $email)
-            ->values();
+            ->get();
     }
 }

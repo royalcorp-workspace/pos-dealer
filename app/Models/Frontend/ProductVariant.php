@@ -15,11 +15,17 @@ class ProductVariant extends Model
 
     protected $fillable = [
         'product_id',
-        'name',
         'sku',
+        'variant_name',
+        'width',
+        'length',
+        'height',
+        'weight',
         'price',
-        'stock',
-        'attributes',
+        'stock_qty',
+        'min_order_qty',
+        'sort_order',
+        'status',
     ];
 
     protected function casts(): array

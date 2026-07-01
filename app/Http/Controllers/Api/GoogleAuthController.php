@@ -110,83 +110,86 @@ class GoogleAuthController extends Controller
             ], 401);
         }
 
-        return $this->verifyGoogleIdTokenAndLogin($idToken, $request, true);
+        return $this->verifyGoogleIdTokenAndLogin($idToken, $request, true, '');
     }
 
     public function googleSignIn(Request $request)
     {
         $data = $request->validate([
             'id_token' => ['required', 'string'],
+            'firebase_token' => ['nullable', 'string'],
         ]);
 
         $idToken = (string) $data['id_token'];
+        $firebaseToken = (string) ($data['firebase_token'] ?? '');
 
         try {
-            return $this->verifyGoogleIdTokenAndLogin($idToken, $request, false);
+            return $this->verifyGoogleIdTokenAndLogin($idToken, $request, false, $firebaseToken);
         } catch (ValidationException $exception) {
             return response()->json($exception->validator->errors(), 422);
         }
     }
 
-    private function verifyGoogleIdTokenAndLogin(string $idToken, Request $request, bool $redirect): mixed
+    private function verifyGoogleIdTokenAndLogin(string $idToken, Request $request, bool $redirect, string $firebaseToken): mixed
     {
-        $clientId = (string) config('services.google.client_id');
-
-        if ($clientId === '') {
+        try {
+            $verifiedIdToken = app('firebase.auth')->verifyIdToken($idToken);
+            $googleId = (string) $verifiedIdToken->claims()->get('sub');
+            $email = (string) $verifiedIdToken->claims()->get('email');
+            $name = (string) $verifiedIdToken->claims()->get('name');
+        } catch (\Throwable $e) {
             return response()->json([
-                'message' => 'Google OAuth client_id belum dikonfigurasi.',
-            ], 500);
-        }
-
-        $googleUser = Http::get('https://oauth2.googleapis.com/tokeninfo', [
-            'id_token' => $idToken,
-        ]);
-
-        if (!$googleUser->successful()) {
-            return response()->json([
-                'message' => 'ID token Google tidak valid.',
+                'message' => 'Token Firebase tidak valid: ' . $e->getMessage(),
             ], 401);
         }
-
-        $googlePayload = $googleUser->json();
-
-        $audience = (string) ($googlePayload['aud'] ?? '');
-        if ($audience !== $clientId) {
-            return response()->json([
-                'message' => 'ID token Google tidak ditujukan untuk aplikasi ini.',
-            ], 401);
-        }
-
-        $googleId = (string) ($googlePayload['sub'] ?? '');
-        $email = (string) ($googlePayload['email'] ?? '');
-        $name = (string) ($googlePayload['name'] ?? '');
 
         if ($googleId === '' || $email === '') {
             return response()->json([
-                'message' => 'ID token Google tidak valid.',
+                'message' => 'Token Firebase tidak valid.',
             ], 401);
         }
 
         $user = User::query()
             ->where('google_id', $googleId)
-            ->orWhere('email', $email)
             ->first();
 
+        if (!$user) {
+            $user = User::query()
+                ->where('email', $email)
+                ->first();
+        }
+
         if ($user) {
-            $user->update([
-                'google_id' => $googleId,
-                'email_verified' => true,
-                'email_verified_at' => now(),
-            ]);
+            if (empty($user->google_id)) {
+                $user->update([
+                    'google_id' => $googleId,
+                    'firebase_token' => $firebaseToken !== '' ? $firebaseToken : $user->firebase_token,
+                    'email_verified' => true,
+                    'email_verified_at' => now(),
+                ]);
+            } elseif ($user->google_id !== $googleId) {
+                return response()->json([
+                    'action' => 'conflict',
+                    'message' => 'Email ini sudah terdaftar dengan akun Google lain. Silakan login dengan akun Google yang sesuai.',
+                ], 409);
+            } elseif ($firebaseToken !== '') {
+                $user->update([
+                    'firebase_token' => $firebaseToken,
+                    'email_verified' => true,
+                    'email_verified_at' => now(),
+                ]);
+            }
         } else {
-            $user = User::create([
-                'id' => (string) \Illuminate\Support\Str::uuid(),
-                'name' => $name,
-                'email' => $email,
-                'google_id' => $googleId,
-                'email_verified' => true,
-                'email_verified_at' => now(),
-            ]);
+            return response()->json([
+                'action' => 'register',
+                'message' => 'Akun belum terdaftar. Silakan lengkapi pendaftaran.',
+                'user' => [
+                    'email' => $email,
+                    'name' => $name,
+                    'google_id' => $googleId,
+                    'firebase_token' => $firebaseToken,
+                ]
+            ], 404);
         }
 
         $deviceId = $this->deviceSessions->deviceId($request);
@@ -197,7 +200,7 @@ class GoogleAuthController extends Controller
 
         $this->audit->log($user, 'login_success', $request, [
             'provider' => 'google',
-            'google_id' => $googlePayload['sub'] ?? null,
+            'google_id' => $googleId,
         ]);
 
         if ($redirect) {

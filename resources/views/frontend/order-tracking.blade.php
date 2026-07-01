@@ -152,11 +152,32 @@
                                     <div class="min-w-0 flex-1">
                                         <p class="font-bold text-brand-dark">{{ $item->name }}</p>
                                         <p class="text-sm text-gray-500 mt-1">Qty {{ $item->quantity }} × {{ $formatRupiah($item->unit_price ?? 0) }}</p>
+                                        @if(($item->discount_percent ?? 0) > 0)
+                                            <p class="text-xs text-red-500 mt-1">Diskon {{ $item->discount_percent }}%</p>
+                                        @endif
+                                        @if(($item->discount_nominal ?? 0) > 0)
+                                            <p class="text-xs text-red-500 mt-1">Diskon: -{{ $formatRupiah($item->discount_nominal) }}</p>
+                                        @endif
                                         @if(!empty($item->item_notes))
                                             <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $item->item_notes }}</p>
                                         @endif
                                     </div>
-                                    <p class="font-bold text-brand-dark">{{ $formatRupiah($item->total ?? 0) }}</p>
+                                    <div class="text-right">
+                                        @php
+                                            $discountedPrice = max(0, ($item->total ?? 0) - (($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) - ($item->discount_nominal ?? 0));
+                                        @endphp
+                                        @if(($item->discount_percent ?? 0) > 0 || ($item->discount_nominal ?? 0) > 0)
+                                            <p class="text-xs text-gray-400 line-through">{{ $formatRupiah($item->total ?? 0) }}</p>
+                                        @endif
+                                        @if(($item->discount_percent ?? 0) > 0 && ($item->discount_nominal ?? 0) > 0)
+                                            <p class="text-xs text-red-500">-{{ $formatRupiah(($item->total ?? 0) * ($item->discount_percent ?? 0) / 100 + ($item->discount_nominal ?? 0)) }}</p>
+                                        @elseif(($item->discount_percent ?? 0) > 0)
+                                            <p class="text-xs text-red-500">-{{ $formatRupiah(($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) }}</p>
+                                        @elseif(($item->discount_nominal ?? 0) > 0)
+                                            <p class="text-xs text-red-500">-{{ $formatRupiah($item->discount_nominal) }}</p>
+                                        @endif
+                                        <p class="font-bold text-brand-dark">{{ $formatRupiah($discountedPrice) }}</p>
+                                    </div>
                                 </div>
                             @endforeach
                         </div>

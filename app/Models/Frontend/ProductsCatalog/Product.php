@@ -90,6 +90,11 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class, 'product_id');
     }
 
+    public function colors(): HasMany
+    {
+        return $this->hasMany(ProductColor::class, 'product_id');
+    }
+
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(ProductTag::class, 'product_tag_relations', 'product_id', 'tag_id');

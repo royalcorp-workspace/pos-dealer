@@ -159,6 +159,21 @@
             } catch(e) { /* noop */ }
         })();
     </script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script>
+        window.firebaseConfig = {
+            apiKey: '{{ config("services.firebase.api_key") }}',
+            authDomain: '{{ config("services.firebase.auth_domain") }}',
+            projectId: '{{ config("services.firebase.project_id") }}',
+        };
+        
+        if (window.firebaseConfig.apiKey) {
+            firebase.initializeApp(window.firebaseConfig);
+        }
+    </script>
 
     <style>
         [x-cloak] { display: none !important; }
@@ -512,9 +527,9 @@
     </style>
     
     <!-- App JS (must load before Alpine so window.* helpers are defined when Alpine initialises) -->
-    <script src="{{ asset('js/frontend/app.js') }}"></script>
-    <script src="{{ asset('js/frontend/cart-drawer.js') }}"></script>
-    <script src="{{ asset('js/frontend/auth-modal.js') }}"></script>
+    <script src="{{ asset('js/frontend/app.js') }}?v={{ filemtime(public_path('js/frontend/app.js')) }}"></script>
+    <script src="{{ asset('js/frontend/cart-drawer.js') }}?v={{ filemtime(public_path('js/frontend/cart-drawer.js')) }}"></script>
+    <script src="{{ asset('js/frontend/auth-modal.js') }}?v={{ filemtime(public_path('js/frontend/auth-modal.js')) }}"></script>
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
@@ -547,7 +562,7 @@
         cartNoticeTimer: null
     }"
     @open-cart.window="isCartOpen = true"
-    @open-auth.window="isAuthOpen = true"
+    @open-auth.window="isAuthOpen = true; setTimeout(() => window.initFirebaseGoogleSignIn && window.initFirebaseGoogleSignIn(), 100)"
     @open-review.window="selectedProductForReview = $event.detail; console.log($event.detail)"
     @open-review="selectedProductForReview = $event.detail; console.log($event.detail)"
     @cart-added.window="cartNoticeMessage = $event.detail && $event.detail.message ? $event.detail.message : 'Produk berhasil masuk keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 2500)"

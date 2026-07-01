@@ -28,7 +28,9 @@ class Order extends Model
     public const STATUS_RETURNED = 7;
 
     protected $fillable = [
+        'order_number',
         'customer_id',
+        'courier_id',
         'status',
         'payment_method',
         'payment_status',
@@ -71,6 +73,11 @@ class Order extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class, 'customer_id', 'id');
+    }
+
+    public function courier(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Shipping\Courier::class, 'courier_id', 'id');
     }
 
     public function items(): HasMany

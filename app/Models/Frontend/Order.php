@@ -7,7 +7,9 @@ namespace App\Models\Frontend;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 use App\Models\Customer;
+use App\Models\Frontend\Shipping\Courier;
 use App\Models\Payment;
 
 class Order extends Model
@@ -25,7 +27,10 @@ class Order extends Model
     public const STATUS_RETURNED = 7;
 
     protected $fillable = [
+        'id',
+        'order_number',
         'customer_id',
+        'courier_id',
         'status',
         'payment_method',
         'payment_status',
@@ -35,6 +40,9 @@ class Order extends Model
         'total',
         'notes',
         'meta',
+        'creator',
+        'editor',
+        'deleted',
     ];
 
     protected function casts(): array
@@ -47,14 +55,31 @@ class Order extends Model
             'discount' => 'decimal:2',
             'total' => 'decimal:2',
             'meta' => 'array',
+            'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
     }
 
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (!$model->order_number) {
+                $model->order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(uniqid(substr(md5(Str::random(8)), 0, 4)));
+            }
+        });
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function courier(): BelongsTo
+    {
+        return $this->belongsTo(Courier::class);
     }
 
     public function items(): HasMany
@@ -84,5 +109,20 @@ class Order extends Model
     public function statusLabel(): string
     {
         return self::statusLabels()[$this->status] ?? 'Unknown';
+    }
+
+    public function getStatusBadgeClassAttribute(): string
+    {
+        return match ($this->status) {
+            self::STATUS_DRAFT => 'bg-gray-100 text-gray-600',
+            self::STATUS_PENDING_APPROVAL => 'bg-yellow-100 text-yellow-700',
+            self::STATUS_CONFIRMED => 'bg-blue-100 text-blue-700',
+            self::STATUS_PROCESSING => 'bg-indigo-100 text-indigo-700',
+            self::STATUS_SHIPPED => 'bg-purple-100 text-purple-700',
+            self::STATUS_DELIVERED => 'bg-green-100 text-green-700',
+            self::STATUS_CANCELLED => 'bg-red-100 text-red-700',
+            self::STATUS_RETURNED => 'bg-orange-100 text-orange-700',
+            default => 'bg-gray-100 text-gray-600',
+        };
     }
 }

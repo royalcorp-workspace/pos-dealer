@@ -1,4 +1,168 @@
 
+// Helper for Alpine @click in auth modal
+window.handleGoogleSignInFromModal = function(e) {
+    console.log('Google sign-in clicked', e);
+    console.log('Firebase config:', window.firebaseConfig);
+    console.log('Firebase apps:', firebase ? firebase.apps : 'firebase not loaded');
+    var submitBtn = e.currentTarget || e.target.closest('button') || e.target;
+    console.log('submitBtn:', submitBtn);
+    if (!firebase || !firebase.apps.length) {
+        console.log('Firebase not configured');
+        document.dispatchEvent(new CustomEvent('show-auth-toast', {
+            detail: { message: 'Firebase belum dikonfigurasi', type: 'error' }
+        }));
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.opacity = '0.6';
+    }
+
+    var provider = new firebase.auth.GoogleAuthProvider();
+    console.log('Firebase auth instance:', firebase.auth);
+    console.log('Provider:', provider);
+    firebase.auth().signInWithPopup(provider)
+        .then(function(result) {
+            console.log('Firebase sign-in result:', result);
+            console.log('Credential:', result.credential);
+            return result.user.getIdToken().then(function(idToken) {
+                var isJwt = idToken && idToken.startsWith('eyJ');
+                console.log('Firebase ID token:', idToken ? (idToken.substring(0, 20) + '...') : null);
+                console.log('Is valid JWT (starts with eyJ):', isJwt);
+                if (!isJwt) {
+                    console.error('ERROR: getIdToken() did not return JWT. This should not happen.');
+                    document.dispatchEvent(new CustomEvent('show-auth-toast', {
+                        detail: { message: 'Firebase error: Token format invalid', type: 'error' }
+                    }));
+                    return;
+                }
+                // Send Firebase ID Token as firebase_token for your separate backend validation
+                var firebaseToken = idToken; // Firebase JWT for authentication
+                console.log('Firebase ID Token (firebase_token):', firebaseToken.substring(0, 20) + '...');
+                return fetch('/api/auth/google', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        id_token: idToken,
+                        firebase_token: firebaseToken
+                    })
+                }).then(function(response) {
+                    return response.json().then(function(data) {
+                        return { ok: response.ok, data: data };
+                    });
+                });
+            });
+        })
+        .then(function(result) {
+            console.log('API response:', result);
+            if (result.ok) {
+                fetch('/auth/google/session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        access_token: result.data.access_token,
+                        refresh_token: result.data.refresh_token
+                    })
+                }).then(function() {
+                    var isCheckout = window.location.pathname.includes('checkout');
+                    if (isCheckout) {
+                        var checkoutForm = document.getElementById('checkout-form');
+                        if (checkoutForm) {
+                            document.querySelector('body').__x.$data.isAuthOpen = false;
+                            setTimeout(function() { checkoutForm.submit(); }, 1000);
+                        } else {
+                            window.location.href = '/dashboard';
+                        }
+                    } else {
+                        window.location.href = '/dashboard';
+                    }
+                }).catch(function() {
+                    window.location.href = '/dashboard';
+                });
+            } else if (result.data && result.data.action === 'register') {
+                var params = {
+                    email: result.data.user.email,
+                    name: result.data.user.name,
+                    google_id: result.data.user.google_id,
+                };
+                if (result.data.user.firebase_token) {
+                    params.firebase_token = result.data.user.firebase_token;
+                }
+                var q = new URLSearchParams(params).toString();
+                window.location.href = '/register?' + q;
+            } else if (result.data && result.data.action === 'conflict') {
+                document.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: result.data.message || 'Akun Google tidak cocok', type: 'error' }
+                }));
+            } else {
+                document.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: result.data.message || 'Login Google gagal', type: 'error' }
+                }));
+            }
+        })
+        .catch(function(error) {
+            var msg = error.message || 'Login Google gagal';
+            console.log('Google sign-in error:', error);
+            document.dispatchEvent(new CustomEvent('show-auth-toast', {
+                detail: { message: msg, type: 'error' }
+            }));
+        })
+        .finally(function() {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.style.opacity = '';
+            }
+        });
+};
+
+// Also support legacy data-google-signin attribute (for backward compatibility)
+var googleSignInHandler = function(e) {
+    window.handleGoogleSignInFromModal(e);
+};
+
+window.initFirebaseGoogleSignIn = function() {
+    var googleButtons = document.querySelectorAll('button[data-google-signin]');
+    googleButtons.forEach(function(btn) {
+        btn.removeEventListener('click', googleSignInHandler);
+        btn.addEventListener('click', googleSignInHandler);
+    });
+};
+
+document.addEventListener('alpine:initialized', function() {
+    // Delay to ensure function is registered
+    setTimeout(function() {
+        if (typeof window.initFirebaseGoogleSignIn === 'function') {
+            window.initFirebaseGoogleSignIn();
+        }
+    }, 0);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    window.initFirebaseGoogleSignIn();
+});
+
+// Watch for Alpine isAuthOpen changes - rebind when modal opens
+var lastAuthOpenState = false;
+setInterval(function() {
+    var modalEl = document.querySelector('[x-data*="isAuthOpen"]');
+    if (modalEl && modalEl.__x && modalEl.__x.$data) {
+        var currentAuthOpen = modalEl.__x.$data.isAuthOpen;
+        if (currentAuthOpen !== null && currentAuthOpen !== lastAuthOpenState && currentAuthOpen === true) {
+            lastAuthOpenState = currentAuthOpen;
+            window.initFirebaseGoogleSignIn();
+        }
+    }
+}, 200);
+
 document.addEventListener('DOMContentLoaded', function () {
     const loginForm = document.getElementById('loginModalForm');
     if (loginForm) {
@@ -35,13 +199,23 @@ document.addEventListener('DOMContentLoaded', function () {
                     }, 1000);
                     return;
                 }
-                window.dispatchEvent(new CustomEvent('show-auth-toast', {
-                    detail: { message: result.data.message || 'Login gagal. Periksa email dan password Anda.', type: 'error' }
+                var msg = result.data.message || 'Login gagal. Periksa email dan password Anda.';
+                if (result.data.errors) {
+                    var fieldErrors = [];
+                    for (var field in result.data.errors) {
+                        if (result.data.errors[field] && result.data.errors[field][0]) {
+                            fieldErrors.push(result.data.errors[field][0]);
+                        }
+                    }
+                    if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
+                }
+                window.dispatchEvent(new CustomEvent('auth-error-login', {
+                    detail: { message: msg }
                 }));
             })
             .catch(function () {
-                window.dispatchEvent(new CustomEvent('show-auth-toast', {
-                    detail: { message: 'Terjadi kesalahan jaringan. Silakan coba lagi.', type: 'error' }
+                window.dispatchEvent(new CustomEvent('auth-error-login', {
+                    detail: { message: 'Terjadi kesalahan jaringan. Silakan coba lagi.' }
                 }));
             })
             .finally(function () {
@@ -86,13 +260,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (res.ok && (res.data.success || res.data.message)) {
                     window.location.href = window.location.origin + '/password-otp-sent?email=' + encodeURIComponent(email);
                 } else {
-                    window.dispatchEvent(new CustomEvent('show-auth-toast', { detail: { message: res.data.message || 'Gagal mengirim kode OTP', type: 'error' }}));
+                    window.dispatchEvent(new CustomEvent('auth-error-forgot', { detail: { message: res.data.message || 'Gagal mengirim kode OTP' }}));
                 }
             })
             .catch(function () {
                 submitBtn.disabled = false;
                 submitBtn.querySelector('span').textContent = 'Lanjutkan';
-                window.dispatchEvent(new CustomEvent('show-auth-toast', { detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }}));
+                window.dispatchEvent(new CustomEvent('auth-error-forgot', { detail: { message: 'Terjadi kesalahan jaringan' }}));
             });
         });
     }
@@ -124,11 +298,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (res.ok) {
                     window.location.href = window.location.origin + '/register-success';
                 } else {
-                    window.dispatchEvent(new CustomEvent('show-auth-toast', { detail: { message: res.data.message || 'Register gagal', type: 'error' }}));
+                    var msg = res.data.message || 'Register gagal';
+                    if (res.data.errors) {
+                        var fieldErrors = [];
+                        for (var field in res.data.errors) {
+                            if (res.data.errors[field] && res.data.errors[field][0]) {
+                                fieldErrors.push(res.data.errors[field][0]);
+                            }
+                        }
+                        if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
+                    }
+                    window.dispatchEvent(new CustomEvent('auth-error-register', {
+                        detail: { message: msg }
+                    }));
                 }
             })
             .catch(function () {
-                window.dispatchEvent(new CustomEvent('show-auth-toast', { detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }}));
+                window.dispatchEvent(new CustomEvent('auth-error-register', {
+                    detail: { message: 'Terjadi kesalahan jaringan' }
+                }));
             })
             .finally(function () {
                 submitBtn.disabled = false;

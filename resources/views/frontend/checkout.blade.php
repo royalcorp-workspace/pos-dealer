@@ -80,8 +80,19 @@
                                 <input type="tel" name="phone" value="{{ $defaultPhone }}" required class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold" placeholder="08xx xxxx xxxx">
                             </div>
                             <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Kecamatan / Kelurahan</label>
+                                <select name="sub_district_id" required class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold bg-white">
+                                    <option value="">Pilih Kecamatan/Kelurahan</option>
+                                    @foreach($subDistricts as $sd)
+                                        <option value="{{ $sd['id'] }}" {{ (old('sub_district_id', $form['sub_district_id'] ?? $defaultAddress?->subDistrict->id ?? '') == $sd['id']) ? 'selected' : '' }}>
+                                            {{ $sd['label'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">Kota</label>
-                                <input type="text" name="city" value="{{ $defaultCity }}" required class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold" placeholder="Jakarta">
+                                <input type="text" name="city" id="city-display" value="{{ $defaultCity }}" required class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold bg-gray-50" placeholder="Kota akan terisi otomatis">
                             </div>
                         </div>
                         <div class="mt-4">
@@ -120,6 +131,12 @@
                         <input type="hidden" name="voucher_code" id="voucher-code" value="{{ implode(',', $selectedVoucherCodes) }}">
                         <input type="hidden" name="voucher_codes" id="voucher-codes" value="{{ implode(',', $selectedVoucherCodes) }}">
                         <input type="hidden" name="voucher_discount" id="voucher-discount-value" value="{{ $selectedVoucher['discount'] ?? 0 }}">
+
+                        <div class="flex gap-3 mb-4">
+                            <input type="text" id="manual-voucher-input" placeholder="Masukkan kode voucher" class="flex-1 px-4 py-2.5 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold text-sm uppercase" maxlength="20">
+                            <button type="button" onclick="validateAndApplyVoucher()" class="px-4 py-2.5 bg-brand-dark text-brand-gold rounded-xl font-bold text-sm hover:bg-brand-darker transition-colors">Gunakan</button>
+                        </div>
+                        <div id="manual-voucher-feedback" class="text-sm mb-3"></div>
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             @foreach($vouchers as $voucher)
@@ -230,4 +247,109 @@
             </div>
         </form>
     </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
+        var cityInput = document.getElementById('city-display') || document.querySelector('input[name="city"]');
+        var postalInput = document.querySelector('input[name="postal_code"]');
+        var subDistrictMap = @json($subDistricts->map(fn($sd) => ['city' => $sd['city'], 'postal_code' => $sd['postal_code']]));
+
+        if (subDistrictSelect && cityInput) {
+            subDistrictSelect.addEventListener('change', function() {
+                var data = subDistrictMap[this.value];
+                if (data) {
+                    cityInput.value = data.city;
+                    if (postalInput) postalInput.value = data.postal_code || '';
+                }
+            });
+        }
+
+        var originalFillAddress = window.fillAddress;
+        window.fillAddress = function(el) {
+            if (originalFillAddress) originalFillAddress(el);
+            var addresses = @json($savedAddressesSafe);
+            var selected = addresses.find(function(a) { return a.id == el.value; });
+            if (selected) {
+                if (subDistrictSelect && selected.sub_district_id) {
+                    subDistrictSelect.value = selected.sub_district_id;
+                    var data = subDistrictMap[selected.sub_district_id];
+                    if (data && cityInput) cityInput.value = data.city;
+                    if (data && postalInput) postalInput.value = data.postal_code || '';
+                }
+                var addressSelector = document.getElementById('address-selector');
+                if (addressSelector) addressSelector.classList.add('hidden');
+            }
+        };
+    });
+
+    window.validateAndApplyVoucher = function() {
+        var input = document.getElementById('manual-voucher-input');
+        var code = input.value.trim().toUpperCase();
+        var feedback = document.getElementById('manual-voucher-feedback');
+
+        if (!code) {
+            if (feedback) feedback.innerHTML = '<span class="text-red-500">Masukkan kode voucher terlebih dahulu.</span>';
+            return;
+        }
+
+        var currCodes = (document.getElementById('voucher-codes').value || '').split(',').filter(Boolean).map(function(c){return c.trim().toUpperCase();});
+        if (currCodes.includes(code)) {
+            if (feedback) feedback.innerHTML = '<span class="text-red-500">Kupon sudah dipilih.</span>';
+            return;
+        }
+
+        var cartTotal = {{ $cartTotal }};
+        var productIds = @json(collect(session()->get('cart', []))->pluck('product_id')->filter()->unique()->values());
+        var categoryIds = @json(\App\Models\Frontend\ProductsCatalog\Product::whereIn('id', $productIds)->pluck('category_id')->unique()->values());
+        var shippingCost = {{ $form['shipping_cost'] ?? 25000 }};
+
+        if (feedback) feedback.innerHTML = '<span class="text-gray-500">Memvalidasi...</span>';
+
+        fetch('/voucher/validate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                code: code,
+                cart_total: cartTotal,
+                product_ids: productIds,
+                category_ids: categoryIds
+            })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.valid) {
+                var discount = data.voucher.discount || 0;
+                var total = Math.max(0, cartTotal + shippingCost - discount);
+
+                document.getElementById('voucher-code').value = code;
+                document.getElementById('voucher-codes').value = code;
+                document.getElementById('voucher-discount-value').value = discount.toFixed(2);
+                document.getElementById('voucher-discount').textContent = '- Rp ' + discount.toLocaleString('id-ID');
+                document.getElementById('total-cost').textContent = 'Rp ' + total.toLocaleString('id-ID');
+
+                document.querySelectorAll('.coupon-card').forEach(function(item) {
+                    item.classList.remove('border-brand-gold', 'bg-brand-light');
+                    var label = item.querySelector('.select-coupon-label');
+                    if (label) label.textContent = 'Pilih';
+                });
+
+                var selectedText = document.getElementById('selected-coupon-text');
+                if (selectedText) selectedText.innerHTML = 'Kupon dipilih: <strong class="text-brand-dark">' + code + '</strong>';
+
+                if (feedback) feedback.innerHTML = '<span class="text-green-600">Voucher berhasil diterapkan: ' + code + '</span>';
+                if (input) input.value = '';
+            } else {
+                if (feedback) feedback.innerHTML = '<span class="text-red-500">' + data.message + '</span>';
+            }
+        })
+        .catch(function() {
+            if (feedback) feedback.innerHTML = '<span class="text-red-500">Gagal memvalidasi voucher. Coba lagi.</span>';
+        });
+    };
+    </script>
 @endsection

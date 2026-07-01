@@ -50,7 +50,7 @@
         if (title) title.textContent = 'Tambah Alamat';
         const form = document.getElementById('address-form');
         if (form) {
-            form.action = form.dataset.routeStore;
+            form.action = form.dataset.routeStore || '';
             form.reset();
         }
         const primaryCheckbox = document.getElementById('address-is-primary');

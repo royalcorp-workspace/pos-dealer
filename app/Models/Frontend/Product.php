@@ -14,22 +14,22 @@ class Product extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'brand_id',
         'category_id',
+        'brand_id',
         'name',
         'slug',
-        'description',
+        'thumbnail',
+        'alt_text',
         'short_description',
-        'price',
-        'cost_price',
-        'stock',
-        'min_stock',
-        'sku',
-        'barcode',
-        'images',
-        'specifications',
-        'is_active',
-        'is_featured',
+        'description',
+        'best_seller',
+        'is_new',
+        'sort_order',
+        'status',
+        'creator',
+        'editor',
+        'deleted',
+        'base_price',
     ];
 
     protected function casts(): array
