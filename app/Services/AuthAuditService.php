@@ -27,7 +27,7 @@ class AuthAuditService
         array $metadata = []
     ): ActivityLog {
 
-    
+
         return ActivityLog::create([
             'user_id' => $user->getAttributes()['id'],
             'action' => $action,
@@ -37,4 +37,3 @@ class AuthAuditService
         ]);
     }
 }
-

@@ -204,14 +204,14 @@ class GoogleAuthController extends Controller
         ]);
 
         if ($redirect) {
-            return redirect(config('app.url') . '/auth/callback#access_token=' . $access . '&refresh_token=' . ($refreshModel->getAttribute('raw_token')) . '&token_type=Bearer&expires_in=3600');
+            return redirect(config('app.url') . '/auth/callback#access_token=' . $access . '&refresh_token=' . ($refreshModel->getAttribute('raw_token')) . '&token_type=Bearer&expires_in=' . $this->tokens->accessTokenTtlSeconds());
         }
 
         return response()->json([
             'access_token' => $access,
             'refresh_token' => (string) $refreshModel->getAttribute('raw_token'),
             'token_type' => 'Bearer',
-            'expires_in' => 3600,
+            'expires_in' => $this->tokens->accessTokenTtlSeconds(),
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,

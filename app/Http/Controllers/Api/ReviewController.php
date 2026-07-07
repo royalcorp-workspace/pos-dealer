@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 
 class ReviewController extends Controller
 {
-    public function index(Request $request, int $productId): JsonResponse
+    public function index(Request $request, string $productId): JsonResponse
     {
         $reviews = Review::query()
             ->where('product_id', $productId)

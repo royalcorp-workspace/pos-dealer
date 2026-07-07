@@ -73,7 +73,8 @@ class AuthController extends Controller
 
         $data = $request->validate([
             'email' => ['required', 'email', 'max:255'],
-            'password' => [$isGoogleSignup ? 'nullable' : 'required', 'string', 'min:8', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/'],
+            'password' => [$isGoogleSignup ? 'nullable' : 'required', 'string', 'min:8',
+                'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/'],
             'password_confirmation' => [$isGoogleSignup ? 'nullable' : 'required', 'same:password'],
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:20'],
@@ -134,7 +135,10 @@ class AuthController extends Controller
                 'expires_at' => now()->addHours(24),
                 'used' => false,
             ]);
-            \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+            \Illuminate\Support\Facades\Mail::to($user->
+                email)->
+                send(new \App\Mail\VerifyEmailMail($user->
+                email, $token));
             return response()->json([
                 'message' => 'User created. Verification email sent to your inbox.'
             ], 201);
@@ -156,7 +160,7 @@ class AuthController extends Controller
             'access_token' => $access,
             'refresh_token' => (string) $refreshModel->getAttribute('raw_token'),
             'token_type' => 'Bearer',
-            'expires_in' => 3600,
+            'expires_in' => $this->tokens->accessTokenTtlSeconds(),
             'redirect' => '/dashboard'
         ], 201);
     }
@@ -257,7 +261,7 @@ class AuthController extends Controller
             'access_token' => $access,
             'refresh_token' => (string) $refreshModel->getAttribute('raw_token'),
             'token_type' => 'Bearer',
-            'expires_in' => 3600,
+            'expires_in' => $this->tokens->accessTokenTtlSeconds(),
         ]);
     }
 
@@ -283,7 +287,13 @@ class AuthController extends Controller
         $deviceId = $refresh->device_id ?: $this->deviceSessions->deviceId($request);
 
         $out = $this->tokens->refresh($token, $user, $request, $deviceId);
-        $this->deviceSessions->register($request, $user, null, null, RefreshToken::query()->where('token_hash', $this->tokens->hashRefreshToken($out['refresh_token']))->value('id'));
+        $this->
+            deviceSessions->
+            register($request, $user, null, null, RefreshToken::query()->
+            where('token_hash', $this->
+            tokens->
+            hashRefreshToken($out['refresh_token']))->
+            value('id'));
         $this->deviceSessions->enforceLimit($user, null, $deviceId);
         $this->audit->log($user, 'token_refresh', $request, []);
 
@@ -367,4 +377,3 @@ class AuthController extends Controller
         return $refresh;
     }
 }
-

@@ -2,20 +2,36 @@
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
+function getLoadingOverlay() {
+    return document.getElementById('loading-overlay');
+}
+
 window.addEventListener('beforeunload', () => {
-    const overlay = $('#loading-overlay');
+    const overlay = getLoadingOverlay();
     if (overlay) overlay.style.display = 'flex';
 });
 
 window.showLoading = function () {
-    const overlay = $('#loading-overlay');
-    if (overlay) overlay.style.display = 'flex';
+    const overlay = getLoadingOverlay();
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
 };
 
 window.hideLoading = function () {
-    const overlay = $('#loading-overlay');
-    if (overlay) overlay.style.display = 'none';
+    const overlay = getLoadingOverlay();
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
 };
+
+document.addEventListener('show-loading', () => {
+    showLoading();
+});
+
+document.addEventListener('hide-loading', () => {
+    hideLoading();
+});
 
 document.addEventListener('submit', function (e) {
     const target = e.target;
@@ -89,6 +105,11 @@ window.updateCartDrawer = function (html) {
     const drawerBody = $('#cart-drawer-body');
     if (drawerBody && html) {
         drawerBody.innerHTML = html;
+        const footer = $('#cart-footer');
+        const newTotal = footer ? Number(footer.dataset.cartTotal || 0) : 0;
+        drawerBody.setAttribute('data-cart-total', newTotal);
+        window.currentCartTotal = newTotal;
+        window.dispatchEvent(new CustomEvent('cart-drawer-updated', { bubbles: true }));
     }
 };
 

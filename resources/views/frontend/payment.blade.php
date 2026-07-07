@@ -4,7 +4,7 @@
 @section('robots', 'noindex,nofollow')
 
 @section('content')
-    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh] font-sans" data-route-thankyou="{{ route('thankyou') }}">
+    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh] font-sans" id="payment-container" data-route-thankyou="{{ route('thankyou') }}" data-route-payment-process="{{ route('payment.process') }}">
         <h1 class="text-3xl font-extrabold text-brand-dark mb-8 font-serif">Pemilihan Pembayaran</h1>
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -59,21 +59,84 @@
                     </div>
                 </div>
 
+                @if(!empty($orderData['items']))
+                    <div class="bg-white border border-brand-muted rounded-2xl p-6 mb-6">
+                        <h2 class="font-bold text-brand-dark mb-4">Produk yang Dipesan</h2>
+                        <div class="space-y-3">
+                            @foreach($orderData['items'] as $item)
+                                <div class="flex justify-between items-start py-3 border-b">
+                                    <div class="flex-1">
+                                        <p class="font-medium text-gray-700">{{ $item['name'] }}</p>
+                                        <p class="text-xs text-gray-500">Qty: {{ $item['quantity'] }}</p>
+                                    </div>
+                                    <span class="font-semibold ml-4">Rp {{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
                 <div class="bg-white border border-brand-muted rounded-2xl p-6">
                     <h2 class="font-bold text-brand-dark mb-4">Detail Pesanan</h2>
+                    @php
+                        $items = $orderData['items'] ?? [];
+                        $originalSubtotal = collect($items)->sum(fn($i) => ($i['price'] ?? 0) * ($i['quantity'] ?? 0));
+                        
+                        $totalPercentDiscount = 0.0;
+                        $totalNominalDiscount = 0.0;
+                        foreach ($items as $i) {
+                            $itemDiscountTotal = ($i['discount_nominal'] ?? 0) * ($i['quantity'] ?? 0);
+                            if (($i['discount_percent'] ?? 0) > 0) {
+                                $totalPercentDiscount += $itemDiscountTotal;
+                            } else {
+                                $totalNominalDiscount += $itemDiscountTotal;
+                            }
+                        }
+
+                        $discountedSubtotal = max(0, $originalSubtotal - $totalPercentDiscount - $totalNominalDiscount);
+                    @endphp
                     <div class="space-y-3">
+                        @if($totalPercentDiscount > 0 || $totalNominalDiscount > 0)
+                            <div class="flex justify-between items-center py-2 border-b">
+                                <span class="text-gray-700">Subtotal</span>
+                                <span class="font-semibold line-through text-gray-400">Rp {{ number_format($originalSubtotal, 0, ',', '.') }}</span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b">
+                                <span class="text-gray-700">Harga</span>
+                                <span class="font-semibold text-brand-dark">Rp {{ number_format($discountedSubtotal, 0, ',', '.') }}</span>
+                            </div>
+                        @else
+                            <div class="flex justify-between items-center py-2 border-b">
+                                <span class="text-gray-700">Subtotal</span>
+                                <span class="font-semibold text-brand-dark">Rp {{ number_format($originalSubtotal, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+                        
+                        @if($totalPercentDiscount > 0)
+                            <div class="flex justify-between items-center py-2 border-b text-red-600">
+                                <span class="text-gray-700">Diskon Persen</span>
+                                <span class="font-semibold">- Rp {{ number_format($totalPercentDiscount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        @if($totalNominalDiscount > 0)
+                            <div class="flex justify-between items-center py-2 border-b text-red-600">
+                                <span class="text-gray-700">Diskon Nominal</span>
+                                <span class="font-semibold">- Rp {{ number_format($totalNominalDiscount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
                         <div class="flex justify-between items-center py-2 border-b">
-                            <span class="text-gray-700">Subtotal</span>
-                            <span class="font-semibold">Rp {{ number_format($orderData['subtotal'] ?? 0, 0, ',', '.') }}</span>
-                        </div>
-                        <div class="flex justify-between items-center py-2 border-b">
-                            <span class="text-gray-700">Ongkos Kirim</span>
+                            <span class="text-gray-700">Shipping ({{ strtoupper($orderData['courier'] ?? 'Kurir') }})</span>
                             <span class="font-semibold">Rp {{ number_format($orderData['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
                         </div>
-                        <div class="flex justify-between items-center py-2 border-b">
-                            <span class="text-gray-700">Diskon</span>
-                            <span class="font-semibold text-red-600">- Rp {{ number_format($orderData['total_discount'] ?? 0, 0, ',', '.') }}</span>
-                        </div>
+
+                        @if(($orderData['voucher_discount'] ?? 0) > 0)
+                            <div class="flex justify-between items-center py-2 border-b text-red-600">
+                                <span class="text-gray-700">Voucher ({{ $orderData['voucher_code'] ?? 'Kupon' }})</span>
+                                <span class="font-semibold">- Rp {{ number_format($orderData['voucher_discount'], 0, ',', '.') }}</span>
+                            </div>
+                        @endif
                         
                         @php
                             $selectedMethod = collect($paymentMethods)->firstWhere('code', $orderData['payment_method'] ?? null);
@@ -125,4 +188,5 @@
             </div>
         </div>
     </div>
+    <script src="{{ asset('js/frontend/payment.js') }}?v={{ filemtime(public_path('js/frontend/payment.js')) }}"></script>
 @endsection

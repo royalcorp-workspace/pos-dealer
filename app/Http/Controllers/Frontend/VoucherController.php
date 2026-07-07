@@ -32,14 +32,26 @@ class VoucherController extends Controller
 
         $productIds = (array) $request->input('product_ids', []);
         $categoryIds = (array) $request->input('category_ids', []);
-        if ((int) $voucher->scope === 2 && $voucher->products()->where('deleted', false)->pluck('products.id')->intersect($productIds)->isEmpty()) {
+        if ((int) $voucher->
+            scope === 2 && $voucher->
+            products()->
+            where('deleted', false)->
+            pluck('products.id')->
+            intersect($productIds)->
+            isEmpty()) {
             return response()->json([
                 'valid' => false,
                 'message' => 'Voucher ini hanya berlaku untuk produk tertentu.',
             ]);
         }
 
-        if ((int) $voucher->scope === 3 && $voucher->categories()->where('deleted', false)->pluck('product_category.id')->intersect($categoryIds)->isEmpty()) {
+        if ((int) $voucher->
+            scope === 3 && $voucher->
+            categories()->
+            where('deleted', false)->
+            pluck('product_category.id')->
+            intersect($categoryIds)->
+            isEmpty()) {
             return response()->json([
                 'valid' => false,
                 'message' => 'Voucher ini hanya berlaku untuk kategori tertentu.',
@@ -52,7 +64,8 @@ class VoucherController extends Controller
         if ($request->cart_total < $voucher->min_purchase) {
             return response()->json([
                 'valid' => false,
-                'message' => 'Minimum pembelian Rp ' . number_format($voucher->min_purchase, 0, ',', '.') . ' untuk voucher ini.',
+                'message' => 'Minimum pembelian Rp ' . number_format((float) $voucher->min_purchase, 0, ',',
+                    '.') . ' untuk voucher ini.',
             ]);
         }
 
@@ -65,9 +78,10 @@ class VoucherController extends Controller
 
         $discount = 0;
         if ($voucher->type == 1) {
+            $maxDiscount = ($voucher->max_discount !== null && (float) $voucher->max_discount > 0) ? (float) $voucher->max_discount : PHP_FLOAT_MAX;
             $discount = min(
                 ($request->cart_total * $voucher->value / 100),
-                $voucher->max_discount ?? PHP_FLOAT_MAX
+                $maxDiscount
             );
         } elseif ($voucher->type == 2) {
             $discount = min($voucher->value, $request->cart_total);
@@ -75,10 +89,11 @@ class VoucherController extends Controller
             $discount = $voucher->value;
         }
 
-        $typeLabel = match($voucher->type) {
+        $typeLabel = match((int)$voucher->type) {
             1 => 'Persentase',
             2 => 'Nominal',
             3 => 'Gratis Ongkir',
+            4 => 'Bonus Produk',
             default => 'Tidak diketahui',
         };
 
@@ -90,9 +105,11 @@ class VoucherController extends Controller
                 'type' => $typeLabel,
                 'value' => $voucher->value,
                 'discount' => $discount,
+                'max_discount' => $voucher->max_discount,
                 'scope' => $voucher->scope,
                 'scopeLabel' => $voucher->scopeLabel(),
                 'allowStacking' => $voucher->isStackable(),
+                'products' => (int)$voucher->type === 4 ? $voucher->products()->where('deleted', false)->pluck('name')->toArray() : [],
             ],
         ]);
     }

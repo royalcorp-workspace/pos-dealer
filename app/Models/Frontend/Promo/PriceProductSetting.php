@@ -106,4 +106,75 @@ class PriceProductSetting extends Model
     {
         return $this->isVolumeDiscount() ? 'Diskon Volume' : 'Diskon Langsung';
     }
+
+    public function volumeTiers()
+    {
+        return $this->hasMany(VolumeTier::class, 'price_product_setting_id', 'id')->orderBy('sort_order');
+    }
+
+    public function getVolumeTiersAttribute()
+    {
+        if ($this->relationLoaded('volumeTiers')) {
+            $relation = $this->getRelation('volumeTiers');
+            if ($relation && $relation->isNotEmpty()) {
+                $tiers = [];
+                foreach ($relation as $vt) {
+                    $dt = $vt->discount_type;
+                    $dv = $vt->discount_value;
+                    if ($dt == 1 && $dv > 100) {
+                        $dt = 2; // Auto-correct to nominal
+                    }
+                    $tiers[] = [
+                        'min_quantity' => $vt->min_purchase,
+                        'discount_type' => $dt,
+                        'discount_value' => $dv,
+                    ];
+                }
+                return $tiers;
+            }
+        }
+
+        // Fallback to relationship query if not loaded yet but has records
+        if (!$this->relationLoaded('volumeTiers') && $this->volumeTiers()->exists()) {
+            $relation = $this->volumeTiers()->get();
+            $tiers = [];
+            foreach ($relation as $vt) {
+                $dt = $vt->discount_type;
+                $dv = $vt->discount_value;
+                if ($dt == 1 && $dv > 100) {
+                    $dt = 2; // Auto-correct to nominal
+                }
+                $tiers[] = [
+                    'min_quantity' => $vt->min_purchase,
+                    'discount_type' => $dt,
+                    'discount_value' => $dv,
+                ];
+            }
+            return $tiers;
+        }
+
+        // Otherwise fall back to legacy JSON column
+        $value = $this->attributes['volume_tiers'] ?? null;
+        if ($value) {
+            $decoded = is_string($value) ? json_decode($value, true) : $value;
+            if (is_array($decoded)) {
+                $tiers = [];
+                foreach ($decoded as $tier) {
+                    $dt = $tier['discount_type'] ?? 1;
+                    $dv = $tier['discount_value'] ?? 0;
+                    if ($dt == 1 && $dv > 100) {
+                        $dt = 2; // Auto-correct to nominal
+                    }
+                    $tiers[] = [
+                        'min_quantity' => $tier['min_quantity'] ?? ($tier['min_purchase'] ?? 0),
+                        'discount_type' => $dt,
+                        'discount_value' => $dv,
+                    ];
+                }
+                return $tiers;
+            }
+        }
+
+        return [];
+    }
 }

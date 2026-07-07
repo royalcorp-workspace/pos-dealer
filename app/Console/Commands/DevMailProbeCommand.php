@@ -29,4 +29,3 @@ class DevMailProbeCommand extends Command
         return self::SUCCESS;
     }
 }
-

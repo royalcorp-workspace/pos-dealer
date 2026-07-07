@@ -38,7 +38,7 @@
         $categoryUrl = $product->category?->slug ? route('category.show', $product->category->slug) : route('categories');
         $brandUrl = $product->brand?->slug ? route('products.index', ['type' => 'brand', 'value' => $product->brand->slug]) : route('brands');
         $productUrl = route('products.show', $product->slug);
-$wishlist = session()->get('wishlist', []);
+        $wishlist = session()->get('wishlist', []);
         $isInWishlist = in_array($product->id, $wishlist);
         $productSchema = [
             '@context' => 'https://schema.org/',

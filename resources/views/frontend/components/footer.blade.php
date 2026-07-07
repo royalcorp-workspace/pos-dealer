@@ -1,4 +1,9 @@
 <footer class="bg-brand-dark text-white border-t border-brand-darker font-sans mt-20">
+    @php
+        if (!isset($about)) {
+            $about = \App\Models\Frontend\AboutUs::first();
+        }
+    @endphp
     <div class="container mx-auto px-6 py-16 lg:py-20">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
             <!-- Brand Column -->
@@ -13,15 +18,27 @@
                     Toko kasur dan perlengkapan tidur terpercaya. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga.
                 </p>
                 <div class="flex gap-4">
-                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="Facebook">
-                        <i class="fa-brands fa-facebook-f w-5 h-5 footer-social-icon"></i>
-                    </a>
-                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="Instagram">
-                        <i class="fa-brands fa-instagram w-5 h-5 footer-social-icon"></i>
-                    </a>
-                    <a href="#" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="Twitter">
-                        <i class="fa-brands fa-x-twitter w-5 h-5 footer-social-icon"></i>
-                    </a>
+                    @if($about && $about->social_media)
+                        @php
+                            $socialIcons = [
+                                'facebook' => ['icon' => 'fa-brands fa-facebook-f', 'aria' => 'Facebook'],
+                                'instagram' => ['icon' => 'fa-brands fa-instagram', 'aria' => 'Instagram'],
+                                'twitter' => ['icon' => 'fa-brands fa-x-twitter', 'aria' => 'Twitter'],
+                                'x' => ['icon' => 'fa-brands fa-x-twitter', 'aria' => 'X'],
+                                'linkedin' => ['icon' => 'fa-brands fa-linkedin-in', 'aria' => 'LinkedIn'],
+                                'youtube' => ['icon' => 'fa-brands fa-youtube', 'aria' => 'YouTube'],
+                                'tiktok' => ['icon' => 'fa-brands fa-tiktok', 'aria' => 'TikTok'],
+                                'whatsapp' => ['icon' => 'fa-brands fa-whatsapp', 'aria' => 'WhatsApp'],
+                            ];
+                        @endphp
+                        @foreach($about->social_media as $platform => $url)
+                            @if(!empty($url) && isset($socialIcons[$platform]))
+                                <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="{{ $socialIcons[$platform]['aria'] }}">
+                                    <i class="{{ $socialIcons[$platform]['icon'] }} w-5 h-5 footer-social-icon"></i>
+                                </a>
+                            @endif
+                        @endforeach
+                    @endif
                 </div>
             </div>
 
@@ -51,18 +68,24 @@
             <div class="space-y-6">
                 <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Hubungi Kami</h4>
                 <div class="space-y-4 text-brand-light/70">
+                    @if($about && $about->address)
                     <div class="flex items-start gap-3">
                         <i class="fa-solid fa-location-dot w-5 h-5 text-brand-gold mt-1 flex-shrink-0"></i>
-                        <span>Jl. Tidur Nyenyak No. 99, Jakarta Selatan, 12345</span>
+                        <span>{{ $about->address }}</span>
                     </div>
+                    @endif
+                    @if($about && $about->phone)
                     <div class="flex items-center gap-3">
                         <i class="fa-solid fa-phone w-5 h-5 text-brand-gold flex-shrink-0"></i>
-                        <span class="font-medium">0812-3456-7890</span>
+                        <span class="font-medium">{{ $about->phone }}</span>
                     </div>
+                    @endif
+                    @if($about && $about->email)
                     <div class="flex items-center gap-3">
                         <i class="fa-solid fa-envelope w-5 h-5 text-brand-gold flex-shrink-0"></i>
-                        <span class="font-medium">halo@img.id</span>
+                        <span class="font-medium">{{ $about->email }}</span>
                     </div>
+                    @endif
                 </div>
                 
                 <div class="pt-4">

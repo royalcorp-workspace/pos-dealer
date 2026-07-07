@@ -15,28 +15,28 @@ class ProductCatalogController extends Controller
     {
         $filterType = $request->query('type');
         $filterValue = $request->query('value');
-        
+
         // Handle tag slug in URL path
         $tagSlug = $request->route()->parameter('tagSlug');
         if ($tagSlug && !$filterType) {
             $filterType = 'search';
             $filterValue = $tagSlug;
         }
-        
+
         // Handle category slug in URL path (SEO-friendly)
         $categorySlug = $request->route()->parameter('categorySlug');
         if ($categorySlug && !$filterType) {
             $filterType = 'category';
             $filterValue = $categorySlug;
         }
-        
+
         // Handle brand slug in URL path
         $brandSlug = $request->route()->parameter('brandSlug');
         if ($brandSlug && !$filterType) {
             $filterType = 'brand';
             $filterValue = $brandSlug;
         }
-        
+
         $minPrice = $request->query('min_price', 0);
         $maxPrice = $request->query('max_price');
         $inStock = $request->query('in_stock');
@@ -142,7 +142,7 @@ class ProductCatalogController extends Controller
     public function show(Product $product)
     {
         $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
-        
+
         return view('frontend.product.show', compact('product'));
     }
 

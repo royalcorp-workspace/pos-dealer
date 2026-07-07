@@ -45,7 +45,10 @@ class PriceProductSettingSeeder extends Seeder
             'is_featured' => false,
             'sort_order' => 2,
         ])->products()->attach(
-            $products->pluck('id')->mapWithKeys(fn($id) => [$id => ['discount_type' => 2, 'discount_value' => 0]])->toArray()
+            $products->
+                pluck('id')->
+                mapWithKeys(fn($id) => [$id => ['discount_type' => 2, 'discount_value' => 0]])->
+                toArray()
         );
     }
 }

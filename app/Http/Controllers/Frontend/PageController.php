@@ -3,9 +3,16 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Models\Frontend\AboutUs;
+use App\Models\Frontend\BlogPost;
+use App\Models\Frontend\Faq;
+use App\Models\Frontend\HowToReturn;
+use App\Models\Frontend\PrivacyPolicy;
 use App\Models\Frontend\ProductsCatalog\Brand;
 use App\Models\Frontend\ProductsCatalog\Product;
 use App\Models\Frontend\ProductsCatalog\ProductCategory;
+use App\Models\Frontend\TermsAndCondition;
+use App\Models\Frontend\WarrantyClaim;
 use Illuminate\Http\Request;
 
 class PageController extends Controller
@@ -23,7 +30,8 @@ class PageController extends Controller
     {
         $categories = ProductCategory::where('deleted', false)
             ->whereNull('parent_id')
-            ->with('children.children')
+            ->with(['children.children', 'products' => fn($q) => $q->where('deleted', false)])
+            ->withCount('products')
             ->orderBy('sort_order')
             ->get();
         return view('frontend.categories', compact('categories'));
@@ -53,60 +61,54 @@ class PageController extends Controller
 
     public function blog()
     {
-        $blogs = [
-            [
-                'title' => 'Cara Memilih Kasur yang Tepat untuk Tulang Belakang',
-                'category' => 'Tips & Trik',
-                'date' => '19 Mei 2026'
-            ],
-            [
-                'title' => 'Tanda-tanda Anda Harus Segera Mengganti Bantal',
-                'category' => 'Kesehatan',
-                'date' => '15 Mei 2026'
-            ],
-            [
-                'title' => 'Mengenal Teknologi Pocket Spring Pada Kasur Premium',
-                'category' => 'Informasi Produk',
-                'date' => '10 Mei 2026'
-            ],
-            [
-                'title' => 'Membersihkan Noda Membandel di Springbed Anda',
-                'category' => 'Perawatan',
-                'date' => '05 Mei 2026'
-            ]
-        ];
+        $blogs = BlogPost::where('is_published', true)
+            ->orderBy('published_at', 'desc')
+            ->orderBy('sort_order')
+            ->get();
 
         return view('frontend.blog', compact('blogs'));
     }
 
-    public function help()
+    public function blogShow(BlogPost $blogPost)
     {
+        $blogPost->increment('view_count');
+
+        $structuredData = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Article',
+            'headline' => $blogPost->title,
+            'description' => $blogPost->excerpt,
+            'datePublished' => $blogPost->published_at?->format('Y-m-d') ?? $blogPost->created_at->format('Y-m-d'),
+            'dateModified' => $blogPost->updated_at->format('Y-m-d'),
+            'author' => [
+                '@type' => 'Organization',
+                'name' => $blogPost->author_name ?? 'IMG International Mattress Gallery',
+            ],
+            'publisher' => [
+                '@type' => 'Organization',
+                'name' => 'IMG International Mattress Gallery',
+                'url' => route('home'),
+            ],
+        ];
+
+        return view('frontend.blog-detail', compact('blogPost', 'structuredData'));
+    }
+
+public function help()
+    {
+        $about = AboutUs::first();
+
         $contacts = [
-            ['label' => 'Telepon', 'value' => '1500-123', 'icon' => 'phone'],
-            ['label' => 'Email', 'value' => 'support@img.co.id', 'icon' => 'mail'],
-            ['label' => 'WhatsApp', 'value' => '+62 811-1234-5678', 'icon' => 'message-square'],
+            ['label' => 'Telepon', 'value' => $about->phone ?? '', 'icon' => 'phone'],
+            ['label' => 'Email', 'value' => $about->email ?? '', 'icon' => 'mail'],
+            ['label' => 'WhatsApp', 'value' => $about->social_media['whatsapp'] ?? '', 'icon' => 'message-square'],
         ];
 
-        $faqs = [
-            [
-                'question' => 'Bagaimana cara mengklaim garansi?',
-                'answer' => 'Hubungi layanan pelanggan IMG dengan menyertakan bukti pembelian, foto produk, dan detail keluhan. Tim kami akan memandu proses klaim garansi sesuai ketentuan produk.',
-            ],
-            [
-                'question' => 'Apakah bisa tukar tambah kasur lama?',
-                'answer' => 'Program tukar tambah dapat berubah sesuai periode promo. Hubungi IMG melalui WhatsApp atau telepon untuk mengecek ketersediaan program di wilayah Anda.',
-            ],
-            [
-                'question' => 'Apa saja metode pembayaran yang tersedia?',
-                'answer' => 'IMG menyediakan pembayaran melalui transfer bank, e-wallet, dan metode pembayaran lainnya sesuai ketersediaan saat checkout.',
-            ],
-            [
-                'question' => 'Berapa lama estimasi pengiriman untuk pesanan saya?',
-                'answer' => 'Estimasi pengiriman tergantung lokasi dan ketersediaan produk. Untuk area Jabodetabek, pengiriman biasanya lebih cepat dan dapat dikonfirmasi saat pemesanan.',
-            ],
-        ];
+        $faqs = Faq::where('is_published', true)
+            ->orderBy('sort_order')
+            ->get();
 
-        return view('frontend.help', compact('contacts', 'faqs'));
+        return view('frontend.help', compact('about', 'contacts', 'faqs'));
     }
 
     public function verifyEmail()
@@ -285,26 +287,36 @@ class PageController extends Controller
 
     public function about()
     {
-        return view('frontend.about');
+        $about = AboutUs::first();
+
+        return view('frontend.about', compact('about'));
     }
 
     public function warranty()
     {
-        return view('frontend.warranty');
+        $warranty = WarrantyClaim::first();
+
+        return view('frontend.warranty', compact('warranty'));
     }
 
     public function terms()
     {
-        return view('frontend.terms');
+        $terms = TermsAndCondition::first();
+
+        return view('frontend.terms', compact('terms'));
     }
 
     public function privacy()
     {
-        return view('frontend.privacy');
+        $privacy = PrivacyPolicy::first();
+
+        return view('frontend.privacy', compact('privacy'));
     }
 
     public function returns()
     {
-        return view('frontend.returns');
+        $returns = HowToReturn::first();
+
+        return view('frontend.returns', compact('returns'));
     }
 }

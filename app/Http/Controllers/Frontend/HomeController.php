@@ -31,11 +31,12 @@ class HomeController extends Controller
 
         $categories = ProductCategory::where('deleted', false)
             ->whereNull('parent_id')
-            ->withCount('children')
+            ->withCount('products')
             ->take(6)
             ->get();
 
-        return view('frontend.home', compact('bestsellers', 'recommended', 'featured', 'categories', 'recommendedTotal'));
+        return view('frontend.home', compact('bestsellers', 'recommended', 'featured', 'categories',
+            'recommendedTotal'));
     }
 
     public function loadMore(Request $request)

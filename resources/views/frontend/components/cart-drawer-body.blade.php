@@ -1,11 +1,33 @@
 @php
     $cart = $cart ?? session()->get('cart', []);
     $cartItemCount = collect($cart)->sum('quantity');
-    $cartTotal = collect($cart)->sum(function($item) {
-        return $item['price'] * $item['quantity'];
-    });
+    
+    $cartTotal = 0.0;
+    foreach($cart as $item) {
+        $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+        $originalPrice = 0.0;
+        if ($variantId) {
+            $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+            if ($variantModel) {
+                $originalPrice = (float) $variantModel->price;
+            }
+        }
+        if ($originalPrice <= 0.0) {
+            $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+            if ($productModel) {
+                $originalPrice = (float) $productModel->base_price;
+            }
+        }
+        if ($originalPrice <= 0.0) {
+            $originalPrice = (float) $item['price'];
+        }
+        $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
+        $cartTotal += $res['promotional_price'] * (int) $item['quantity'];
+    }
+
     $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
     $cartCategoryIds = \App\Models\Frontend\ProductsCatalog\Product::whereIn('id', $cartProductIds)->pluck('category_id')->unique()->values()->all();
+    $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
     $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()->with(['products', 'categories'])->get()->filter(function($coupon) use ($cartProductIds, $cartCategoryIds) {
         if ((int) $coupon->scope === 2) {
             return $coupon->products()->where('deleted', false)->whereIn('products.id', $cartProductIds)->exists();
@@ -16,6 +38,9 @@
         }
 
         return true;
+    })->map(function ($coupon) use ($userId) {
+        $coupon->is_usable = $coupon->canBeUsedBy($userId);
+        return $coupon;
     })->values();
 @endphp
 
@@ -38,6 +63,65 @@
 @else
     <div class="flex-1 p-5 md:p-6 flex flex-col gap-6 overflow-y-auto">
         @foreach($cart as $item)
+            @php
+                $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+                $originalPrice = 0.0;
+                if ($variantId) {
+                    $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                    if ($variantModel) {
+                        $originalPrice = (float) $variantModel->price;
+                    }
+                }
+                if ($originalPrice <= 0.0) {
+                    $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                    if ($productModel) {
+                        $originalPrice = (float) $productModel->base_price;
+                    }
+                }
+                if ($originalPrice <= 0.0) {
+                    $originalPrice = (float) $item['price'];
+                }
+
+                $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
+                $itemPrice = $res['promotional_price'];
+
+                // Fetch applicable volume settings for suggestions
+                $itemVolumeSettings = \App\Models\Frontend\Promo\PriceProductSetting::active()
+                    ->where('type', 2)
+                    ->where(function($q) use ($item) {
+                        $q->where('scope', 1) // Global
+                          ->orWhereHas('products', function($q2) use ($item) {
+                              $q2->where('products.id', $item['product_id']);
+                          });
+                    })
+                    ->with('volumeTiers')
+                    ->get();
+                
+                $promoSuggest = null;
+                $currentQty = (int) $item['quantity'];
+
+                foreach ($itemVolumeSettings as $vs) {
+                    $tiers = $vs->volume_tiers ?? [];
+                    if (!empty($tiers) && is_array($tiers)) {
+                        // Sort tiers by min_quantity ascending
+                        usort($tiers, fn($a, $b) => $a['min_quantity'] <=> $b['min_quantity']);
+                        
+                        foreach ($tiers as $tier) {
+                            $minQty = (int) ($tier['min_quantity'] ?? 0);
+                            $discountVal = $tier['discount_value'] ?? 0;
+                            $discountType = $tier['discount_type'] ?? 1;
+                            $discountStr = $discountType == 1 ? $discountVal . '%' : 'Rp ' . number_format((float) $discountVal, 0, ',', '.');
+
+                            if ($currentQty < $minQty) {
+                                $neededQty = $minQty - $currentQty;
+                                $promoSuggest = "Beli {$neededQty} unit lagi untuk dapat diskon {$discountStr}!";
+                                break; // Show the closest next tier
+                            }
+                        }
+                    }
+                    if ($promoSuggest) break;
+                }
+            @endphp
             <div data-cart-item-id="{{ $item['id'] }}" class="flex gap-4 p-4 border border-gray-100 rounded-2xl bg-white shadow-sm">
                 <div class="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0">
                     <img src="{{ $item['image'] }}" alt="{{ $item['name'] }}" class="w-full h-full object-cover" />
@@ -53,6 +137,13 @@
                             @if(isset($item['size']) && $item['size'])
                                 <div class="text-xs text-brand-gold-dark mt-1 font-medium">{{ $item['size'] }}</div>
                             @endif
+                            
+                            @if($promoSuggest)
+                                <div class="mt-2 flex items-center gap-1.5 bg-brand-gold/10 text-brand-gold-dark px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border border-brand-gold/20">
+                                    <i class="fa-solid fa-gift text-xs text-brand-gold"></i>
+                                    <span>{{ $promoSuggest }}</span>
+                                </div>
+                            @endif
                         </div>
                         <form action="{{ route('cart.remove', $item['id']) }}" method="POST">
                             @csrf
@@ -65,7 +156,20 @@
                             @endif
                         </div>
                         <div class="mt-auto flex justify-between items-end">
-                        <span class="font-bold text-brand-dark tracking-tight">Rp {{ number_format($item['price'], 0, ',', '.') }}</span>
+                        <div class="flex flex-col items-start">
+                            @if($res['volume_discount'] > 0 || $res['static_discount'] > 0)
+                                <div class="flex items-center gap-1.5 mb-0.5">
+                                    <span class="text-xs line-through text-gray-400 font-semibold">Rp {{ number_format($originalPrice, 0, ',', '.') }}</span>
+                                    @php
+                                        $discountPercent = round((($originalPrice - $itemPrice) / $originalPrice) * 100);
+                                    @endphp
+                                    @if($discountPercent > 0)
+                                        <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountPercent }}% OFF</span>
+                                    @endif
+                                </div>
+                            @endif
+                            <span class="font-bold text-brand-dark tracking-tight">Rp {{ number_format($itemPrice, 0, ',', '.') }}</span>
+                        </div>
 
                         <div class="flex items-center gap-3 bg-brand-light px-2 py-1 rounded-lg border border-brand-muted">
                             <button
@@ -92,7 +196,7 @@
         @endforeach
     </div>
 
-    <div id="cart-footer" class="p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-4" data-product-ids='@json($cartProductIds)' data-category-ids='@json($cartCategoryIds)'>
+    <div id="cart-footer" class="p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-4" data-product-ids='@json($cartProductIds)' data-category-ids='@json($cartCategoryIds)' data-cart-total="{{ $cartTotal }}">
         <button
             type="button"
             onclick="toggleCartCouponPanel()"
@@ -122,22 +226,29 @@
                 @php
                     $typeLabel = match($coupon->type) {
                         1 => $coupon->value . '%',
-                        2 => 'Rp ' . number_format($coupon->value, 0, ',', '.'),
+                        2 => 'Rp ' . number_format((float) $coupon->value, 0, ',', '.'),
                         3 => 'Gratis Ongkir',
                         default => 'Tidak diketahui',
                     };
                 @endphp
-<button
+                @php
+                    $isUsable = $coupon->is_usable ?? true;
+                @endphp
+                <button
                      type="button"
-                     onclick="selectCartCoupon(this)"
-                     class="coupon-option w-full text-left rounded-2xl border bg-white p-4 transition-all hover:border-brand-gold hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-gold"
+                     @if($isUsable)
+                         onclick="selectCartCoupon(this)"
+                         class="coupon-option w-full text-left rounded-2xl border bg-white p-4 transition-all hover:border-brand-gold hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-gold"
+                     @else
+                         class="coupon-option opacity-50 bg-gray-100 border-gray-300 pointer-events-none cursor-not-allowed w-full text-left rounded-2xl border p-4 transition-all focus:outline-none"
+                     @endif
                      data-code="{{ $coupon->code }}"
                      data-title="{{ $coupon->title }}"
                      data-description="{{ $coupon->description }}"
                      data-discount-type="{{ $coupon->type == 1 ? 'percentage' : ($coupon->type == 2 ? 'fixed' : 'shipping') }}"
-                      data-discount-value="{{ floatval($coupon->value) }}"
-                      data-max-discount="{{ $coupon->max_discount ?? '' }}"
-                      data-allow-stacking="{{ $coupon->allow_stacking ? 1 : 0 }}">
+                     data-discount-value="{{ floatval($coupon->value) }}"
+                     data-max-discount="{{ $coupon->max_discount ?? '' }}"
+                     data-allow-stacking="{{ $coupon->allow_stacking ? 1 : 0 }}">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
                             <p class="font-extrabold text-brand-dark">{{ $coupon->title }}</p>
@@ -151,19 +262,35 @@
                     </div>
                     <div class="mt-4 flex items-center justify-between">
                         <span class="font-mono text-sm font-bold text-brand-gold-dark">{{ $coupon->code }}</span>
-                        <span class="coupon-option-label text-xs font-bold text-gray-400">Pilih</span>
+                        @if($isUsable)
+                            <span class="coupon-option-label text-xs font-bold text-gray-400">Pilih</span>
+                        @else
+                            <span class="coupon-option-label text-xs font-bold text-red-500 uppercase tracking-wider">Limit Habis</span>
+                        @endif
                     </div>
+                    @if(!$isUsable)
+                        <div class="mt-2 text-[10px] font-bold text-red-600 uppercase tracking-wider border-t pt-2">
+                            Kupon sudah pernah digunakan oleh Anda
+                        </div>
+                    @endif
                 </button>
             @endforeach
 
             <div id="cart-selected-coupon" class="hidden rounded-xl bg-white border border-brand-gold/30 p-3 text-sm text-gray-700">
-                <div class="flex justify-between gap-3">
-                    <span>Kupon dipilih</span>
-                    <strong id="cart-selected-title" class="text-brand-dark"></strong>
-                </div>
-                <div class="flex justify-between gap-3 mt-1 text-red-600">
-                    <span>Estimasi hemat</span>
-                    <strong id="cart-selected-discount"></strong>
+                <div class="flex justify-between items-center gap-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">Kupon dipilih:</span>
+                            <strong id="cart-selected-title" class="text-brand-dark"></strong>
+                        </div>
+                        <div class="flex items-center gap-2 mt-0.5 text-red-600">
+                            <span class="text-xs">Estimasi hemat:</span>
+                            <strong id="cart-selected-discount"></strong>
+                        </div>
+                    </div>
+                    <button type="button" onclick="deselectCartCoupon()" class="text-xs font-bold text-red-500 hover:text-red-700 focus:outline-none px-2 py-1 rounded bg-red-50 hover:bg-red-100 transition-colors">
+                        Hapus
+                    </button>
                 </div>
             </div>
         </div>
@@ -171,7 +298,7 @@
         <div class="space-y-2 pt-2">
             <div class="flex justify-between text-sm text-gray-500">
                 <span>Subtotal</span>
-                <span class="font-semibold text-gray-800">Rp {{ number_format($cartTotal, 0, ',', '.') }}</span>
+                <span id="cart-drawer-subtotal" class="font-semibold text-gray-800">Rp {{ number_format($cartTotal, 0, ',', '.') }}</span>
             </div>
             <div id="cart-coupon-discount-row" class="hidden flex justify-between text-sm text-gray-500">
                 <span>Diskon Kupon</span>
