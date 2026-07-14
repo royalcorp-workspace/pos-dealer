@@ -276,14 +276,48 @@ class CheckoutController extends Controller
         }
 
         $courierModel = Courier::where('code', $request->courier)->first();
+        $finalSubDistrictId = $subDistrictId ?? $request->sub_district_id;
+
         $shippingAddressRecord = null;
-        if ($courierModel) {
+        if ($courierModel && $finalSubDistrictId) {
             $shippingAddressRecord = \App\Models\Frontend\Shipping\ShippingAddress::where('courier_id', $courierModel->id)
-                ->where('sub_district_id', $request->sub_district_id)
+                ->where('sub_district_id', $finalSubDistrictId)
                 ->where('type', 1)
                 ->first();
         }
         $shippingAddressesId = $shippingAddressRecord ? $shippingAddressRecord->id : null;
+
+        // Fetch complete location details for metadata storage
+        $shippingAddressData = null;
+        if ($finalSubDistrictId) {
+            $subDistrictModel = \App\Models\Frontend\Location\SubDistrict::with('city.province')->find($finalSubDistrictId);
+            if ($subDistrictModel) {
+                $recipientName = $request->name;
+                $phone = $request->phone;
+                $addressText = $request->address;
+                $postalCode = $request->postal_code ?? $subDistrictModel->postal_code;
+
+                if (session()->get('is_logged_in') && $addressId) {
+                    $savedAddress = Address::find($addressId);
+                    if ($savedAddress) {
+                        $recipientName = $savedAddress->recipient_name;
+                        $phone = $savedAddress->phone;
+                        $addressText = $savedAddress->address;
+                        $postalCode = $savedAddress->postal_code;
+                    }
+                }
+
+                $shippingAddressData = [
+                    'recipient_name' => $recipientName,
+                    'phone' => $phone,
+                    'address' => $addressText,
+                    'sub_district' => $subDistrictModel->sub_district,
+                    'city' => $subDistrictModel->city->name ?? '',
+                    'province' => $subDistrictModel->city->province->name ?? '',
+                    'postal_code' => $postalCode,
+                ];
+            }
+        }
 
         $dbSubtotal = $originalCartTotal - $totalStaticDiscount - $priceProductSettingDiscount;
         $dbDiscount = $voucherDiscount;
@@ -308,6 +342,7 @@ class CheckoutController extends Controller
             'shipping_cost' => $shippingCost,
             'shipping_cost_subsidy' => $shippingCostSubsidy,
             'shipping_addresses_id' => $shippingAddressesId,
+            'meta' => $shippingAddressData ? ['shipping_address' => $shippingAddressData] : null,
         ]);
 
         $productIds = collect($cart)->pluck('product_id')->filter()->unique()->toArray();
@@ -500,6 +535,12 @@ class CheckoutController extends Controller
             ], 400);
         }
 
+        if ($paymentMethod === 'transfer_manual') {
+            $request->validate([
+                'payment_proof' => 'required|image|mimes:jpeg,png,jpg|max:5120',
+            ]);
+        }
+
         $orderId = $orderData['id'];
         $order = $this->getOrderFromIdentifier($orderId);
 
@@ -512,11 +553,18 @@ class CheckoutController extends Controller
                     : $paymentMethodModel->charge_value;
             }
 
+            $meta = $order->meta ?? [];
+            if ($paymentMethod === 'transfer_manual' && $request->hasFile('payment_proof')) {
+                $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
+                $meta['payment_proof'] = $proofPath;
+            }
+
             $order->update([
                 'payment_method' => $paymentMethod,
                 'payment_status' => 2, // Terbayar / Menunggu verifikasi
                 'transaction_fee' => $charge,
                 'total' => $order->total + $charge,
+                'meta' => $meta,
             ]);
 
             session()->forget('order_data');
@@ -534,6 +582,41 @@ class CheckoutController extends Controller
             'success' => false,
             'message' => 'Order tidak ditemukan.'
         ], 404);
+    }
+
+    public function uploadPaymentProof(Request $request, string $orderId)
+    {
+        $order = null;
+        if (\Illuminate\Support\Str::isUuid($orderId)) {
+            $order = \App\Models\Frontend\Order::where('id', $orderId)->first();
+        }
+        if (!$order) {
+            $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
+        }
+
+        if (!$order) {
+            return redirect()->back()->with('error', 'Order tidak ditemukan.');
+        }
+
+        $request->validate([
+            'payment_proof' => 'required|image|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        if ($request->hasFile('payment_proof')) {
+            $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
+            
+            $meta = $order->meta ?? [];
+            $meta['payment_proof'] = $proofPath;
+
+            $order->update([
+                'meta' => $meta,
+                'payment_status' => 2, // Terbayar / Menunggu verifikasi
+            ]);
+
+            return redirect()->back()->with('success', 'Bukti transfer berhasil diunggah.');
+        }
+
+        return redirect()->back()->with('error', 'Gagal mengunggah bukti transfer.');
     }
 
     public function cancelOrder(Request $request, string $orderId)

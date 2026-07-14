@@ -11,6 +11,30 @@ class PaymentMethodSeeder extends Seeder
     {
         $methods = [
             [
+                'code' => 'transfer_manual',
+                'name' => 'Transfer Bank Manual',
+                'type' => 1,
+                'provider' => 'Manual',
+                'image' => 'https://img.icons8.com/color/48/bank-transfer.png',
+                'has_charge' => false,
+                'minimum_amount' => 0,
+                'sort_order' => 0,
+                'status' => 1,
+                'deleted' => false,
+                'bank_info' => [
+                    [
+                        'bank_name' => 'BCA',
+                        'account_number' => '123-456-7890',
+                        'account_holder' => 'PT POS Dealer Indonesia',
+                    ],
+                    [
+                        'bank_name' => 'Mandiri',
+                        'account_number' => '987-654-3210',
+                        'account_holder' => 'PT POS Dealer Indonesia',
+                    ]
+                ],
+            ],
+            [
                 'code' => 'bca_va',
                 'name' => 'BCA Virtual Account',
                 'type' => 2,
@@ -108,7 +132,7 @@ class PaymentMethodSeeder extends Seeder
         ];
 
         foreach ($methods as $method) {
-            PaymentMethod::create($method);
+            PaymentMethod::updateOrCreate(['code' => $method['code']], $method);
         }
     }
 }

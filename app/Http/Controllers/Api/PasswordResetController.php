@@ -96,7 +96,7 @@ class PasswordResetController extends Controller
         $reset->update(['used' => true]);
 
         $user->update([
-            'password_hash' => \Illuminate\Support\Facades\Hash::make($data['new_password']),
+            'password' => \Illuminate\Support\Facades\Hash::make($data['new_password']),
         ]);
 
         // Revoke refresh tokens on password reset

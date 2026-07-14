@@ -53,7 +53,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return { ok: r.ok, status, data };
         })
         .then(({ ok, status, data }) => {
-            console.log('API Response:', { ok, status, data });
             if (ok && (data.success === true || data.message)) {
                 window.location.href = window.location.origin + '/password-otp-sent?email=' + encodeURIComponent(email);
             } else {
@@ -62,7 +61,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         })
         .catch((err) => {
-            console.error('Fetch error:', err);
             alert('Terjadi kesalahan: ' + err.message);
             resetLoading();
         });

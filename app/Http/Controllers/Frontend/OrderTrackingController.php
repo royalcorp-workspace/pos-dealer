@@ -56,7 +56,7 @@ class OrderTrackingController extends Controller
         ];
     }
 
-    private function buildShipment(stdClass $order, int $currentStatus): ?array
+    private function buildShipment(object $order, int $currentStatus): ?array
     {
         if ($currentStatus < 5) {
             return null;

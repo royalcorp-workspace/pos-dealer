@@ -21,6 +21,9 @@ class DatabaseSeeder extends Seeder
             JasonSeeder::class,
             PriceProductSettingSeeder::class,
             PaymentMethodSeeder::class,
+            LocationSeeder::class,
+            MattressProductSeeder::class,
+            CourierSeeder::class,
         ]);
 
         User::factory()->create([

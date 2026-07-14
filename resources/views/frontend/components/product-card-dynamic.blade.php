@@ -2,7 +2,7 @@
 
 @php
     $isVariable = $product->variants->isNotEmpty();
-    $hasStock = $product->variants->sum('stock_qty') > 0;
+    $hasStock = $product->variants->sum('stock_quantity') > 0;
     $isSoldOut = !$isVariable ? false : !$hasStock;
     $minPrice = $product->variants->min('price');
     $maxPrice = $product->variants->max('price');

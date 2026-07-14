@@ -22,7 +22,7 @@ class ProductVariant extends Model
         'height',
         'weight',
         'price',
-        'stock_qty',
+        'stock_quantity',
         'min_order_qty',
         'sort_order',
         'status',

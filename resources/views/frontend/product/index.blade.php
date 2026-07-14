@@ -91,8 +91,8 @@
         </script>
     @endpush
 
-    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh]" x-data="{ viewMode: localStorage.getItem('productViewMode') || 'grid' }" 
-        @product-view-mode.window="viewMode = $event.detail">
+    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh]" x-data="{ viewMode: localStorage.getItem('productViewMode') || 'grid', isFilterOpen: false }" 
+        @product-view-mode.window="viewMode = $event.detail" @open-filter.window="isFilterOpen = true">
         <!-- Listing Header -->
         <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4 border-b border-gray-100 pb-6 font-sans">
             <div>
@@ -124,144 +124,114 @@
         </div>
 
         <div class="flex flex-col lg:flex-row gap-8">
-            <!-- Sidebar Categories -->
-            <aside class="w-full lg:w-64 flex-shrink-0">
+            <!-- Sidebar Categories (Desktop) -->
+            <aside class="hidden lg:block lg:w-64 flex-shrink-0">
                 <div class="bg-white border border-brand-muted rounded-2xl p-6 shadow-sm sticky top-6 mb-6">
-                    <form method="GET" class="space-y-6">
-                        <input type="hidden" name="type" value="{{ $filterType }}">
-                        <input type="hidden" name="value" value="{{ $filterValue }}">
-
-                        <div>
-                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Kategori</h3>
-                            @foreach($categories->take(10) as $category)
-                                <label class="flex items-center gap-2 py-1 text-sm">
-                                    <input type="checkbox" name="categories[]" value="{{ $category->slug }}"
-                                        {{ in_array($category->slug, $filters['categories'] ?? []) ? 'checked' : '' }}
-                                        class="rounded border-gray-300 text-brand-gold focus:ring-brand-gold">
-                                    <span class="text-gray-700">{{ $category->name }}</span>
-                                </label>
-                            @endforeach
-                        </div>
-
-                        <div>
-                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Brand</h3>
-                            @foreach($brands->take(10) as $brand)
-                                <label class="flex items-center gap-2 py-1 text-sm">
-                                    <input type="checkbox" name="brands[]" value="{{ $brand->slug }}"
-                                        {{ in_array($brand->slug, $filters['brands'] ?? []) ? 'checked' : '' }}
-                                        class="rounded border-gray-300 text-brand-gold focus:ring-brand-gold">
-                                    <span class="text-gray-700">{{ $brand->name }}</span>
-                                </label>
-                            @endforeach
-                        </div>
-
-                        <div>
-                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Harga</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                <input type="number" name="min_price" placeholder="Min" value="{{ $filters['min_price'] ?? '' }}"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-brand-gold focus:border-brand-gold">
-                                <input type="number" name="max_price" placeholder="Max" value="{{ $filters['max_price'] ?? '' }}"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-brand-gold focus:border-brand-gold">
-                            </div>
-                        </div>
-
-                        <div>
-                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Stok</h3>
-                            <label class="flex items-center gap-2 py-1 text-sm">
-                                <input type="checkbox" name="in_stock" value="1"
-                                    {{ ($filters['in_stock'] ?? '') === '1' ? 'checked' : '' }}
-                                    class="rounded border-gray-300 text-brand-gold focus:ring-brand-gold">
-                                <span class="text-gray-700">Tersedia</span>
-                            </label>
-                        </div>
-
-                        <div>
-                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Atribut</h3>
-                            @foreach($tags->take(10) as $tag)
-                                <label class="flex items-center gap-2 py-1 text-sm">
-                                    <input type="checkbox" name="tags[]" value="{{ $tag->slug }}"
-                                        {{ in_array($tag->slug, $filters['tags'] ?? []) ? 'checked' : '' }}
-                                        class="rounded border-gray-300 text-brand-gold focus:ring-brand-gold">
-                                    <span class="text-gray-700">{{ $tag->name }}</span>
-                                </label>
-                            @endforeach
-                        </div>
-
-                        <button type="submit" class="w-full py-2 bg-brand-gold text-brand-dark rounded-lg font-bold text-sm hover:bg-brand-gold/80 transition">
-                            Terapkan Filter
-                        </button>
-                    </form>
+                    @include('frontend.product.sidebar-filters')
                 </div>
 
                 <div class="bg-white border border-brand-muted rounded-2xl p-6 shadow-sm sticky top-[calc(70vh+100px)]">
-                    <h3 class="font-bold text-brand-dark mb-4 text-lg">Kategori</h3>
-                    
-                    @foreach($categories as $category)
-                        @php
-                            $hasChildren = $category->children->isNotEmpty();
-                            $isActive = $filterType === 'category' && $filterValue === $category->slug;
-                        @endphp
-                        <div class="mb-3">
-                            <a href="{{ route('category.show', $category->slug) }}"
-                                class="flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium transition-colors {{ $isActive ? 'bg-brand-gold/20 text-brand-dark' : 'text-gray-700 hover:bg-brand-light hover:text-brand-dark' }}"
-                            >
-                                <span>{{ $category->name }}</span>
-                            </a>
-                            
-                            @if($hasChildren)
-                                <div class="ml-4 mt-2 space-y-1">
-                                    @foreach($category->children->take(10) as $child)
-                                        @php
-                                            $childActive = $filterType === 'category' && $filterValue === $child->slug;
-                                            $grandchildren = $child->children->take(5);
-                                        @endphp
-                                        <a href="{{ route('category.show', $child->slug) }}"
-                                            class="block py-1.5 px-3 rounded text-xs transition-colors {{ $childActive ? 'bg-brand-gold/10 text-brand-dark font-semibold' : 'text-gray-500 hover:text-brand-dark' }}"
-                                        >
-                                            {{ $child->name }}
-                                        </a>
-                                        
-                                        @if($grandchildren->isNotEmpty())
-                                            <div class="ml-3 mt-1 space-y-1">
-                                                @foreach($grandchildren as $grandchild)
-                                                    <a href="{{ route('category.show', $grandchild->slug) }}"
-                                                        class="block py-1 px-3 rounded text-xs text-gray-400 hover:text-brand-dark"
-                                                    >
-                                                        {{ $grandchild->name }}
-                                                    </a>
-                                                @endforeach
-                                            </div>
-                                        @endif
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
+                    @include('frontend.product.sidebar-categories')
                 </div>
             </aside>
+
+            <!-- Mobile Filter Drawer (Mobile) -->
+            <div 
+                x-show="isFilterOpen" 
+                x-cloak 
+                class="fixed inset-0 z-[100] overflow-hidden font-sans lg:hidden"
+                role="dialog" 
+                aria-modal="true"
+            >
+                <div class="absolute inset-0 overflow-hidden">
+                    <!-- Overlay -->
+                    <div 
+                        x-show="isFilterOpen"
+                        x-transition:enter="ease-in-out duration-300"
+                        x-transition:enter-start="opacity-0"
+                        x-transition:enter-end="opacity-100"
+                        x-transition:leave="ease-in-out duration-300"
+                        x-transition:leave-start="opacity-100"
+                        x-transition:leave-end="opacity-0"
+                        @click="isFilterOpen = false"
+                        class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
+                    ></div>
+
+                    <!-- Slide Panel -->
+                    <div class="fixed inset-y-0 left-0 pr-10 max-w-full flex">
+                        <div 
+                            x-show="isFilterOpen"
+                            x-transition:enter="transform transition ease-in-out duration-300"
+                            x-transition:enter-start="-translate-x-full"
+                            x-transition:enter-end="translate-x-0"
+                            x-transition:leave="transform transition ease-in-out duration-300"
+                            x-transition:leave-start="translate-x-0"
+                            x-transition:leave-end="-translate-x-full"
+                            class="w-screen max-w-xs"
+                        >
+                            <div class="h-full flex flex-col bg-white shadow-2xl overflow-y-scroll">
+                                <div class="flex items-center justify-between p-5 border-b border-brand-muted bg-brand-light">
+                                    <h2 class="text-lg font-bold text-brand-dark flex items-center gap-2">
+                                        <i class="fa-solid fa-filter"></i> Filter Produk
+                                    </h2>
+                                    <button 
+                                        @click="isFilterOpen = false" 
+                                        class="p-2 text-gray-400 hover:text-brand-dark bg-white hover:bg-brand-muted rounded-full transition-colors flex items-center justify-center focus:outline-none"
+                                    >
+                                        <i class="fa-solid fa-xmark w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                <div class="flex-1 p-5 space-y-6">
+                                    <div class="bg-white border border-brand-muted rounded-2xl p-5 shadow-sm">
+                                        @include('frontend.product.sidebar-filters')
+                                    </div>
+                                    <div class="bg-white border border-brand-muted rounded-2xl p-5 shadow-sm">
+                                        @include('frontend.product.sidebar-categories')
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Main Content -->
             <div class="flex-1">
                 <!-- Products Grid/List -->
                 @if($products->count() > 0)
                     <!-- Grid View -->
-                    <div x-show="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div x-show="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 catalog-products-grid">
                         @foreach($products as $product)
                             @include('frontend.components.product-card-dynamic', ['product' => $product])
                         @endforeach
                     </div>
 
                     <!-- List View -->
-                    <div x-show="viewMode === 'list'" class="flex flex-col gap-4" style="display: none;">
+                    <div x-show="viewMode === 'list'" class="flex flex-col gap-4 catalog-products-list" style="display: none;">
                         @foreach($products as $product)
                             @include('frontend.components.product-card-list', ['product' => $product])
                         @endforeach
                     </div>
 
-                    <!-- Pagination -->
-                    <div class="mt-10">
-                        {{ $products->withQueryString()->links('frontend.components.pagination') }}
-                    </div>
+                    <!-- Pagination / Load More -->
+                    @if($filterType === 'category' || $filterType === 'brand')
+                        @if($products->hasMorePages())
+                            <div class="mt-12 text-center" id="catalog-load-more-container">
+                                <button 
+                                    type="button"
+                                    id="catalog-load-more-btn"
+                                    class="group px-8 py-3.5 rounded-full font-bold text-brand-darker bg-white border-2 border-brand-dark shadow-sm transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-xl focus:outline-none"
+                                    data-next-page-url="{{ $products->nextPageUrl() }}"
+                                >
+                                    Muat Lebih Banyak <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
+                                </button>
+                            </div>
+                        @endif
+                    @else
+                        <div class="mt-10">
+                            {{ $products->withQueryString()->links('frontend.components.pagination') }}
+                        </div>
+                    @endif
                 @else
                     <div class="bg-white border border-brand-muted rounded-2xl p-12 text-center shadow-sm font-sans">
                         <div class="w-20 h-20 bg-brand-light rounded-full flex items-center justify-center text-brand-gold mx-auto mb-4">

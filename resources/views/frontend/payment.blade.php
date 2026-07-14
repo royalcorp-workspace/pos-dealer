@@ -32,13 +32,33 @@
                             <div class="grid grid-cols-2 gap-3">
                                 @foreach(array_filter($paymentMethods, fn($m) => $m['type'] === 'transfer') as $method)
                                     <label class="flex items-center gap-3 p-4 border border-brand-muted rounded-xl cursor-pointer hover:border-brand-gold transition-colors">
-                                        <input type="radio" name="payment_method" value="{{ $method['code'] }}" class="w-4 h-4 text-brand-gold">
+                                        <input type="radio" name="payment_method" value="{{ $method['code'] }}" 
+                                               data-is-manual="{{ $method['code'] === 'transfer_manual' ? '1' : '0' }}"
+                                               data-banks='@json($method["bank_info"] ?? [])'
+                                               class="w-4 h-4 text-brand-gold">
                                         <div class="flex items-center gap-2">
                                             <i class="fa-solid fa-building w-5 h-5 text-brand-dark"></i>
                                             <span class="font-medium">{{ $method['name'] }}</span>
                                         </div>
                                     </label>
                                 @endforeach
+                            </div>
+                            
+                            <div id="transfer-manual-details" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/30 rounded-2xl hidden transition-all">
+                                <h4 class="font-bold text-brand-dark mb-3">Instruksi Transfer Bank Manual:</h4>
+                                <div class="text-sm text-gray-700 space-y-4 mb-4">
+                                    <p>Silakan melakukan pembayaran ke salah satu rekening berikut:</p>
+                                    <div id="instructions-banks-container" class="space-y-4">
+                                        <!-- Dynamic bank cards will be inserted here -->
+                                    </div>
+                                    <p class="text-xs text-red-500 italic mt-2">*Harap pastikan nominal transfer sama persis dengan Total Transfer di atas agar proses verifikasi berjalan lancar.</p>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-bold text-brand-dark">Upload Bukti Transfer <span class="text-red-500">*</span></label>
+                                    <input type="file" id="payment_proof" name="payment_proof" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-brand-dark file:text-brand-gold hover:file:bg-brand-darker cursor-pointer border border-brand-muted rounded-xl p-2 bg-white">
+                                    <p class="text-xs text-gray-400">Format yang diterima: JPG, JPEG, PNG. Ukuran maksimal: 5MB.</p>
+                                </div>
                             </div>
                         </div>
 
@@ -189,4 +209,68 @@
         </div>
     </div>
     <script src="{{ asset('js/frontend/payment.js') }}?v={{ filemtime(public_path('js/frontend/payment.js')) }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var radios = document.querySelectorAll('input[name="payment_method"]');
+            var detailsContainer = document.getElementById('transfer-manual-details');
+            
+            var banksContainer = document.getElementById('instructions-banks-container');
+            
+            function toggleDetails() {
+                var selected = document.querySelector('input[name="payment_method"]:checked');
+                if (selected && selected.getAttribute('data-is-manual') === '1') {
+                    var banksData = [];
+                    try {
+                        banksData = JSON.parse(selected.getAttribute('data-banks') || '[]');
+                    } catch (e) {
+                        // ignore
+                    }
+                    
+                    if (!Array.isArray(banksData) || banksData.length === 0) {
+                        banksData = [{
+                            bank_name: 'BCA',
+                            account_number: '123-456-7890',
+                            account_holder: 'PT POS Dealer Indonesia'
+                        }];
+                    }
+
+                    banksContainer.innerHTML = '';
+                    banksData.forEach(function(bank) {
+                        var card = document.createElement('div');
+                        card.className = 'bg-white p-4 rounded-xl border border-brand-muted space-y-2 shadow-sm mb-4';
+                        card.innerHTML = `
+                            <div class="flex justify-between items-center border-b pb-2">
+                                <span class="text-gray-500 text-xs">Bank</span>
+                                <span class="font-bold text-brand-dark">${bank.bank_name}</span>
+                            </div>
+                            <div class="flex justify-between items-center border-b pb-2">
+                                <span class="text-gray-500 text-xs">No. Rekening</span>
+                                <span class="font-bold text-brand-dark font-mono text-base">${bank.account_number}</span>
+                            </div>
+                            <div class="flex justify-between items-center border-b pb-2">
+                                <span class="text-gray-500 text-xs">Atas Nama</span>
+                                <span class="font-bold text-brand-dark">${bank.account_holder}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-500 text-xs">Total Transfer</span>
+                                <span class="font-extrabold text-brand-gold-dark text-base">Rp ${new Intl.NumberFormat('id-ID').format({{ $orderData['total'] }})}</span>
+                            </div>
+                        `;
+                        banksContainer.appendChild(card);
+                    });
+                    
+                    detailsContainer.classList.remove('hidden');
+                } else {
+                    detailsContainer.classList.add('hidden');
+                }
+            }
+            
+            radios.forEach(function(radio) {
+                radio.addEventListener('change', toggleDetails);
+            });
+            
+            // Trigger initially in case of preselected radio button
+            toggleDetails();
+        });
+    </script>
 @endsection

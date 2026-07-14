@@ -1,13 +1,8 @@
 
 // Helper for Alpine @click in auth modal
 window.handleGoogleSignInFromModal = function(e) {
-    console.log('Google sign-in clicked', e);
-    console.log('Firebase config:', window.firebaseConfig);
-    console.log('Firebase apps:', firebase ? firebase.apps : 'firebase not loaded');
     var submitBtn = e.currentTarget || e.target.closest('button') || e.target;
-    console.log('submitBtn:', submitBtn);
     if (!firebase || !firebase.apps.length) {
-        console.log('Firebase not configured');
         document.dispatchEvent(new CustomEvent('show-auth-toast', {
             detail: { message: 'Firebase belum dikonfigurasi', type: 'error' }
         }));
@@ -20,18 +15,11 @@ window.handleGoogleSignInFromModal = function(e) {
     }
 
     var provider = new firebase.auth.GoogleAuthProvider();
-    console.log('Firebase auth instance:', firebase.auth);
-    console.log('Provider:', provider);
     firebase.auth().signInWithPopup(provider)
         .then(function(result) {
-            console.log('Firebase sign-in result:', result);
-            console.log('Credential:', result.credential);
             return result.user.getIdToken().then(function(idToken) {
                 var isJwt = idToken && idToken.startsWith('eyJ');
-                console.log('Firebase ID token:', idToken ? (idToken.substring(0, 20) + '...') : null);
-                console.log('Is valid JWT (starts with eyJ):', isJwt);
                 if (!isJwt) {
-                    console.error('ERROR: getIdToken() did not return JWT. This should not happen.');
                     document.dispatchEvent(new CustomEvent('show-auth-toast', {
                         detail: { message: 'Firebase error: Token format invalid', type: 'error' }
                     }));
@@ -39,7 +27,6 @@ window.handleGoogleSignInFromModal = function(e) {
                 }
                 // Send Firebase ID Token as firebase_token for your separate backend validation
                 var firebaseToken = idToken; // Firebase JWT for authentication
-                console.log('Firebase ID Token (firebase_token):', firebaseToken.substring(0, 20) + '...');
                 return fetch('/api/auth/google', {
                     method: 'POST',
                     headers: {
@@ -59,7 +46,6 @@ window.handleGoogleSignInFromModal = function(e) {
             });
         })
         .then(function(result) {
-            console.log('API response:', result);
             if (result.ok) {
                 fetch('/auth/google/session', {
                     method: 'POST',
@@ -111,7 +97,6 @@ window.handleGoogleSignInFromModal = function(e) {
         })
         .catch(function(error) {
             var msg = error.message || 'Login Google gagal';
-            console.log('Google sign-in error:', error);
             document.dispatchEvent(new CustomEvent('show-auth-toast', {
                 detail: { message: msg, type: 'error' }
             }));

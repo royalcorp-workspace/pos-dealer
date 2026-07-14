@@ -138,6 +138,7 @@ Route::post('/orders/{order}/reorder', [CartController::class, 'reorder'])->name
 Route::post('/checkout/preview', [CartController::class, 'preview'])->name('checkout.preview');
 Route::post('/order/{order}/cancel', [CheckoutController::class, 'cancelOrder'])->name('order.cancel');
 Route::post('/order/{order}/reorder', [CheckoutController::class, 'reorder'])->name('order.reorder');
+Route::post('/order/{order}/upload-payment-proof', [CheckoutController::class, 'uploadPaymentProof'])->name('order.upload-payment-proof');
 
 Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
 Route::get('/products/{product}/reviews', [ReviewController::class, 'filter'])->name('reviews.filter');

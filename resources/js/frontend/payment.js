@@ -11,16 +11,40 @@ window.processPayment = function () {
 
     window.showLoading();
 
-    fetch(processUrl, {
-        method: 'POST',
-        headers: {
+    var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
+    var body, headers;
+
+    if (isManualTransfer) {
+        var fileInput = document.getElementById('payment_proof');
+        if (!fileInput || fileInput.files.length === 0) {
+            alert('Silakan upload bukti transfer terlebih dahulu.');
+            window.hideLoading();
+            return;
+        }
+
+        body = new FormData();
+        body.append('payment_method', selectedMethod.value);
+        body.append('payment_proof', fileInput.files[0]);
+
+        headers = {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            'Accept': 'application/json'
+        };
+    } else {
+        body = JSON.stringify({
+            payment_method: selectedMethod.value
+        });
+        headers = {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
             'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-            payment_method: selectedMethod.value
-        })
+        };
+    }
+
+    fetch(processUrl, {
+        method: 'POST',
+        headers: headers,
+        body: body
     })
     .then(function (response) { return response.json(); })
     .then(function (data) {
