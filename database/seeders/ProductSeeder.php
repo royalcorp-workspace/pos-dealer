@@ -50,7 +50,7 @@ class ProductSeeder extends Seeder
                 'variant_name' => 'King Size - Medium',
                 'sku' => 'SKU-' . $i . '-M',
                 'price' => $product->price + 500000,
-                'stock_qty' => rand(5, 50),
+                'stock_quantity' => rand(5, 50),
                 // 'attributes' => ['size' => 'King', 'firmness' => 'Medium'],
             ]);
 
@@ -60,7 +60,7 @@ class ProductSeeder extends Seeder
                 'variant_name' => 'Queen Size - Soft',
                 'sku' => 'SKU-' . $i . '-Q',
                 'price' => $product->price - 200000,
-                'stock_qty' => rand(5, 50),
+                'stock_quantity' => rand(5, 50),
                 // 'attributes' => ['size' => 'Queen', 'firmness' => 'Soft'],
             ]);
         }

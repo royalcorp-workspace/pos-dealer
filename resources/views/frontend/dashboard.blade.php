@@ -22,6 +22,34 @@
 
 @section('content')
     <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh] font-sans">
+        @if(session('success'))
+            <div class="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-2xl text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-green-500 text-base"></i>
+                <span>{{ session('success') }}</span>
+            </div>
+        @endif
+
+        @if(session('error'))
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-circle-xmark text-red-500 text-base"></i>
+                <span>{{ session('error') }}</span>
+            </div>
+        @endif
+
+        @if($errors->any())
+            <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm font-medium">
+                <div class="flex items-center gap-2 mb-2 font-bold">
+                    <i class="fa-solid fa-circle-xmark text-red-500 text-base"></i>
+                    <span>Terdapat beberapa kesalahan:</span>
+                </div>
+                <ul class="list-disc list-inside space-y-1 text-xs">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         <div class="flex flex-col lg:flex-row gap-8">
             <!-- Left: Profile sidebar -->
             <div class="w-full lg:w-1/3 bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 self-start">
@@ -206,6 +234,45 @@
                                                 <p class="text-gray-500">Tidak ada item pada pesanan ini.</p>
                                             @endforelse
                                         </div>
+
+                                        @if($order->payment_method === 'transfer_manual')
+                                            <div class="mt-4 p-4 border border-brand-gold/20 bg-amber-50/20 rounded-xl space-y-3">
+                                                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                                                    <div>
+                                                        <p class="text-xs font-extrabold text-brand-dark uppercase tracking-wider">Transfer Bank Manual</p>
+                                                        <p class="text-[11px] text-gray-500 mt-0.5">BCA: 123-456-7890 a/n PT RAS</p>
+                                                    </div>
+                                                    
+                                                    @php
+                                                        $proof = $order->meta['payment_proof'] ?? null;
+                                                    @endphp
+                                                    
+                                                    @if($proof)
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md font-semibold flex items-center gap-1">
+                                                                <i class="fa-solid fa-circle-check"></i> Bukti Uploaded
+                                                            </span>
+                                                            <a href="{{ asset('storage/' . $proof) }}" target="_blank" class="text-xs text-brand-gold-dark hover:underline font-bold">
+                                                                Lihat Bukti
+                                                            </a>
+                                                        </div>
+                                                    @else
+                                                        <span class="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-md font-semibold flex items-center gap-1">
+                                                            <i class="fa-solid fa-circle-exclamation"></i> Menunggu Bukti Transfer
+                                                        </span>
+                                                    @endif
+                                                </div>
+
+                                                <!-- Upload / Re-upload form -->
+                                                <form action="{{ route('order.upload-payment-proof', $order->id) }}" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row items-center gap-2 mt-2">
+                                                    @csrf
+                                                    <input type="file" name="payment_proof" accept="image/*" required class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-dark file:text-brand-gold hover:file:bg-brand-darker cursor-pointer border border-brand-muted rounded-lg p-1.5 bg-white">
+                                                    <button type="submit" class="w-full sm:w-auto px-4 py-1.5 bg-brand-gold text-brand-dark text-xs font-bold rounded-lg hover:bg-brand-dark hover:text-brand-gold transition-colors whitespace-nowrap">
+                                                        {{ $proof ? 'Ganti Bukti' : 'Upload Bukti' }}
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        @endif
                                     </div>
 
                                     <div class="flex flex-col sm:items-end gap-3 lg:min-w-[220px]">

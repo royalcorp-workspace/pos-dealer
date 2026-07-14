@@ -108,7 +108,7 @@ class ProductCatalogController extends Controller
 
         // Filter by stock
         if ($inStock === '1') {
-            $query->whereHas('variants', fn($q) => $q->where('stock_qty', '>', 0));
+            $query->whereHas('variants', fn($q) => $q->where('stock_quantity', '>', 0));
         }
 
         // Filter by selected brands (array)
@@ -126,7 +126,22 @@ class ProductCatalogController extends Controller
             $query->whereHas('tags', fn($q) => $q->whereIn('slug', $selectedTags));
         }
 
-        $products = $query->orderBy('sort_order')->paginate(12);
+        $products = $query->orderBy('sort_order')->paginate(12)->withQueryString();
+
+        if ($request->ajax() || $request->wantsJson() || $request->has('load_more')) {
+            $gridHtml = '';
+            $listHtml = '';
+            foreach ($products as $product) {
+                $gridHtml .= view('frontend.components.product-card-dynamic', ['product' => $product])->render();
+                $listHtml .= view('frontend.components.product-card-list', ['product' => $product])->render();
+            }
+            return response()->json([
+                'grid_html' => $gridHtml,
+                'list_html' => $listHtml,
+                'next_page_url' => $products->nextPageUrl(),
+                'has_more' => $products->hasMorePages(),
+            ]);
+        }
 
         return view('frontend.product.index', [
             'products' => $products,

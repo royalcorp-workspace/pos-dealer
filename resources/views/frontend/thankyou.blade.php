@@ -44,6 +44,42 @@
                             <span class="text-gray-500">Total</span>
                             <span class="font-bold text-brand-dark">Rp {{ number_format($total, 0, ',', '.') }}</span>
                         </div>
+                        
+                        @if($paymentMethod === 'transfer_manual')
+                            <div class="mt-6 pt-6 border-t border-brand-muted">
+                                <h4 class="font-bold text-brand-dark mb-3">Informasi Rekening Pembayaran</h4>
+                                <div class="bg-amber-50/30 border border-brand-gold/20 p-4 rounded-xl space-y-2 text-xs mb-4">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-500">Bank</span>
+                                        <span class="font-bold">BCA</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-500">No. Rekening</span>
+                                        <span class="font-mono font-bold">123-456-7890</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-500">Atas Nama</span>
+                                        <span class="font-bold">PT RAS</span>
+                                    </div>
+                                </div>
+
+                                @php
+                                    $proof = $order->meta['payment_proof'] ?? null;
+                                @endphp
+                                @if($proof)
+                                    <h4 class="font-bold text-brand-dark mb-2">Bukti Pembayaran</h4>
+                                    <div class="relative rounded-xl overflow-hidden border border-brand-muted max-w-[200px] hover:shadow-md transition-shadow">
+                                        <a href="{{ asset('storage/' . $proof) }}" target="_blank">
+                                            <img src="{{ asset('storage/' . $proof) }}" alt="Bukti Transfer" class="w-full h-auto object-cover max-h-[200px] cursor-pointer">
+                                        </a>
+                                    </div>
+                                @else
+                                    <div class="bg-red-50 text-red-700 p-4 rounded-xl text-xs">
+                                        Bukti transfer belum diupload. Silakan hubungi admin atau upload bukti di menu riwayat pesanan.
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
                     </div>
                 </div>
 

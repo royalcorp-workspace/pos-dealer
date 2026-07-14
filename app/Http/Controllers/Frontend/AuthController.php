@@ -166,15 +166,14 @@ class AuthController extends Controller
             ]);
         }
 
-        // Ensure customer record exists
-        $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $user->id)->first();
-        if (!$customer) {
-            \App\Models\Frontend\Customer\Customer::create([
+        // Ensure customer record exists and is linked to the user
+        \App\Models\Frontend\Customer\Customer::updateOrCreate(
+            ['email' => $email],
+            [
                 'user_id' => $user->id,
                 'name' => $name,
-                'email' => $email,
-            ]);
-        }
+            ]
+        );
 
         session()->put('is_logged_in', true);
         session()->put('access_token', $data['access_token']);

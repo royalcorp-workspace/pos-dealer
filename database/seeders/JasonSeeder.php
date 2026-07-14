@@ -55,7 +55,7 @@ class JasonSeeder extends Seeder
                 'height' => 0,
                 'weight' => 0,
                 'price' => 0,
-                'stock_qty' => 0,
+                'stock_quantity' => 0,
                 'min_order_qty' => 1,
                 'sort_order' => 0,
                 'status' => true,

@@ -155,7 +155,6 @@ window.openProductReview = function (event, productId) {
     const product = productEl ? JSON.parse(productEl.getAttribute('data-product-review')) : null;
 
     if (!product) {
-        console.warn('Produk ulasan tidak ditemukan:', productId);
         return;
     }
 
@@ -309,3 +308,62 @@ document.addEventListener('click', function (e) {
         console.error('Load more error:', err);
     });
 });
+
+document.addEventListener('click', function (e) {
+    const catalogBtn = e.target.closest('#catalog-load-more-btn');
+    if (!catalogBtn) return;
+
+    e.preventDefault();
+    const nextPageUrl = catalogBtn.dataset.nextPageUrl;
+    const gridContainer = document.querySelector('.catalog-products-grid');
+    const listContainer = document.querySelector('.catalog-products-list');
+
+    if (!nextPageUrl || (!gridContainer && !listContainer)) return;
+
+    showLoading();
+    catalogBtn.disabled = true;
+    catalogBtn.style.opacity = '0.6';
+
+    const url = new URL(nextPageUrl, window.location.origin);
+    url.searchParams.set('load_more', '1');
+
+    fetch(url.toString(), {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }
+    })
+    .then(r => {
+        if (!r.ok) throw new Error('Gagal memuat produk');
+        return r.json();
+    })
+    .then(data => {
+        hideLoading();
+        catalogBtn.disabled = false;
+        catalogBtn.style.opacity = '1';
+
+        if (data.grid_html && gridContainer) {
+            gridContainer.insertAdjacentHTML('beforeend', data.grid_html);
+        }
+
+        if (data.list_html && listContainer) {
+            listContainer.insertAdjacentHTML('beforeend', data.list_html);
+        }
+
+        if (data.next_page_url) {
+            catalogBtn.dataset.nextPageUrl = data.next_page_url;
+        } else {
+            const container = document.getElementById('catalog-load-more-container');
+            if (container) container.style.display = 'none';
+            catalogBtn.style.display = 'none';
+        }
+    })
+    .catch(err => {
+        hideLoading();
+        catalogBtn.disabled = false;
+        catalogBtn.style.opacity = '1';
+        console.error('Catalog load more error:', err);
+        alert(err.message || 'Gagal memuat produk');
+    });
+});
+

@@ -12,8 +12,8 @@
                 'position' => $index + 1,
                 'item' => [
                     '@type' => 'Offer',
-                    'name' => $promo['title'],
-                    'description' => $promo['desc'],
+                    'name' => $promo->title,
+                    'description' => $promo->description,
                     'url' => route('promos'),
                     'availability' => 'https://schema.org/InStock',
                     'areaServed' => [
@@ -68,31 +68,88 @@
                 <p class="text-gray-500 max-w-2xl mx-auto">Nikmati berbagai penawaran eksklusif dan voucher diskon yang bisa Anda gunakan hari ini.</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                @foreach($promos as $promo)
-                    <div class="bg-white border text-center border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-3xl p-8 relative overflow-hidden group">
-                        <div class="absolute top-0 left-0 w-full h-1 bg-brand-gold"></div>
+            @if($promos->isEmpty())
+                <div class="text-center text-gray-500 py-12">
+                    <p>Belum ada promo aktif saat ini. Silakan cek kembali nanti.</p>
+                </div>
+            @else
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                    @foreach($promos as $promo)
+                        @php
+                            $now = now();
+                            $endDate = $promo->end_date;
+                            $isExpired = $endDate && $endDate->isPast();
+                            $daysLeft = $endDate ? $now->diffInDays($endDate, false) : null;
+                            $daysLeftAbs = $daysLeft !== null ? abs((int) $daysLeft) : null;
 
-                        <div class="w-16 h-16 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mx-auto mb-6 group-hover:scale-110 transition-transform">
-                            <i class="fa-solid fa-ticket w-8 h-8"></i>
-                        </div>
+                            if ($endDate === null) {
+                                $expiryText = 'Berlaku Selamanya';
+                            } elseif ($isExpired) {
+                                $expiryText = 'Berakhir';
+                            } elseif ($daysLeftAbs === 0) {
+                                $expiryText = 'Hari Ini';
+                            } else {
+                                $expiryText = $daysLeftAbs . ' Hari Lagi';
+                            }
 
-                        <h3 class="text-xl font-bold text-brand-dark mb-3">{{ $promo['title'] }}</h3>
-                        <p class="text-gray-500 text-sm mb-6 pb-6 border-b border-gray-100">{{ $promo['desc'] }}</p>
+                            $discountLabel = match ((int) $promo->type) {
+                                1 => 'Persentase',
+                                2 => 'Nominal',
+                                3 => 'Gratis Ongkir',
+                                4 => 'Bonus Produk',
+                                default => 'Voucher',
+                            };
 
-                        <div class="flex flex-col gap-3">
-                            <div class="bg-brand-light border border-dashed border-brand-gold/50 rounded-xl py-3 px-4 flex justify-center items-center">
-                                <span class="font-mono font-bold tracking-widest text-brand-dark">{{ $promo['code'] }}</span>
+                            $discountSuffix = match ((int) $promo->type) {
+                                1 => '%',
+                                2 => '',
+                                3 => '',
+                                4 => ' pcs',
+                                default => '',
+                            };
+
+                            if ($promo->value > 0) {
+                                $promoDisplay = $discountSuffix === '%'
+                                    ? number_format((float) $promo->value, 0) . '%'
+                                    : ($discountSuffix === ''
+                                        ? 'Rp ' . number_format((float) $promo->value, 0, ',', '.')
+                                        : (string) (int) $promo->value . ' ' . $discountSuffix);
+                            } else {
+                                $promoDisplay = 'Voucher';
+                            }
+                        @endphp
+
+                        <div class="bg-white border text-center {{ $isExpired ? 'opacity-60 border-gray-200' : 'border-brand-muted hover:border-brand-gold hover:shadow-lg' }} transition-all rounded-3xl p-8 relative overflow-hidden group">
+                            @if(!$isExpired)
+                                <div class="absolute top-0 left-0 w-full h-1 bg-brand-gold"></div>
+                            @endif
+
+                            <div class="w-16 h-16 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mx-auto mb-6 group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-ticket w-8 h-8"></i>
                             </div>
 
-                            <div class="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-500">
-                                <i class="fa-regular fa-clock w-3.5 h-3.5"></i>
-                                Sisa: {{ $promo['expiry'] }}
+                            <h3 class="text-xl font-bold text-brand-dark mb-3">{{ $promo->title }}</h3>
+                            <p class="text-gray-500 text-sm mb-6 pb-6 border-b border-gray-100">{{ $promo->description }}</p>
+
+                            <div class="flex flex-col gap-3">
+                                <div class="bg-brand-light border border-dashed border-brand-gold/50 rounded-xl py-3 px-4 flex justify-center items-center">
+                                    <span class="font-mono font-bold tracking-widest text-brand-dark">{{ $promo->code }}</span>
+                                </div>
+
+                                <div class="flex items-center justify-center gap-1.5 text-xs font-semibold {{ $isExpired ? 'text-gray-400' : 'text-red-500' }}">
+                                    <i class="fa-regular fa-clock w-3.5 h-3.5"></i>
+                                    Sisa: {{ $expiryText }}
+                                </div>
+
+                                @if($promo->value > 0)
+                                    <div class="text-xs text-gray-500">
+                                        {{ $discountLabel }} {{ $promoDisplay }}
+                                    </div>
+                                @endif
                             </div>
                         </div>
-                    </div>
-                @endforeach
-            </div>
+                    @endforeach
+                </div>
+            @endif
         </div>
 @endsection
-

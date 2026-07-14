@@ -217,7 +217,7 @@
                             <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/></svg>
                         </div>
                         <span class="font-bold text-brand-dark text-center text-sm group-hover:text-brand-gold-dark">{{ $cat->name }}</span>
-                        <span class="text-xs text-gray-500 mt-1">{{ $cat->children->count() + 10 }} Products</span>
+                        <span class="text-xs text-gray-500 mt-1">{{ $cat->getProductsCountWithChildren() }} Products</span>
                     </a>
                 @endforeach
             </div>
@@ -247,6 +247,7 @@
         </div>
     </section>
 
+    @if($featured && $featured->slug)
     <!-- Special Spotlight (Featured Product) -->
     <section class="py-20 bg-brand-dark text-white relative overflow-hidden">
         <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-darker rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 opacity-50"></div>
@@ -294,7 +295,7 @@
                             <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featuredPrice, 0, ',', '.') }}@if($featuredHasPriceRange) - Rp {{ number_format($featuredPriceMax, 0, ',', '.') }}@endif</span>
                         </div>
                         <a 
-                            href="{{ route('products.show', $featured->slug ?? '') }}"
+                            href="{{ route('products.show', $featured->slug) }}"
                             class="bg-brand-gold text-brand-dark hover:bg-brand-light font-bold px-6 py-3 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-2"
                         >
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 7h12l-1 12H7L6 7Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -305,6 +306,7 @@
             </div>
         </div>
     </section>
+    @endif
 
     <!-- Product Recommendations -->
     <section class="py-16 bg-brand-light/50">

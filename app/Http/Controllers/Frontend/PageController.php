@@ -11,6 +11,7 @@ use App\Models\Frontend\PrivacyPolicy;
 use App\Models\Frontend\ProductsCatalog\Brand;
 use App\Models\Frontend\ProductsCatalog\Product;
 use App\Models\Frontend\ProductsCatalog\ProductCategory;
+use App\Models\Frontend\Promo\Voucher;
 use App\Models\Frontend\TermsAndCondition;
 use App\Models\Frontend\WarrantyClaim;
 use Illuminate\Http\Request;
@@ -19,11 +20,11 @@ class PageController extends Controller
 {
     public function brands()
     {
-        $brands = Brand::where('deleted', false)
+        $brandsWithProducts = Brand::where('deleted', false)
             ->withCount('products')
             ->orderBy('sort_order')
             ->get();
-        return view('frontend.brands', compact('brands'));
+        return view('frontend.brands', compact('brandsWithProducts'));
     }
 
     public function categories()
@@ -39,22 +40,10 @@ class PageController extends Controller
 
     public function promos()
     {
-        $promos = [
-            [
-                'title' => 'Diskon Akhir Bulan',
-                'desc' => 'Diskon hingga 50% untuk kasur pilihan.',
-                'code' => 'PAYDAY50',
-                'expiry' => '3 Hari Lagi',
-                'type' => 'disc'
-            ],
-            [
-                'title' => 'Gratis Ongkir Jabodetabek',
-                'desc' => 'Tanpa minimum pembelian.',
-                'code' => 'FREESONGKIR',
-                'expiry' => 'Berlaku Selamanya',
-                'type' => 'shipping'
-            ]
-        ];
+        $promos = Voucher::active()
+            ->orderByDesc('start_date')
+            ->orderByDesc('end_date')
+            ->get();
 
         return view('frontend.promos', compact('promos'));
     }

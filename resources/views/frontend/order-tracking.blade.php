@@ -58,7 +58,7 @@
                         <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                             <div>
                                 <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Order ID</p>
-                                <h2 class="text-2xl font-extrabold text-brand-dark mt-1">{{ $order->id }}</h2>
+                                <h2 class="text-2xl font-extrabold text-brand-dark mt-1">{{ $order->order_number }}</h2>
                                 <p class="text-sm text-gray-500 mt-2">Dibuat {{ $order->created_at ? $order->created_at->format('d M Y H:i') : '-' }}</p>
                             </div>
                             <span class="inline-flex items-center rounded-full {{ $shipment ? 'bg-brand-gold/15 text-brand-gold-dark' : 'bg-gray-100 text-gray-500' }} px-4 py-2 text-xs font-extrabold uppercase tracking-wider">

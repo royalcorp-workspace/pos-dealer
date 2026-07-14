@@ -55,4 +55,23 @@ class ProductCategory extends Model
     {
         return $this->hasMany(Product::class, 'category_id');
     }
+
+    public function getProductsCountWithChildren(): int
+    {
+        $ids = [$this->id];
+        $childrenIds = $this->children()->where('deleted', false)->pluck('id')->toArray();
+        $ids = array_merge($ids, $childrenIds);
+
+        foreach ($childrenIds as $childId) {
+            $child = self::find($childId);
+            if ($child) {
+                $grandchildrenIds = $child->children()->where('deleted', false)->pluck('id')->toArray();
+                $ids = array_merge($ids, $grandchildrenIds);
+            }
+        }
+
+        return Product::where('deleted', false)
+            ->whereIn('category_id', array_unique($ids))
+            ->count();
+    }
 }

@@ -97,19 +97,21 @@ class AuthController extends Controller
             'id' => Str::uuid()->toString(),
             'name' => $data['name'],
             'email' => $data['email'],
-            'password_hash' => !empty($data['password']) ? Hash::make($data['password']) : null,
+            'password' => !empty($data['password']) ? Hash::make($data['password']) : null,
             'google_id' => $data['google_id'] ?? null,
             'firebase_token' => $data['firebase_token'] ?? null,
             'email_verified' => !empty($data['google_id']),
             'email_verified_at' => !empty($data['google_id']) ? now() : null,
         ]);
 
-        \App\Models\Frontend\Customer\Customer::create([
-            'user_id' => $user->id,
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'phone' => $data['phone'],
-        ]);
+        \App\Models\Frontend\Customer\Customer::updateOrCreate(
+            ['email' => $data['email']],
+            [
+                'user_id' => $user->id,
+                'name' => $data['name'],
+                'phone' => $data['phone'],
+            ]
+        );
 
         $subDistrict = \App\Models\Frontend\Location\SubDistrict::find($data['sub_district_id']);
         if ($subDistrict) {
@@ -219,7 +221,7 @@ class AuthController extends Controller
 
 
         $user = User::query()->where('email', $email)->first();
-        if (!$user || !Hash::check($data['password'], $user->password_hash ?? '')) {
+        if (!$user || !Hash::check($data['password'], $user->password ?? '')) {
 
             $this->recordAttempt(null, $email, $ip, false);
 

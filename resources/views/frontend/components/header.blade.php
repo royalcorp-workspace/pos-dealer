@@ -243,20 +243,50 @@
                                 </div>
                             @endforeach
                         </div>
-                        <a 
-                            href="{{ route('categories') }}" 
-                            class="w-72 bg-brand-dark rounded-xl p-6 flex flex-col justify-end relative overflow-hidden group cursor-pointer"
-                        >
-                            <div class="absolute top-0 right-0 p-4 w-32 opacity-10">
-                                <i class="fa-solid fa-bag-shopping w-full h-full text-brand-gold"></i>
-                            </div>
-                            <div class="relative z-10">
-                                <span class="inline-block bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">New Arrival</span>
-                                <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors">Koleksi Springbed 2026</h4>
-                                <p class="text-sm text-gray-300 mb-4">Temukan kenyamanan tidur tak tertandingi.</p>
-                                <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">Lihat Koleksi &rarr;</span>
-                            </div>
-                        </a>
+                        @php
+                            $promoProduct = \DB::table('products')
+                                ->where('status', 1)
+                                ->where('deleted', false)
+                                ->latest()
+                                ->first();
+                        @endphp
+                        @if($promoProduct)
+                            <a 
+                                href="{{ route('products.show', $promoProduct->slug) }}" 
+                                class="w-72 bg-brand-dark rounded-xl p-6 flex flex-col justify-end relative overflow-hidden group cursor-pointer"
+                            >
+                                <div class="absolute top-0 right-0 p-4 w-32 opacity-10">
+                                    <i class="fa-solid fa-bag-shopping w-full h-full text-brand-gold"></i>
+                                </div>
+                                <div class="relative z-10 flex flex-col h-full justify-end">
+                                    <span class="inline-block self-start bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">
+                                        {{ $promoProduct->is_new ? 'New Arrival' : ($promoProduct->best_seller ? 'Best Seller' : 'Hot Product') }}
+                                    </span>
+                                    <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors line-clamp-2">
+                                        {{ $promoProduct->name }}
+                                    </h4>
+                                    <p class="text-xs text-gray-300 mb-4 line-clamp-3">
+                                        {{ $promoProduct->short_description ?? 'Temukan kenyamanan tidur tak tertandingi.' }}
+                                    </p>
+                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">Lihat Koleksi &rarr;</span>
+                                </div>
+                            </a>
+                        @else
+                            <a 
+                                href="{{ route('categories') }}" 
+                                class="w-72 bg-brand-dark rounded-xl p-6 flex flex-col justify-end relative overflow-hidden group cursor-pointer"
+                            >
+                                <div class="absolute top-0 right-0 p-4 w-32 opacity-10">
+                                    <i class="fa-solid fa-bag-shopping w-full h-full text-brand-gold"></i>
+                                </div>
+                                <div class="relative z-10">
+                                    <span class="inline-block bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">New Arrival</span>
+                                    <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors">Koleksi Springbed 2026</h4>
+                                    <p class="text-sm text-gray-300 mb-4">Temukan kenyamanan tidur tak tertandingi.</p>
+                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">Lihat Koleksi &rarr;</span>
+                                </div>
+                            </a>
+                        @endif
                     </div>
                 </li>
 

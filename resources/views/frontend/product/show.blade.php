@@ -18,7 +18,7 @@
         $maxPrice = $variantsData->max('price');
         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
         $firstVariantName = $variantsData->first()->variant_name ?? '';
-        $totalStock = $variantsData->sum('stock_qty');
+        $totalStock = $variantsData->sum('stock_quantity');
         $originalPrice = $hasVariants ? (float) $variantsData->first()->price : $basePrice;
         $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalPrice;
         $staticPromo = \App\Services\StaticPromoService::forProduct($product);
@@ -211,7 +211,7 @@
                                         class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 {{ $i === 0 ? 'border-brand-gold bg-brand-light text-brand-dark' : 'border-brand-muted bg-white text-gray-600' }}"
                                     >
                                         {{ $variant->variant_name }}
-                                        @if($variant->stock_qty <= 0)
+                                        @if($variant->stock_quantity <= 0)
                                             <div class="text-xs text-gray-400 mt-1">Sold Out</div>
                                         @endif
                                     </button>
@@ -247,7 +247,7 @@
                     @endif
 
                     @php
-                        $totalStock = $product->variants->sum('stock_qty');
+                        $totalStock = $product->variants->sum('stock_quantity');
                     @endphp
 
                     <!-- Action Buttons -->

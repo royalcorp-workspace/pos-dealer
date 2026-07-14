@@ -565,8 +565,8 @@
     }"
     @open-cart.window="isCartOpen = true"
     @open-auth.window="isAuthOpen = true; setTimeout(() => window.initFirebaseGoogleSignIn && window.initFirebaseGoogleSignIn(), 100)"
-    @open-review.window="selectedProductForReview = $event.detail; console.log($event.detail)"
-    @open-review="selectedProductForReview = $event.detail; console.log($event.detail)"
+    @open-review.window="selectedProductForReview = $event.detail"
+    @open-review="selectedProductForReview = $event.detail"
     @cart-added.window="cartNoticeMessage = $event.detail && $event.detail.message ? $event.detail.message : 'Produk berhasil masuk keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 2500)"
     @cart-add-failed.window="cartNoticeMessage = 'Gagal menambahkan produk ke keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 3000)"
 >
