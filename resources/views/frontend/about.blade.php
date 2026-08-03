@@ -15,7 +15,7 @@
 
                 @if($about->cover_image)
                     <div class="mb-8 rounded-2xl overflow-hidden aspect-video shadow-md">
-                        <img src="{{ asset('storage/' . $about->cover_image) }}" alt="{{ $about->company_name }}" class="w-full h-full object-cover">
+                        <img src="{{ asset('storage/' . $about->cover_image) }}" alt="{{ $about->company_name }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                     </div>
                 @endif
 

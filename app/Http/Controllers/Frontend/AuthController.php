@@ -8,6 +8,7 @@ use App\Services\DeviceSessionService;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -37,12 +38,22 @@ class AuthController extends Controller
         $email = (string) $request->input('email');
         $user = User::query()->where('email', $email)->first();
 
+        if (!$user || !Hash::check($request->password, $user->password ?? '')) {
+            if ($request->expectsJson() || $request->is('login')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email atau password tidak valid'
+                ], 422);
+            }
+            return redirect()->route('home')->with('show_login', true);
+        }
+
         session()->put('is_logged_in', true);
         session()->put('user', [
-            'id' => $user->id ?? null,
-            'name' => $user->name ?? 'Budi Santoso',
+            'id' => $user->id,
+            'name' => $user->name,
             'email' => $email,
-            'type' => 'Member Premium'
+            'type' => 'Member'
         ]);
 
         $this->deviceSessions->register($request, $user, $email);
@@ -79,12 +90,22 @@ class AuthController extends Controller
         $email = (string) $request->input('email');
         $user = User::query()->where('email', $email)->first();
 
+        if (!$user) {
+            if ($request->expectsJson() || $request->is('register')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data yang dimasukkan tidak valid'
+                ], 422);
+            }
+            return redirect()->route('home')->with('show_login', true);
+        }
+
         session()->put('is_logged_in', true);
         session()->put('user', [
-            'id' => $user->id ?? null,
-            'name' => $user->name ?? 'Budi Santoso',
+            'id' => $user->id,
+            'name' => $user->name,
             'email' => $email,
-            'type' => 'Member Premium'
+            'type' => 'Member'
         ]);
 
         $this->deviceSessions->register($request, $user, $email);

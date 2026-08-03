@@ -161,18 +161,20 @@
     </script>
     
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
     <script>
-        window.firebaseConfig = {
-            apiKey: '{{ config("services.firebase.api_key") }}',
-            authDomain: '{{ config("services.firebase.auth_domain") }}',
-            projectId: '{{ config("services.firebase.project_id") }}',
-        };
-        
-        if (window.firebaseConfig.apiKey) {
-            firebase.initializeApp(window.firebaseConfig);
-        }
+        document.addEventListener('DOMContentLoaded', function() {
+            window.firebaseConfig = {
+                apiKey: '{{ config("services.firebase.api_key") }}',
+                authDomain: '{{ config("services.firebase.auth_domain") }}',
+                projectId: '{{ config("services.firebase.project_id") }}',
+            };
+            
+            if (window.firebaseConfig.apiKey) {
+                firebase.initializeApp(window.firebaseConfig);
+            }
+        });
     </script>
 
     <style>
@@ -526,16 +528,17 @@
         }
     </style>
     
-    <!-- App JS (must load before Alpine so window.* helpers are defined when Alpine initialises) -->
-    <script src="{{ asset('js/frontend/app.js') }}?v={{ filemtime(public_path('js/frontend/app.js')) }}"></script>
-    <script src="{{ asset('js/frontend/cart-drawer.js') }}?v={{ filemtime(public_path('js/frontend/cart-drawer.js')) }}"></script>
-    <script src="{{ asset('js/frontend/auth-modal.js') }}?v={{ filemtime(public_path('js/frontend/auth-modal.js')) }}"></script>
+    <!-- App JS (deferred to avoid render-blocking; preserved order ensures Alpine loads after) -->
+    <script defer src="{{ asset('js/frontend/app.js') }}?v={{ filemtime(public_path('js/frontend/app.js')) }}"></script>
+    <script defer src="{{ asset('js/frontend/cart-drawer.js') }}?v={{ filemtime(public_path('js/frontend/cart-drawer.js')) }}"></script>
+    <script defer src="{{ asset('js/frontend/auth-modal.js') }}?v={{ filemtime(public_path('js/frontend/auth-modal.js')) }}"></script>
 
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"></noscript>
     
     <!-- Motion One (used by React motion/react) - attempt to reproduce exact animations -->
     <script defer src="https://cdn.jsdelivr.net/npm/motion@10.15.3/dist/motion.global.min.js"></script>

@@ -12,7 +12,7 @@
                 
                 @if($returns->featured_image)
                     <div class="mb-8 rounded-2xl overflow-hidden aspect-video shadow-md">
-                        <img src="{{ asset('storage/' . $returns->featured_image) }}" alt="{{ $returns->title }}" class="w-full h-full object-cover">
+                        <img src="{{ asset('storage/' . $returns->featured_image) }}" alt="{{ $returns->title }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                     </div>
                 @endif
                 

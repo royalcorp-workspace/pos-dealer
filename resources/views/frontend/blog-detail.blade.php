@@ -44,7 +44,7 @@
                     @if ($blogPost->featured_image_url)
 
                         <div class="aspect-[16/9] bg-brand-light w-full relative overflow-hidden rounded-2xl mb-6">
-                            <img src="{{ $blogPost->featured_image_url }}" alt="{{ $blogPost->title }}" class="absolute inset-0 w-full h-full object-cover">
+                            <img src="{{ $blogPost->featured_image_url }}" alt="{{ $blogPost->title }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover">
                         </div>
 
                     @endif

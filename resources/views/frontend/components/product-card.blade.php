@@ -22,6 +22,8 @@
             <img 
                 src="{{ $product['image'] }}" 
                 alt="{{ $product['name'] }}" 
+                loading="lazy"
+                decoding="async"
                 class="product-card__image w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
             />
         </a>
