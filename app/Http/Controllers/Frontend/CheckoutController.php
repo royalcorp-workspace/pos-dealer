@@ -17,6 +17,7 @@ use App\Models\Frontend\ProductsCatalog\Product;
 use App\Models\Frontend\ProductsCatalog\ProductCategory;
 use App\Models\Frontend\Order;
 use App\Models\Frontend\Order\OrderItem;
+use App\Models\Frontend\Buffer\Buffer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
@@ -25,7 +26,8 @@ class CheckoutController extends Controller
 {
     public function index()
     {
-        $cart = Session::get('cart', []);
+        $buffer = $this->getCurrentBuffer();
+        $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
         $vouchers = $this->getAvailableVouchers($cart);
         $couriers = Courier::with('shippingAddresses')->get();
         $selectedVoucher = Session::get('selected_voucher');
@@ -37,7 +39,6 @@ class CheckoutController extends Controller
         $savedAddresses = collect();
         $savedAddressesSafe = collect();
         $checkoutFormData = Session::get('checkout_form_data', []);
-        $cartBackup = Session::get('cart_backup', []);
         $subDistricts = \App\Models\Frontend\Location\SubDistrict::with('city')
             ->orderBy('sub_district')
             ->get()
@@ -66,11 +67,6 @@ class CheckoutController extends Controller
                     'sub_district_id' => $a->sub_district_id,
                 ];
             });
-        }
-
-        if ($cartBackup) {
-            Session::put('cart', array_merge($cart, $cartBackup));
-            Session::forget('cart_backup');
         }
 
         $originalCartTotal = 0.0;
@@ -106,7 +102,6 @@ class CheckoutController extends Controller
             $totalPercentDiscount += $res['static_discount'];
             $priceProductSettingDiscount += $res['volume_discount'];
 
-            // Recalculate cart item price for voucher calculations and checkout displays
             $cart[$key]['price'] = $res['promotional_price'];
         }
 
@@ -121,7 +116,6 @@ class CheckoutController extends Controller
 
         if (!session()->get('is_logged_in')) {
             $request->session()->put('checkout_form_data', $formFields);
-            $request->session()->put('cart_backup', session()->get('cart', []));
             return redirect()->route('checkout')->with('show_login', true);
         }
 
@@ -139,7 +133,8 @@ class CheckoutController extends Controller
             'item_notes.*' => 'nullable|string|max:500',
         ]);
 
-        $cart = Session::get('cart', []);
+        $buffer = $this->getCurrentBuffer();
+        $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
         $itemNotes = (array) $request->input('item_notes', []);
         $cartTotal = collect($cart)->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
 
@@ -570,7 +565,12 @@ class CheckoutController extends Controller
             session()->forget('order_data');
             session()->forget('selected_voucher_codes');
             session()->put('thankyou_order_id', $order->id);
-            session()->put('cart', []);
+
+            $buffer = $this->getCurrentBuffer();
+            if ($buffer) {
+                $buffer->items()->delete();
+                $buffer->delete();
+            }
 
             return response()->json([
                 'success' => true,
@@ -661,19 +661,65 @@ class CheckoutController extends Controller
         }
 
         // Restore cart items
-        $cart = session()->get('cart', []);
-        foreach ($order->items as $item) {
-            $cart[] = [
-                'id' => uniqid(),
-                'product_id' => $item->product_id,
-                'variant_id' => $item->product_variant_id,
-                'name' => $item->name,
-                'price' => $item->unit_price,
-                'quantity' => $item->quantity,
-            ];
+        $userId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
+
+        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->first();
+
+        if (!$buffer) {
+            $buffer = Buffer::create([
+                'id' => Str::uuid()->toString(),
+                'customer_id' => $customerId,
+                'session_id' => $sessionId,
+                'customer_name' => session()->get('user')['name'] ?? null,
+                'customer_email' => session()->get('user')['email'] ?? null,
+                'creator' => $userId,
+                'editor' => $userId,
+            ]);
         }
 
-        session()->put('cart', $cart);
+        foreach ($order->items as $item) {
+            $existingItem = BufferItem::where('buffer_id', $buffer->id)
+                ->where('product_id', $item->product_id)
+                ->where(function ($q) use ($item) {
+                    if ($item->product_variant_id) {
+                        $q->where('product_variant_id', $item->product_variant_id);
+                    } else {
+                        $q->whereNull('product_variant_id');
+                    }
+                })
+                ->first();
+
+            if ($existingItem) {
+                $existingItem->update([
+                    'quantity' => $existingItem->quantity + $item->quantity,
+                ]);
+            } else {
+                BufferItem::create([
+                    'id' => Str::uuid()->toString(),
+                    'buffer_id' => $buffer->id,
+                    'product_id' => $item->product_id,
+                    'product_variant_id' => $item->product_variant_id,
+                    'name' => $item->name,
+                    'quantity' => $item->quantity,
+                    'unit_price' => (float) $item->unit_price,
+                    'total' => (float) $item->unit_price * $item->quantity,
+                    'discount_nominal' => (float) $item->discount_nominal,
+                    'discount_percent' => (float) $item->discount_percent,
+                    'item_notes' => $item->item_notes ?? '',
+                ]);
+            }
+        }
+
+        $this->recalculateBuffer($buffer);
         session()->put('reorder_for', $orderId);
 
         return redirect()->route('checkout')->with('success', 'Silakan cek keranjang untuk order ulang.');
@@ -1059,5 +1105,85 @@ class CheckoutController extends Controller
             'voucher_ids' => $order->voucher_id ? [$order->voucher_id] : [],
             'items' => $items,
         ];
+    }
+
+    private function getCurrentBuffer(): ?Buffer
+    {
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
+
+        return Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->first();
+    }
+
+    private function getBufferCartArray(Buffer $buffer): array
+    {
+        return $buffer->items()
+            ->with(['product.brand', 'variant'])
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'variant_id' => $item->product_variant_id,
+                    'name' => $item->name,
+                    'brand' => $item->product->brand->name ?? '',
+                    'image' => $item->product->thumbnail_url ?? '',
+                    'price' => (float) $item->unit_price,
+                    'quantity' => (int) $item->quantity,
+                    'item_note' => $item->item_notes ?? '',
+                ];
+            })
+            ->toArray();
+    }
+
+    private function recalculateBuffer(Buffer $buffer): void
+    {
+        $items = $buffer->items()->get();
+        $subtotal = $items->sum(fn($item) => (float) $item->unit_price * (int) $item->quantity);
+        $discount = $items->sum(function ($item) {
+            $itemTotal = (float) $item->unit_price * (int) $item->quantity;
+            $discountNominal = (float) $item->discount_nominal;
+            $discountPercent = $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
+            return $discountNominal + $discountPercent;
+        });
+        $tax = 0;
+        $total = $subtotal - $discount + $tax;
+
+        $buffer->update([
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'tax' => $tax,
+            'total' => $total,
+        ]);
+    }
+
+    private function resolveCustomerId(): ?string
+    {
+        if (!session()->get('is_logged_in')) {
+            return null;
+        }
+
+        $user = session()->get('user', []);
+        $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
+
+        if (!$userId) {
+            return null;
+        }
+
+        $customer = Customer::where('user_id', $userId)->first();
+
+        if (!$customer && $email) {
+            $customer = Customer::where('email', $email)->first();
+        }
+
+        return $customer?->id;
     }
 }

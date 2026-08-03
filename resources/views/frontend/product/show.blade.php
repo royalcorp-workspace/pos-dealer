@@ -117,6 +117,7 @@
                     <img 
                         src="{{ $product->thumbnail_url ?? 'https://via.placeholder.com/600x400' }}" 
                         alt="{{ $product->alt_text ?? $product->name }}" 
+                        decoding="async"
                         class="w-full h-full object-cover"
                     />
                     @if($product->best_seller)
@@ -131,7 +132,7 @@
                     <div class="grid grid-cols-4 gap-4">
                         @foreach($product->images as $image)
                             <div class="aspect-square bg-brand-light rounded-xl overflow-hidden border-2 cursor-pointer border-brand-gold">
-                                <img src="{{ $image->image_url ?? ($image->image ? asset('storage/' . $image->image) : 'https://via.placeholder.com/150') }}" alt="{{ $image->alt_text }}" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" />
+                                <img src="{{ $image->image_url ?? ($image->image ? asset('storage/' . $image->image) : 'https://via.placeholder.com/150') }}" alt="{{ $image->alt_text }}" loading="lazy" decoding="async" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" />
                             </div>
                         @endforeach
                     </div>

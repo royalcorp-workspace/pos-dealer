@@ -70,7 +70,7 @@
                                     <h4 class="font-bold text-brand-dark mb-2">Bukti Pembayaran</h4>
                                     <div class="relative rounded-xl overflow-hidden border border-brand-muted max-w-[200px] hover:shadow-md transition-shadow">
                                         <a href="{{ asset('storage/' . $proof) }}" target="_blank">
-                                            <img src="{{ asset('storage/' . $proof) }}" alt="Bukti Transfer" class="w-full h-auto object-cover max-h-[200px] cursor-pointer">
+                                            <img src="{{ asset('storage/' . $proof) }}" alt="Bukti Transfer" loading="lazy" decoding="async" class="w-full h-auto object-cover max-h-[200px] cursor-pointer">
                                         </a>
                                     </div>
                                 @else

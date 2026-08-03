@@ -142,7 +142,7 @@
                                 <div class="flex gap-4 border-b border-brand-muted pb-4 last:border-0 last:pb-0">
                                     <div class="w-16 h-16 rounded-xl bg-brand-light overflow-hidden flex-shrink-0">
                                         @if($item->product?->thumbnail_url)
-                                            <img src="{{ $item->product->thumbnail_url }}" alt="{{ $item->name }}" class="w-full h-full object-cover">
+                                            <img src="{{ $item->product->thumbnail_url }}" alt="{{ $item->name }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                                         @else
                                             <div class="w-full h-full flex items-center justify-center text-brand-gold">
                                                 <i class="fa-solid fa-box w-6 h-6"></i>

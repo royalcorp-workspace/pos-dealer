@@ -71,7 +71,7 @@
                     class="bg-white border border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer group h-40"
                 >
                     @if($brand->logo_url)
-                        <img src="{{ $brand->logo_url }}" alt="{{ $brand->name }}" class="w-16 h-16 object-contain mb-3" />
+                        <img src="{{ $brand->logo_url }}" alt="{{ $brand->name }}" loading="lazy" decoding="async" class="w-16 h-16 object-contain mb-3" />
                     @else
                         <div class="w-10 h-10 bg-brand-light rounded-full flex items-center justify-center text-brand-gold/50 group-hover:text-brand-gold mb-3 transition-colors">
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 7h10l2 4c0 1.1-.9 2-2 2H9l-2 4V7z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>

@@ -18,7 +18,7 @@
                             @foreach($typeMethods as $method)
                                 <div class="border border-brand-muted rounded-lg p-4 bg-white flex items-center gap-4">
                                     @if($method->image)
-                                        <img src="{{ $method->image }}" alt="{{ $method->name }}" class="w-12 h-12 object-contain">
+                                        <img src="{{ $method->image }}" alt="{{ $method->name }}" loading="lazy" decoding="async" class="w-12 h-12 object-contain">
                                     @else
                                         <div class="w-12 h-12 bg-brand-light rounded flex items-center justify-center">
                                             <i class="fa-solid fa-money-bill-wave text-brand-gold"></i>

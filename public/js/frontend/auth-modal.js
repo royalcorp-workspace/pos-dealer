@@ -194,13 +194,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
                 }
-                window.dispatchEvent(new CustomEvent('auth-error-login', {
-                    detail: { message: msg }
+                window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: msg, type: 'error' }
                 }));
             })
             .catch(function () {
-                window.dispatchEvent(new CustomEvent('auth-error-login', {
-                    detail: { message: 'Terjadi kesalahan jaringan. Silakan coba lagi.' }
+                window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: 'Terjadi kesalahan jaringan. Silakan coba lagi.', type: 'error' }
                 }));
             })
             .finally(function () {
@@ -245,13 +245,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (res.ok && (res.data.success || res.data.message)) {
                     window.location.href = window.location.origin + '/password-otp-sent?email=' + encodeURIComponent(email);
                 } else {
-                    window.dispatchEvent(new CustomEvent('auth-error-forgot', { detail: { message: res.data.message || 'Gagal mengirim kode OTP' }}));
+                    window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                        detail: { message: res.data.message || 'Gagal mengirim kode OTP', type: 'error' }
+                    }));
                 }
             })
             .catch(function () {
                 submitBtn.disabled = false;
                 submitBtn.querySelector('span').textContent = 'Lanjutkan';
-                window.dispatchEvent(new CustomEvent('auth-error-forgot', { detail: { message: 'Terjadi kesalahan jaringan' }}));
+                window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }
+                }));
             });
         });
     }
@@ -293,14 +297,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
                     }
-                    window.dispatchEvent(new CustomEvent('auth-error-register', {
-                        detail: { message: msg }
+                    window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                        detail: { message: msg, type: 'error' }
                     }));
                 }
             })
             .catch(function () {
-                window.dispatchEvent(new CustomEvent('auth-error-register', {
-                    detail: { message: 'Terjadi kesalahan jaringan' }
+                window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }
                 }));
             })
             .finally(function () {

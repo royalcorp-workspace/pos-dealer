@@ -124,7 +124,7 @@
             @endphp
             <div data-cart-item-id="{{ $item['id'] }}" class="flex gap-4 p-4 border border-gray-100 rounded-2xl bg-white shadow-sm">
                 <div class="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0">
-                    <img src="{{ $item['image'] }}" alt="{{ $item['name'] }}" class="w-full h-full object-cover" />
+                    <img src="{{ $item['image'] }}" alt="{{ $item['name'] }}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
                 </div>
                 <div class="flex flex-col flex-1">
                     <div class="flex justify-between items-start">

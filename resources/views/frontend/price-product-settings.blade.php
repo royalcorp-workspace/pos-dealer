@@ -12,7 +12,7 @@
                         @foreach($featured as $item)
                             <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                                 @if($item->image_url)
-                                    <img src="{{ $item->image_url }}" alt="{{ $item->title }}" class="w-full h-40 object-cover">
+                                    <img src="{{ $item->image_url }}" alt="{{ $item->title }}" loading="lazy" decoding="async" class="w-full h-40 object-cover">
                                 @endif
                                 <div class="p-4">
                                     <h3 class="font-bold text-brand-dark mb-2">{{ $item->title }}</h3>
@@ -35,7 +35,7 @@
                         @foreach($active as $item)
                             <div class="bg-white rounded-xl shadow-sm overflow-hidden">
                                 @if($item->image_url)
-                                    <img src="{{ $item->image_url }}" alt="{{ $item->title }}" class="w-full h-40 object-cover">
+                                    <img src="{{ $item->image_url }}" alt="{{ $item->title }}" loading="lazy" decoding="async" class="w-full h-40 object-cover">
                                 @endif
                                 <div class="p-4">
                                     <h3 class="font-bold text-brand-dark mb-2">{{ $item->title }}</h3>

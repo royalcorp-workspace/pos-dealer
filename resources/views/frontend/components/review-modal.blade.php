@@ -84,6 +84,8 @@
                 <img 
                     :src="product?.image" 
                     :alt="product?.name" 
+                    loading="lazy"
+                    decoding="async"
                     class="w-full max-w-[200px] md:max-w-full aspect-square object-cover rounded-xl shadow-sm mb-6" 
                 />
                 <h3 class="text-xl font-bold text-center text-brand-dark mb-2" x-text="product?.name"></h3>

@@ -60,6 +60,8 @@
                 src="{{ $product->thumbnail_url ?? 'https://via.placeholder.com/400x300' }}" 
                 alt="{{ $product->alt_text ?? $product->name }}" 
                 itemprop="image"
+                loading="lazy"
+                decoding="async"
                 class="product-card__image w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
             />
         </a>

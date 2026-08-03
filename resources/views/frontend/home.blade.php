@@ -126,6 +126,7 @@
                     <img 
                         src="https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800" 
                         alt="Comfortable Bed" 
+                        decoding="async"
                         class="w-full h-full object-cover"
                     />
                     <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/80 to-transparent"></div>
@@ -263,6 +264,7 @@
                     <img 
                         src="https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=800&h=600" 
                         alt="Special Product" 
+                        decoding="async"
                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                     />
                     <div class="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>

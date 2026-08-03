@@ -1,51 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
-use App\Models\Frontend\Order;
-use App\Models\Frontend\OrderItem;
+use App\Models\Frontend\Buffer\Buffer;
+use App\Models\Frontend\Buffer\BufferItem;
+use App\Models\Frontend\Customer\Customer;
 use App\Models\Frontend\ProductsCatalog\Product;
 use App\Models\Frontend\ProductsCatalog\ProductVariant;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
-    public function toggleWishlist(Request $request)
-    {
-        $request->validate([
-            'product_id' => 'required|string|uuid',
-        ]);
-
-        $productId = $request->input('product_id');
-        $wishlist = session()->get('wishlist', []);
-        $isInWishlist = in_array($productId, $wishlist);
-
-        if ($isInWishlist) {
-            $wishlist = array_values(array_filter($wishlist, fn($id) => $id !== $productId));
-            session()->put('wishlist', $wishlist);
-            $message = 'Produk dihapus dari favorit';
-        } else {
-            $wishlist[] = $productId;
-            session()->put('wishlist', $wishlist);
-            $message = 'Produk ditambahkan ke favorit';
-        }
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Produk berhasil masuk keranjang',
-                'cart' => $cart,
-                'cart_count' => $this->getCartCount($cart),
-                'cart_total' => $this->getCartTotal($cart),
-                'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
-            ]);
-        }
-
-        return redirect()->back()->with('success', $message);
-    }
-
     public function add(Request $request)
     {
         $request->validate([
@@ -74,26 +43,71 @@ class CartController extends Controller
         $staticPromo = \App\Services\StaticPromoService::forProduct($product);
         $price = \App\Services\StaticPromoService::discountedPrice((float) $price, $staticPromo);
 
-        $cart = session()->get('cart', []);
-        $cartItemId = $variantId ? $variantId : $productId;
+        $userId = session()->get('is_logged_in')
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+            : null;
 
-        if (isset($cart[$cartItemId])) {
-            $cart[$cartItemId]['quantity'] += $quantity;
-            $cart[$cartItemId]['item_note'] = $cart[$cartItemId]['item_note'] ?? '';
-        } else {
-            $cart[$cartItemId] = [
-                'id' => $cartItemId,
-                'product_id' => $productId,
-                'name' => $product->name,
-                'brand' => $product->brand->name ?? '',
-                'image' => $product->thumbnail_url ?? '',
-                'price' => (float) $price,
-                'quantity' => $quantity,
-                'item_note' => '',
-            ];
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
+
+        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->first();
+
+        if (!$buffer) {
+            $buffer = Buffer::create([
+                'id' => Str::uuid()->toString(),
+                'customer_id' => $customerId,
+                'session_id' => $sessionId,
+                'customer_name' => session()->get('user')['name'] ?? null,
+                'customer_email' => session()->get('user')['email'] ?? null,
+                'creator' => $userId,
+                'editor' => $userId,
+            ]);
         }
 
-        session()->put('cart', $cart);
+        $cartItemId = $variantId ? $variantId : $productId;
+        $existingItem = BufferItem::where('buffer_id', $buffer->id)
+            ->where(function ($q) use ($cartItemId, $productId) {
+                $q->where('id', $cartItemId)
+                  ->orWhere(function ($q2) use ($cartItemId, $productId) {
+                      $q2->where('product_variant_id', $cartItemId)
+                         ->orWhere(function ($q3) use ($cartItemId, $productId) {
+                             $q3->whereNull('product_variant_id')->where('product_id', $cartItemId);
+                         });
+                  });
+            })
+            ->first();
+
+        if ($existingItem) {
+            $existingItem->update([
+                'quantity' => $existingItem->quantity + $quantity,
+            ]);
+            $item = $existingItem;
+        } else {
+            $item = BufferItem::create([
+                'id' => Str::uuid()->toString(),
+                'buffer_id' => $buffer->id,
+                'product_id' => $productId,
+                'product_variant_id' => $variantId,
+                'name' => $product->name,
+                'quantity' => $quantity,
+                'unit_price' => (float) $price,
+                'total' => (float) $price * $quantity,
+                'discount_nominal' => 0,
+                'discount_percent' => 0,
+                'item_notes' => '',
+            ]);
+        }
+
+        $this->recalculateBuffer($buffer);
+
+        $cart = $this->getBufferCartArray($buffer);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -109,24 +123,76 @@ class CartController extends Controller
         return redirect()->back()->with('success', 'Produk berhasil ditambahkan ke keranjang!');
     }
 
+    public function toggleWishlist(Request $request)
+    {
+        $request->validate([
+            'product_id' => 'required|string|uuid',
+        ]);
+
+        $productId = $request->input('product_id');
+        $wishlist = session()->get('wishlist', []);
+
+        if (!is_array($wishlist)) {
+            $wishlist = [];
+        }
+
+        $index = array_search($productId, $wishlist, true);
+        $inWishlist = false;
+
+        if ($index !== false) {
+            unset($wishlist[$index]);
+        } else {
+            $wishlist[] = $productId;
+            $inWishlist = true;
+        }
+
+        session()->put('wishlist', array_values($wishlist));
+
+        return response()->json([
+            'success' => true,
+            'in_wishlist' => $inWishlist,
+        ]);
+    }
+
     public function update(Request $request, string $id)
     {
         $request->validate([
-            'quantity' => 'required|integer',
+            'quantity' => 'required|integer|min:1',
         ]);
 
         $quantity = (int) $request->input('quantity');
-        $cart = session()->get('cart', []);
+        $userId = session()->get('is_logged_in')
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+            : null;
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
 
-        if (isset($cart[$id])) {
-            if ($quantity < 1) {
-                unset($cart[$id]);
-            } else {
-                $cart[$id]['quantity'] = $quantity;
-                $cart[$id]['item_note'] = $cart[$id]['item_note'] ?? '';
-            }
-            session()->put('cart', $cart);
+        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->first();
+
+        if (!$buffer) {
+            return response()->json(['error' => 'Cart not found'], 404);
         }
+
+        $item = BufferItem::where('buffer_id', $buffer->id)->where('id', $id)->first();
+        if (!$item) {
+            return response()->json(['error' => 'Item not found'], 404);
+        }
+
+        if ($quantity < 1) {
+            $item->delete();
+        } else {
+            $item->update(['quantity' => $quantity]);
+        }
+
+        $this->recalculateBuffer($buffer);
+        $cart = $this->getBufferCartArray($buffer);
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -143,12 +209,30 @@ class CartController extends Controller
 
     public function remove(Request $request, string $id)
     {
-        $cart = session()->get('cart', []);
+        $userId = session()->get('is_logged_in')
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+            : null;
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
 
-        if (isset($cart[$id])) {
-            unset($cart[$id]);
-            session()->put('cart', $cart);
+        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->first();
+
+        if ($buffer) {
+            $item = BufferItem::where('buffer_id', $buffer->id)->where('id', $id)->first();
+            if ($item) {
+                $item->delete();
+                $this->recalculateBuffer($buffer);
+            }
         }
+
+        $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -165,10 +249,27 @@ class CartController extends Controller
 
     public function preview(Request $request)
     {
-        $cart = session()->get('cart', []);
-        if (count($cart) === 0) {
+        $userId = session()->get('is_logged_in')
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+            : null;
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
+
+        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->with(['items.product', 'items.variant'])
+            ->first();
+
+        if (!$buffer || $buffer->items->isEmpty()) {
             return redirect()->route('checkout')->with('warning', 'Keranjang belanja kosong.');
         }
+
+        $cart = $this->getBufferCartArray($buffer);
 
         $request->validate([
             'name' => 'required|string|max:200',
@@ -216,8 +317,6 @@ class CartController extends Controller
         $shippingCost = self::SHIPPING_PRICES[$courier] ?? 0;
         $voucherCodes = $this->parseVoucherCodes($request);
 
-        // Hitung voucher diskon dari backend supaya voucher persentase
-        // benar-benar mengurangi total (dan konsisten dengan checkout).
         $voucherDiscount = 0;
         if (!empty($voucherCodes)) {
             $userId = session()->get('is_logged_in')
@@ -243,7 +342,6 @@ class CartController extends Controller
             foreach ($orderedVouchers as $voucher) {
                 if (!$voucher->canBeUsedBy($userId)) continue;
 
-                // eligible subtotal mengikuti scope voucher
                 $eligibleSubtotal = 0.0;
                 if ((int) $voucher->scope === 2) {
                     $eligibleProductIds = $voucher->products()->where('deleted', false)->pluck('products.id')->unique()->toArray();
@@ -268,7 +366,6 @@ class CartController extends Controller
 
                 if ($eligibleSubtotal < (float) ($voucher->min_purchase ?? 0)) continue;
 
-                // nilai diskon sesuai type
                 if ((int) $voucher->type === 1) {
                     $maxDiscount = ($voucher->max_discount !== null && (float) $voucher->max_discount > 0)
                         ? (float) $voucher->max_discount
@@ -288,7 +385,6 @@ class CartController extends Controller
 
             $voucherDiscount = max(0, min((float) $discountSum, $subtotal + $shippingCost));
         }
-
 
         $preview = [
             'customer' => $request->only(['name', 'email', 'phone', 'city', 'address', 'postal_code']),
@@ -317,11 +413,7 @@ class CartController extends Controller
             return redirect()->route('home')->with('show_login', true);
         }
 
-        if (!Schema::hasTable('orders') || !Schema::hasTable('order_items')) {
-            abort(404);
-        }
-
-        $order = Order::with(['items.product.brand', 'items.variant', 'customer'])
+        $order = \App\Models\Frontend\Order::with(['items.product.brand', 'items.variant', 'customer'])
             ->findOrFail($orderId);
 
         if (($order->deleted ?? false)) {
@@ -335,7 +427,31 @@ class CartController extends Controller
             return redirect()->back()->with('warning', 'Pesanan ini tidak memiliki item untuk di-order ulang.');
         }
 
-        $cart = session()->get('cart', []);
+        $userId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
+        $customerId = $this->resolveCustomerId();
+        $sessionId = session()->getId();
+
+        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
+                if ($customerId) {
+                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                } else {
+                    $q->where('session_id', $sessionId);
+                }
+            })
+            ->first();
+
+        if (!$buffer) {
+            $buffer = Buffer::create([
+                'id' => Str::uuid()->toString(),
+                'customer_id' => $customerId,
+                'session_id' => $sessionId,
+                'customer_name' => session()->get('user')['name'] ?? null,
+                'customer_email' => session()->get('user')['email'] ?? null,
+                'creator' => $userId,
+                'editor' => $userId,
+            ]);
+        }
+
         $addedQuantity = 0;
         $skippedCount = 0;
 
@@ -347,16 +463,32 @@ class CartController extends Controller
             }
 
             $cartItemId = $cartItem['id'];
-            if (isset($cart[$cartItemId])) {
-                $cart[$cartItemId]['quantity'] += $cartItem['quantity'];
+            $existingItem = BufferItem::where('buffer_id', $buffer->id)->where('id', $cartItemId)->first();
+
+            if ($existingItem) {
+                $existingItem->update([
+                    'quantity' => $existingItem->quantity + $cartItem['quantity'],
+                ]);
             } else {
-                $cart[$cartItemId] = $cartItem;
+                BufferItem::create([
+                    'id' => Str::uuid()->toString(),
+                    'buffer_id' => $buffer->id,
+                    'product_id' => $cartItem['product_id'],
+                    'product_variant_id' => $cartItem['variant_id'] ?? null,
+                    'name' => $cartItem['name'],
+                    'quantity' => $cartItem['quantity'],
+                    'unit_price' => (float) $cartItem['price'],
+                    'total' => (float) $cartItem['price'] * $cartItem['quantity'],
+                    'discount_nominal' => 0,
+                    'discount_percent' => 0,
+                    'item_notes' => $cartItem['item_note'] ?? '',
+                ]);
             }
 
             $addedQuantity += $cartItem['quantity'];
         }
 
-        session()->put('cart', $cart);
+        $this->recalculateBuffer($buffer);
 
         $message = $skippedCount > 0
             ? "Berhasil menambahkan {$addedQuantity} item ke keranjang. {$skippedCount} item tidak tersedia untuk di-order ulang."
@@ -365,7 +497,7 @@ class CartController extends Controller
         return redirect()->route('checkout')->with('success', $message);
     }
 
-    private function ensureOrderBelongsToCurrentUser(Order $order): void
+    private function ensureOrderBelongsToCurrentUser(\App\Models\Frontend\Order $order): void
     {
         $user = session()->get('user', []);
         $email = (string) ($user['email'] ?? '');
@@ -379,17 +511,7 @@ class CartController extends Controller
         }
     }
 
-    private function parseVoucherCodes(Request $request): array
-    {
-        $rawCodes = $request->input('voucher_codes') ?: $request->input('voucher_code');
-        if (!$rawCodes) {
-            return [];
-        }
-
-        return array_values(array_unique(array_filter(array_map('strtoupper', preg_split('/[,;]+/', (string) $rawCodes) ?: []))));
-    }
-
-    private function buildReorderCartItem(OrderItem $item): ?array
+    private function buildReorderCartItem(\App\Models\Frontend\Order\OrderItem $item): ?array
     {
         $product = $item->product;
         if (!$product || ($product->deleted ?? false) || !$product->status) {
@@ -424,6 +546,46 @@ class CartController extends Controller
         ];
     }
 
+    private function getBufferCartArray(Buffer $buffer): array
+    {
+        $items = $buffer->items()->get()->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'variant_id' => $item->product_variant_id,
+                'name' => $item->name,
+                'brand' => $item->product->brand->name ?? '',
+                'image' => $item->product->thumbnail_url ?? '',
+                'price' => (float) $item->unit_price,
+                'quantity' => (int) $item->quantity,
+                'item_note' => $item->item_notes ?? '',
+            ];
+        })->toArray();
+
+        return $items;
+    }
+
+    private function recalculateBuffer(Buffer $buffer): void
+    {
+        $items = $buffer->items()->get();
+        $subtotal = $items->sum(fn($item) => (float) $item->unit_price * (int) $item->quantity);
+        $discount = $items->sum(function ($item) {
+            $itemTotal = (float) $item->unit_price * (int) $item->quantity;
+            $discountNominal = (float) $item->discount_nominal;
+            $discountPercent = $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
+            return $discountNominal + $discountPercent;
+        });
+        $tax = 0;
+        $total = $subtotal - $discount + $tax;
+
+        $buffer->update([
+            'subtotal' => $subtotal,
+            'discount' => $discount,
+            'tax' => $tax,
+            'total' => $total,
+        ]);
+    }
+
     private function getCartCount(array $cart): int
     {
         $count = 0;
@@ -437,26 +599,41 @@ class CartController extends Controller
     {
         $total = 0.0;
         foreach ($cart as $item) {
-            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
-            $originalPrice = 0.0;
-            if ($variantId) {
-                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                if ($variantModel) {
-                    $originalPrice = (float) $variantModel->price;
-                }
-            }
-            if ($originalPrice <= 0.0) {
-                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                if ($productModel) {
-                    $originalPrice = (float) $productModel->base_price;
-                }
-            }
-            if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['price'];
-            }
-            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
-            $total += $res['promotional_price'] * (int) $item['quantity'];
+            $total += $item['price'] * $item['quantity'];
         }
         return $total;
+    }
+
+    private function parseVoucherCodes(Request $request): array
+    {
+        $rawCodes = $request->input('voucher_codes') ?: $request->input('voucher_code');
+        if (!$rawCodes) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map('strtoupper', preg_split('/[,;]+/', (string) $rawCodes) ?: []))));
+    }
+
+    private function resolveCustomerId(): ?string
+    {
+        if (!session()->get('is_logged_in')) {
+            return null;
+        }
+
+        $user = session()->get('user', []);
+        $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
+
+        if (!$userId) {
+            return null;
+        }
+
+        $customer = Customer::where('user_id', $userId)->first();
+
+        if (!$customer && $email) {
+            $customer = Customer::where('email', $email)->first();
+        }
+
+        return $customer?->id;
     }
 }
