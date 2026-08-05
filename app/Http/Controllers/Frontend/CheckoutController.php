@@ -1186,4 +1186,50 @@ class CheckoutController extends Controller
 
         return $customer?->id;
     }
+
+    public function checkUser(Request $request)
+    {
+        $email = $request->input('email');
+        $phone = $request->input('phone');
+        
+        $customer = null;
+        if ($email) {
+            $customer = Customer::where('email', $email)->first();
+        } elseif ($phone) {
+            $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+            // Normalize 0 to 62
+            if (str_starts_with($cleanPhone, '0')) {
+                $cleanPhone = '62' . substr($cleanPhone, 1);
+            }
+            $customer = Customer::where(function ($q) use ($phone, $cleanPhone) {
+                $q->where('phone', $phone)
+                  ->orWhere('phone', 'like', '%' . $phone)
+                  ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '+', '') = ?", [$cleanPhone]);
+            })->first();
+        }
+        
+        if ($customer) {
+            $address = Address::where('user_id', $customer->user_id)
+                ->where('deleted', false)
+                ->orderBy('is_primary', 'desc')
+                ->first();
+                
+            return response()->json([
+                'registered' => true,
+                'customer' => [
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                    'email' => $customer->email,
+                ],
+                'address' => $address ? [
+                    'address' => $address->address,
+                    'sub_district_id' => $address->sub_district_id,
+                    'city' => $address->city->name ?? ($address->subDistrict->city->name ?? ''),
+                    'postal_code' => $address->postal_code,
+                ] : null
+            ]);
+        }
+        
+        return response()->json(['registered' => false]);
+    }
 }
