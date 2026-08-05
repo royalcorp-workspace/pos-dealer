@@ -262,7 +262,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-5xl mx-auto bg-white/5 backdrop-blur border border-brand-gold/20 rounded-3xl p-6 lg:p-10 shadow-2xl">
                 <div class="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl relative group border border-brand-gold/20">
                     <img 
-                        src="https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=800&h=600" 
+                        src="{{ asset('images/Precise.jpg') }}" 
                         alt="Special Product" 
                         decoding="async"
                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 

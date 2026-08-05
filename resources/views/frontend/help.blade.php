@@ -113,13 +113,15 @@
             </h2>
             <div class="space-y-3">
                 @foreach($faqs as $faq)
-                    <div class="help-faq-item bg-white border border-gray-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow group">
+                    <div class="help-faq-item bg-white border border-gray-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow group cursor-pointer">
                         <div class="flex justify-between items-start gap-4">
-                            <div>
-                                <span class="font-semibold text-gray-700 group-hover:text-brand-dark">{{ $faq['question'] }}</span>
-                                <p class="text-sm text-gray-500 mt-2 leading-relaxed">{{ $faq['answer'] }}</p>
+                            <div class="flex-1">
+                                <span class="font-semibold text-gray-700 group-hover:text-brand-dark block">{{ $faq['question'] }}</span>
+                                <div class="help-faq-answer hidden mt-3 pt-3 border-t border-gray-100">
+                                    <p class="text-sm text-gray-500 leading-relaxed">{{ $faq['answer'] }}</p>
+                                </div>
                             </div>
-                            <span class="help-faq-toggle w-8 h-8 rounded-full bg-brand-light text-brand-gold-dark flex items-center justify-center group-hover:bg-brand-gold group-hover:text-white transition-colors shrink-0 ml-4">+</span>
+                            <span class="help-faq-toggle w-8 h-8 rounded-full bg-brand-light text-brand-gold-dark flex items-center justify-center group-hover:bg-brand-gold group-hover:text-white transition-colors shrink-0 ml-4 font-bold text-lg">+</span>
                         </div>
                     </div>
                 @endforeach
@@ -132,4 +134,32 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const faqItems = document.querySelectorAll('.help-faq-item');
+        faqItems.forEach(item => {
+            item.addEventListener('click', function () {
+                const answer = this.querySelector('.help-faq-answer');
+                const toggle = this.querySelector('.help-faq-toggle');
+                
+                const isExpanded = !answer.classList.contains('hidden');
+                
+                // Close all items
+                faqItems.forEach(otherItem => {
+                    otherItem.querySelector('.help-faq-answer').classList.add('hidden');
+                    otherItem.querySelector('.help-faq-toggle').textContent = '+';
+                });
+                
+                // If the clicked item was not expanded, expand it
+                if (!isExpanded) {
+                    answer.classList.remove('hidden');
+                    toggle.textContent = '-';
+                }
+            });
+        });
+    });
+</script>
+@endpush
 

@@ -91,10 +91,25 @@
                 <div class="pt-4">
                     <h4 class="font-bold text-brand-gold mb-4 uppercase tracking-wider text-sm">Metode Pembayaran</h4>
                     <div class="flex flex-wrap gap-2">
-                        <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">BCA</div>
-                        <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Mandiri</div>
-                        <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Visa</div>
-                        <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Master</div>
+                        @php
+                            $paymentMethods = \App\Models\PaymentMethod::active()->orderBy('sort_order')->get();
+                        @endphp
+                        @forelse($paymentMethods as $method)
+                            @if($method->image)
+                                <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center p-1" title="{{ $method->name }}">
+                                    <img src="{{ $method->image }}" alt="{{ $method->name }}" class="max-h-full max-w-full object-contain">
+                                </div>
+                            @else
+                                <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[9px] font-bold text-brand-dark px-1 text-center" title="{{ $method->name }}">
+                                    {{ $method->code ?? $method->name }}
+                                </div>
+                            @endif
+                        @empty
+                            <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">BCA</div>
+                            <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Mandiri</div>
+                            <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Visa</div>
+                            <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Master</div>
+                        @endforelse
                     </div>
                 </div>
             </div>

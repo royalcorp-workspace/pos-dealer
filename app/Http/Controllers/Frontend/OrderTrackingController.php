@@ -41,6 +41,7 @@ class OrderTrackingController extends Controller
 
         return (object) [
             'id' => 'ORD-DUMMY-20260619-0001',
+            'order_number' => 'ORD-DUMMY-20260619-0001',
             'status' => 5,
             'created_at' => now()->subDays(3),
             'customer' => $customer,

@@ -159,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             submitBtn.disabled = true;
             submitBtn.querySelector('span').textContent = 'Memproses...';
+            window.dispatchEvent(new CustomEvent('auth-error-login-clear'));
 
             fetch('/login', {
                 method: 'POST',
@@ -194,13 +195,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
                 }
-                window.dispatchEvent(new CustomEvent('show-auth-toast', {
-                    detail: { message: msg, type: 'error' }
+                window.dispatchEvent(new CustomEvent('auth-error-login', {
+                    detail: { message: msg }
                 }));
             })
             .catch(function () {
-                window.dispatchEvent(new CustomEvent('show-auth-toast', {
-                    detail: { message: 'Terjadi kesalahan jaringan. Silakan coba lagi.', type: 'error' }
+                window.dispatchEvent(new CustomEvent('auth-error-login', {
+                    detail: { message: 'Terjadi kesalahan jaringan. Silakan coba lagi.' }
                 }));
             })
             .finally(function () {

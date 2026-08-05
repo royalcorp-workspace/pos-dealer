@@ -163,7 +163,7 @@ $locationData = \App\Models\Frontend\Location\SubDistrict::with(['city.province'
                         <input type="email" x-model="email" required placeholder="you@example.com" class="w-full px-4 py-3 bg-brand-light border border-brand-muted rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-colors" />
                     </div>
 
-<div>
+                        <div>
                             <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-1">Password</label>
                             <input type="password" x-model="password" :required="!google_id" placeholder="Minimal 8 karakter, terdiri dari huruf besar, angka, dan karakter khusus" minlength="8" class="w-full px-4 py-3 bg-brand-light border border-brand-muted rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-colors" />
                         </div>

@@ -44,7 +44,7 @@
                                 @endforeach
                             </div>
                             
-                            <div id="transfer-manual-details" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/30 rounded-2xl hidden transition-all">
+                            <div id="transfer-manual-details" data-order-total="{{ $orderData['total'] }}" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/30 rounded-2xl hidden transition-all">
                                 <h4 class="font-bold text-brand-dark mb-3">Instruksi Transfer Bank Manual:</h4>
                                 <div class="text-sm text-gray-700 space-y-4 mb-4">
                                     <p>Silakan melakukan pembayaran ke salah satu rekening berikut:</p>
@@ -209,68 +209,4 @@
         </div>
     </div>
     <script src="{{ asset('js/frontend/payment.js') }}?v={{ filemtime(public_path('js/frontend/payment.js')) }}"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var radios = document.querySelectorAll('input[name="payment_method"]');
-            var detailsContainer = document.getElementById('transfer-manual-details');
-            
-            var banksContainer = document.getElementById('instructions-banks-container');
-            
-            function toggleDetails() {
-                var selected = document.querySelector('input[name="payment_method"]:checked');
-                if (selected && selected.getAttribute('data-is-manual') === '1') {
-                    var banksData = [];
-                    try {
-                        banksData = JSON.parse(selected.getAttribute('data-banks') || '[]');
-                    } catch (e) {
-                        // ignore
-                    }
-                    
-                    if (!Array.isArray(banksData) || banksData.length === 0) {
-                        banksData = [{
-                            bank_name: 'BCA',
-                            account_number: '123-456-7890',
-                            account_holder: 'PT POS Dealer Indonesia'
-                        }];
-                    }
-
-                    banksContainer.innerHTML = '';
-                    banksData.forEach(function(bank) {
-                        var card = document.createElement('div');
-                        card.className = 'bg-white p-4 rounded-xl border border-brand-muted space-y-2 shadow-sm mb-4';
-                        card.innerHTML = `
-                            <div class="flex justify-between items-center border-b pb-2">
-                                <span class="text-gray-500 text-xs">Bank</span>
-                                <span class="font-bold text-brand-dark">${bank.bank_name}</span>
-                            </div>
-                            <div class="flex justify-between items-center border-b pb-2">
-                                <span class="text-gray-500 text-xs">No. Rekening</span>
-                                <span class="font-bold text-brand-dark font-mono text-base">${bank.account_number}</span>
-                            </div>
-                            <div class="flex justify-between items-center border-b pb-2">
-                                <span class="text-gray-500 text-xs">Atas Nama</span>
-                                <span class="font-bold text-brand-dark">${bank.account_holder}</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-gray-500 text-xs">Total Transfer</span>
-                                <span class="font-extrabold text-brand-gold-dark text-base">Rp ${new Intl.NumberFormat('id-ID').format({{ $orderData['total'] }})}</span>
-                            </div>
-                        `;
-                        banksContainer.appendChild(card);
-                    });
-                    
-                    detailsContainer.classList.remove('hidden');
-                } else {
-                    detailsContainer.classList.add('hidden');
-                }
-            }
-            
-            radios.forEach(function(radio) {
-                radio.addEventListener('change', toggleDetails);
-            });
-            
-            // Trigger initially in case of preselected radio button
-            toggleDetails();
-        });
-    </script>
 @endsection

@@ -126,13 +126,11 @@
         <div class="flex flex-col lg:flex-row gap-8">
             <!-- Sidebar Categories (Desktop) -->
             <aside class="hidden lg:block lg:w-64 flex-shrink-0">
-                <div class="bg-white border border-brand-muted rounded-2xl p-6 shadow-sm sticky top-6 mb-6">
+                <div class="bg-white border border-brand-muted rounded-2xl p-6 shadow-sm sticky top-6 mb-6 max-h-[calc(100vh-48px)] overflow-y-auto">
                     @include('frontend.product.sidebar-filters')
                 </div>
 
-                <div class="bg-white border border-brand-muted rounded-2xl p-6 shadow-sm sticky top-[calc(70vh+100px)]">
-                    @include('frontend.product.sidebar-categories')
-                </div>
+
             </aside>
 
             <!-- Mobile Filter Drawer (Mobile) -->
@@ -185,9 +183,7 @@
                                     <div class="bg-white border border-brand-muted rounded-2xl p-5 shadow-sm">
                                         @include('frontend.product.sidebar-filters')
                                     </div>
-                                    <div class="bg-white border border-brand-muted rounded-2xl p-5 shadow-sm">
-                                        @include('frontend.product.sidebar-categories')
-                                    </div>
+
                                 </div>
                             </div>
                         </div>
