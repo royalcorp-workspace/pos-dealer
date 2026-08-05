@@ -60,7 +60,8 @@ class PageController extends Controller
 
     public function blogShow(BlogPost $blogPost)
     {
-        $blogPost->increment('view_count');
+        // blog_posts table does not have view_count column
+        // $blogPost->increment('view_count');
 
         $structuredData = [
             '@context' => 'https://schema.org',

@@ -10,8 +10,8 @@
             return [
                 '@type' => 'ListItem',
                 'position' => $index + 1,
-                'url' => route('blog') . '#' . \Illuminate\Support\Str::slug($blog['title']),
-                'name' => $blog['title'],
+                'url' => route('blog.show', $blog->slug),
+                'name' => $blog->title,
             ];
         })->values()->toArray();
 
@@ -19,9 +19,9 @@
             return [
                 '@context' => 'https://schema.org',
                 '@type' => 'Article',
-                'headline' => $blog['title'],
-                'articleSection' => $blog['category'],
-                'datePublished' => $blog['date'],
+                'headline' => $blog->title,
+                'articleSection' => 'Tips Tidur',
+                'datePublished' => $blog->published_at?->format('Y-m-d') ?? $blog->created_at->format('Y-m-d'),
                 'author' => [
                     '@type' => 'Organization',
                     'name' => 'IMG International Mattress Gallery',
@@ -89,21 +89,25 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 @foreach($blogs as $blog)
                 @php
-                    $blogUrl = route('blog') . '#' . \Illuminate\Support\Str::slug($blog['title']);
+                    $blogUrl = route('blog.show', $blog->slug);
                 @endphp
                 <article class="bg-white border text-left border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-3xl overflow-hidden flex flex-col group blog-card" itemscope itemtype="https://schema.org/Article">
                         <a href="{{ $blogUrl }}" itemprop="url" class="block">
                         <div class="aspect-[4/3] bg-brand-light w-full relative overflow-hidden">
-                            <div class="absolute inset-0 bg-gray-200"></div>
-                            <i class="fa-regular fa-file-lines absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 text-gray-300"></i>
-                            <div class="absolute top-4 left-4 bg-white text-xs font-bold px-3 py-1.5 rounded-full text-brand-dark z-10 shadow-sm" itemprop="articleSection">{{ $blog['category'] }}</div>
+                            @if($blog->featured_image_url)
+                                <img src="{{ $blog->featured_image_url }}" alt="{{ $blog->title }}" loading="lazy" decoding="async" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                            @else
+                                <div class="absolute inset-0 bg-gray-200"></div>
+                                <i class="fa-regular fa-file-lines absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 text-gray-300"></i>
+                            @endif
+                            <div class="absolute top-4 left-4 bg-white text-xs font-bold px-3 py-1.5 rounded-full text-brand-dark z-10 shadow-sm" itemprop="articleSection">Tips Tidur</div>
                         </div>
                         </a>
 
                         <div class="p-6 flex flex-col flex-1">
-                            <span class="text-xs text-brand-gold mb-3 font-semibold" itemprop="datePublished">{{ $blog['date'] }}</span>
+                            <span class="text-xs text-brand-gold mb-3 font-semibold" itemprop="datePublished">{{ $blog->published_at?->format('d M Y') ?? $blog->created_at->format('d M Y') }}</span>
                             <h3 class="blog-card__title font-bold text-brand-dark mb-4 group-hover:text-brand-gold-dark transition-colors line-clamp-3 leading-snug" itemprop="headline">
-                                <a href="{{ $blogUrl }}" class="hover:text-brand-gold-dark">{{ $blog['title'] }}</a>
+                                <a href="{{ $blogUrl }}" class="hover:text-brand-gold-dark">{{ $blog->title }}</a>
                             </h3>
                             <div class="mt-auto flex items-center text-sm font-semibold blog-card__link text-brand-dark group-hover:text-brand-gold transition-colors">
                                 <a href="{{ $blogUrl }}">Baca Selengkapnya <i class="fa-solid fa-arrow-right w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform"></i></a>

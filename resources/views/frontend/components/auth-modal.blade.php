@@ -39,10 +39,13 @@
                 showToast: false, 
                 toastMessage: '', 
                 toastType: 'success', 
-                isSubmitting: false
+                isSubmitting: false,
+                errorMessage: ''
             }"
             @click.stop
             @show-auth-toast.window="showToast = true; toastMessage = $event.detail.message; toastType = $event.detail.type || 'success'; setTimeout(() => showToast = false, 3000)"
+            x-on:auth-error-login.window="errorMessage = $event.detail.message"
+            x-on:auth-error-login-clear.window="errorMessage = ''"
         >
             <!-- Toast Notification -->
             <div 
@@ -103,6 +106,7 @@
 
                     <form action="/login" method="POST" class="space-y-4" id="loginModalForm">
                         @csrf
+                        <div x-show="errorMessage" x-html="errorMessage" class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl" x-cloak></div>
                         <div>
                             <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">Email Address</label>
                             <div class="relative">

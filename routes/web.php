@@ -34,6 +34,7 @@ Route::get('/promos', [PageController::class, 'promos'])->name('promos');
 Route::get('/price-product-settings', [\App\Http\Controllers\Frontend\PriceProductSettingController::class, 'index'])->name('price-product-settings.index');
 Route::get('/price-product-settings/{code}', [\App\Http\Controllers\Frontend\PriceProductSettingController::class, 'show'])->name('price-product-settings.show');
 Route::get('/blog', [PageController::class, 'blog'])->name('blog');
+Route::get('/blog/{blogPost:slug}', [PageController::class, 'blogShow'])->name('blog.show');
 Route::get('/help', [PageController::class, 'help'])->name('help');
 Route::get('/tentang-kami', [PageController::class, 'about'])->name('about');
 Route::get('/klaim-garansi', [PageController::class, 'warranty'])->name('warranty');

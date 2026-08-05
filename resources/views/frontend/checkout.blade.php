@@ -345,42 +345,11 @@
         </form>
     </div>
     
-    <script src="{{ asset('js/frontend/checkout.js') }}?v={{ filemtime(public_path('js/frontend/checkout.js')) }}"></script>
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
-        var cityInput = document.getElementById('city-display') || document.querySelector('input[name="city"]');
-        var postalInput = document.querySelector('input[name="postal_code"]');
-        var subDistrictMap = @json($subDistricts->map(fn($sd) => ['city' => $sd['city'], 'postal_code' => $sd['postal_code']]));
-
-        if (subDistrictSelect && cityInput) {
-            subDistrictSelect.addEventListener('change', function() {
-                var data = subDistrictMap[this.value];
-                if (data) {
-                    cityInput.value = data.city;
-                    if (postalInput) postalInput.value = data.postal_code || '';
-                }
-            });
-        }
-
-        var originalFillAddress = window.fillAddress;
-        window.fillAddress = function(el) {
-            if (originalFillAddress) originalFillAddress(el);
-            var addresses = @json($savedAddressesSafe);
-            var selected = addresses.find(function(a) { return a.id == el.value; });
-            if (selected) {
-                if (subDistrictSelect && selected.sub_district_id) {
-                    subDistrictSelect.value = selected.sub_district_id;
-                    var data = subDistrictMap[selected.sub_district_id];
-                    if (data && cityInput) cityInput.value = data.city;
-                    if (data && postalInput) postalInput.value = data.postal_code || '';
-                }
-                var addressSelector = document.getElementById('address-selector');
-                if (addressSelector) addressSelector.classList.add('hidden');
-            }
-        };
-    });
-
+    <script id="checkout-subdistrict-map" type="application/json">
+        @json($subDistricts->map(fn($sd) => ['city' => $sd['city'], 'postal_code' => $sd['postal_code']]))
     </script>
+    <script id="checkout-saved-addresses" type="application/json">
+        @json($savedAddressesSafe)
+    </script>
+    <script src="{{ asset('js/frontend/checkout.js') }}?v={{ filemtime(public_path('js/frontend/checkout.js')) }}"></script>
 @endsection

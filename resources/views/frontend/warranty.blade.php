@@ -32,11 +32,19 @@
                         </div>
                     @endif
 
-                    @if($warranty->required_documents)
+                    @if(!empty($warranty->required_documents))
                         <div>
                             <h2 class="text-xl font-bold text-brand-dark mt-6 mb-3">Dokumen yang Diperlukan</h2>
                             <div class="bg-gray-50 border border-gray-100 rounded-xl p-4 mb-4">
-                                {!! nl2br(e($warranty->required_documents)) !!}
+                                @if(is_array($warranty->required_documents))
+                                    <ul class="list-disc pl-6 space-y-2">
+                                        @foreach($warranty->required_documents as $document)
+                                            <li class="text-gray-600 text-base">{{ $document }}</li>
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <p class="text-gray-600 text-base">{!! nl2br(e($warranty->required_documents)) !!}</p>
+                                @endif
                             </div>
                         </div>
                     @endif

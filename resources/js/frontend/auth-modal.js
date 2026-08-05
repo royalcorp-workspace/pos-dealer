@@ -159,6 +159,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             submitBtn.disabled = true;
             submitBtn.querySelector('span').textContent = 'Memproses...';
+            window.dispatchEvent(new CustomEvent('auth-error-login-clear'));
 
             fetch('/login', {
                 method: 'POST',

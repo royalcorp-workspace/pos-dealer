@@ -387,3 +387,40 @@ document.addEventListener('DOMContentLoaded', function () {
 
     restoreCartCoupon();
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+    var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
+    var cityInput = document.getElementById('city-display') || document.querySelector('input[name="city"]');
+    var postalInput = document.querySelector('input[name="postal_code"]');
+    
+    var subDistrictMapEl = document.getElementById('checkout-subdistrict-map');
+    var subDistrictMap = subDistrictMapEl ? JSON.parse(subDistrictMapEl.textContent || '{}') : {};
+
+    if (subDistrictSelect && cityInput) {
+        subDistrictSelect.addEventListener('change', function() {
+            var data = subDistrictMap[this.value];
+            if (data) {
+                cityInput.value = data.city;
+                if (postalInput) postalInput.value = data.postal_code || '';
+            }
+        });
+    }
+
+    var originalFillAddress = window.fillAddress;
+    window.fillAddress = function(el) {
+        if (originalFillAddress) originalFillAddress(el);
+        var savedAddressesEl = document.getElementById('checkout-saved-addresses');
+        var addresses = savedAddressesEl ? JSON.parse(savedAddressesEl.textContent || '[]') : [];
+        var selected = addresses.find(function(a) { return a.id == el.value; });
+        if (selected) {
+            if (subDistrictSelect && selected.sub_district_id) {
+                subDistrictSelect.value = selected.sub_district_id;
+                var data = subDistrictMap[selected.sub_district_id];
+                if (data && cityInput) cityInput.value = data.city;
+                if (data && postalInput) postalInput.value = data.postal_code || '';
+            }
+            var addressSelector = document.getElementById('address-selector');
+            if (addressSelector) addressSelector.classList.add('hidden');
+        }
+    };
+});

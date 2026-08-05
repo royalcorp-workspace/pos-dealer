@@ -75,107 +75,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-    <script>
-        // Shim/queue for `tailwind` to prevent "tailwind is not defined" if some inline scripts run before CDN loads.
-        (function(){
-            if (typeof window.tailwind === 'undefined') {
-                window._tailwindQueue = window._tailwindQueue || [];
-                window.tailwind = function(){ window._tailwindQueue.push(arguments); };
-                var runQueued = function(){
-                    try {
-                        if (typeof window.tailwind !== 'function') return;
-                        if (!window._tailwindQueue || !window._tailwindQueue.length) return;
-                        var real = window.tailwind;
-                        // if real tailwind replaced our stub, drain queued calls
-                        if (real && real !== window.tailwind) return; // replaced too early
-                    } catch(e){}
-                };
-                window.addEventListener('load', function(){
-                    if (window._tailwindQueue && window.tailwind && typeof window.tailwind === 'function' && window._tailwindQueue.length) {
-                        try {
-                            // if real tailwind becomes available as a different object, replay
-                            var realTailwind = window.tailwind !== arguments.callee ? window.tailwind : null;
-                        } catch(e){ realTailwind = null }
-                    }
-                });
-            }
-        })();
-
-        tailwind.config = {
-            theme: {
-                fontFamily: {
-                    sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
-                    serif: ['"Playfair Display"', 'ui-serif', 'Georgia', 'Cambria', 'serif'],
-                    mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'monospace'],
-                },
-                extend: {
-                    colors: {
-                        brand: {
-                            dark: '#2b1d12',
-                            darker: '#1a1009',
-                            gold: '#c09d6b',
-                            'gold-dark': '#ad8a58',
-                            light: '#fdfbf7',
-                            muted: '#f2ebd9',
-                        },
-                    },
-                },
-            },
-            safelist: [
-                'hover:shadow-xl',
-                'hover:scale-[1.02]',
-                'hover:-translate-y-1',
-                'group-hover:scale-105',
-                'group-hover:scale-110',
-                'group-hover:opacity-100',
-                'group-hover:translate-x-0',
-                'group-hover:text-white',
-                'group-hover:bg-brand-dark',
-                'group-hover:text-white',
-                'group-hover:text-brand-gold-dark',
-                'group-hover:bg-brand-gold',
-                'hover:text-brand-gold',
-                'hover:text-brand-gold-dark',
-                'hover:text-brand-dark',
-                'hover:border-brand-gold',
-                'hover:bg-brand-dark',
-                'hover:bg-brand-light',
-                'hover:shadow-md',
-                'hover:shadow-lg',
-            ],
-        };
-    </script>
+    <script src="{{ asset('js/frontend/tailwind-config.js') }}?v={{ filemtime(public_path('js/frontend/tailwind-config.js')) }}"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // If we queued tailwind calls before the CDN loaded, replay them now.
-        (function(){
-            try {
-                if (window._tailwindQueue && window._tailwindQueue.length && typeof window.tailwind === 'function') {
-                    window._tailwindQueue.forEach(function(args){
-                        try { window.tailwind.apply(null, args); } catch(e) { console.warn('replaying tailwind call failed', e); }
-                    });
-                    window._tailwindQueue = [];
-                }
-            } catch(e) { /* noop */ }
-        })();
-    </script>
     
     <!-- Firebase SDK -->
     <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            window.firebaseConfig = {
-                apiKey: '{{ config("services.firebase.api_key") }}',
-                authDomain: '{{ config("services.firebase.auth_domain") }}',
-                projectId: '{{ config("services.firebase.project_id") }}',
-            };
-            
-            if (window.firebaseConfig.apiKey) {
-                firebase.initializeApp(window.firebaseConfig);
-            }
-        });
+    
+    <script id="firebase-config-data" type="application/json">
+        {
+            "apiKey": "{{ config('services.firebase.api_key') }}",
+            "authDomain": "{{ config('services.firebase.auth_domain') }}",
+            "projectId": "{{ config('services.firebase.project_id') }}"
+        }
     </script>
+    <script defer src="{{ asset('js/frontend/firebase-init.js') }}?v={{ filemtime(public_path('js/frontend/firebase-init.js')) }}"></script>
 
     <style>
         [x-cloak] { display: none !important; }
@@ -562,16 +476,48 @@
         isAuthOpen: {{ session()->has('show_login') ? 'true' : 'false' }}, 
         selectedProductForReview: null,
         isMobileMenuOpen: false,
-        cartNotice: false,
-        cartNoticeMessage: 'Produk berhasil masuk keranjang',
-        cartNoticeTimer: null
+        toasts: [],
+        addToast(type, message, duration = 4000) {
+            if (!message || String(message).trim() === '') {
+                return;
+            }
+            const id = Date.now() + Math.random().toString(36).substr(2, 9);
+            this.toasts.push({ id, type, message });
+            setTimeout(() => {
+                this.removeToast(id);
+            }, duration);
+        },
+        removeToast(id) {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+        }
     }"
+    x-init="
+        window.showToast = (type, message, duration) => addToast(type, message, duration);
+        @if(session('success') && is_string(session('success')) && trim(session('success')) !== '')
+            addToast('success', '{{ addslashes(session('success')) }}');
+        @endif
+        @if(session('status') && is_string(session('status')) && trim(session('status')) !== '')
+            addToast('success', '{{ addslashes(session('status')) }}');
+        @endif
+        @if(session('error') && is_string(session('error')) && trim(session('error')) !== '')
+            addToast('error', '{{ addslashes(session('error')) }}');
+        @endif
+        @if(session('failed') && is_string(session('failed')) && trim(session('failed')) !== '')
+            addToast('error', '{{ addslashes(session('failed')) }}');
+        @endif
+        @if($errors->any())
+            @foreach($errors->all() as $error)
+                addToast('error', '{{ addslashes($error) }}');
+            @endforeach
+        @endif
+    "
     @open-cart.window="isCartOpen = true"
     @open-auth.window="isAuthOpen = true; setTimeout(() => window.initFirebaseGoogleSignIn && window.initFirebaseGoogleSignIn(), 100)"
     @open-review.window="selectedProductForReview = $event.detail"
     @open-review="selectedProductForReview = $event.detail"
-    @cart-added.window="cartNoticeMessage = $event.detail && $event.detail.message ? $event.detail.message : 'Produk berhasil masuk keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 2500)"
-    @cart-add-failed.window="cartNoticeMessage = 'Gagal menambahkan produk ke keranjang'; cartNotice = true; clearTimeout(cartNoticeTimer); cartNoticeTimer = setTimeout(() => cartNotice = false, 3000)"
+    @cart-added.window="addToast('success', $event.detail && $event.detail.message ? $event.detail.message : 'Produk berhasil masuk keranjang')"
+    @cart-add-failed.window="addToast('error', $event.detail && $event.detail.message ? $event.detail.message : 'Gagal menambahkan produk ke keranjang')"
+    @show-toast.window="addToast($event.detail.type, $event.detail.message, $event.detail.duration)"
 >
      <!-- Header Component -->
     @include('frontend.components.header')
@@ -594,26 +540,56 @@
     @include('frontend.components.auth-modal')
     @include('frontend.components.review-modal')
 
-    <div
-        x-show="cartNotice"
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 translate-y-2"
-        x-transition:enter-end="opacity-100 translate-y-0"
-        x-transition:leave="transition ease-in duration-150"
-        x-transition:leave-start="opacity-100 translate-y-0"
-        x-transition:leave-end="opacity-0 translate-y-2"
-        x-cloak
-        class="fixed top-5 right-4 z-[70] w-[calc(100%-2rem)] max-w-sm rounded-2xl border border-brand-gold/30 bg-white p-4 shadow-2xl"
-    >
-        <div class="flex items-start gap-3">
-            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
-                <i class="fa-solid fa-check w-5 h-5"></i>
+    <!-- Global Floating Toast Container -->
+    <div class="fixed top-5 right-4 z-[9999] flex flex-col gap-3 w-[calc(100%-2rem)] max-w-sm pointer-events-none">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div
+                x-show="true"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-2 md:translate-x-4"
+                x-transition:enter-end="opacity-100 translate-y-0 md:translate-x-0"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-2 md:translate-x-4"
+                class="rounded-2xl border bg-white p-4 shadow-2xl flex items-start gap-3 pointer-events-auto"
+                :class="{
+                    'border-green-100 bg-green-50/90': toast.type === 'success',
+                    'border-red-100 bg-red-50/90': toast.type === 'error',
+                    'border-yellow-100 bg-yellow-50/90': toast.type === 'warning',
+                    'border-blue-100 bg-blue-50/90': toast.type === 'info' || !toast.type
+                }"
+            >
+                <!-- Icon -->
+                <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full"
+                    :class="{
+                        'bg-green-100 text-green-700': toast.type === 'success',
+                        'bg-red-100 text-red-700': toast.type === 'error',
+                        'bg-yellow-100 text-yellow-700': toast.type === 'warning',
+                        'bg-blue-100 text-blue-700': toast.type === 'info' || !toast.type
+                    }"
+                >
+                    <i class="fa-solid w-5 h-5 flex items-center justify-center text-sm"
+                        :class="{
+                            'fa-check': toast.type === 'success',
+                            'fa-xmark': toast.type === 'error',
+                            'fa-triangle-exclamation': toast.type === 'warning',
+                            'fa-info': toast.type === 'info' || !toast.type
+                        }"
+                    ></i>
+                </div>
+                <!-- Content -->
+                <div class="min-w-0 flex-1">
+                    <h4 class="font-extrabold text-brand-dark text-sm" 
+                        x-text="toast.type === 'success' ? 'Sukses' : (toast.type === 'error' ? 'Kesalahan' : (toast.type === 'warning' ? 'Peringatan' : 'Informasi'))"
+                    ></h4>
+                    <p class="mt-1 text-sm text-gray-600 font-medium" x-text="toast.message"></p>
+                </div>
+                <!-- Close Button -->
+                <button @click="removeToast(toast.id)" class="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 p-1">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
             </div>
-            <div class="min-w-0 flex-1">
-                <h4 class="font-extrabold text-brand-dark text-sm">Berhasil Masuk Keranjang</h4>
-                <p class="mt-1 text-sm text-gray-600" x-text="cartNoticeMessage"></p>
-            </div>
-        </div>
+        </template>
     </div>
 
     <a 
