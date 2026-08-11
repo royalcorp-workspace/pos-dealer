@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Frontend;
 
+use App\Concerns\BufferCartTrait;
 use App\Http\Controllers\Controller;
 use App\Models\Frontend\Customer\Address;
 use App\Models\Frontend\Customer\Customer;
@@ -24,6 +25,7 @@ use Illuminate\Support\Str;
 
 class CheckoutController extends Controller
 {
+    use BufferCartTrait;
     public function index()
     {
         $buffer = $this->getCurrentBuffer();
@@ -114,10 +116,6 @@ class CheckoutController extends Controller
     {
         $formFields = $request->only(['name', 'email', 'phone', 'address', 'postal_code', 'courier', 'voucher_code', 'selected_address_id', 'sub_district_id']);
 
-        if (!session()->get('is_logged_in')) {
-            $request->session()->put('checkout_form_data', $formFields);
-            return redirect()->route('checkout')->with('show_login', true);
-        }
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -144,24 +142,32 @@ class CheckoutController extends Controller
         $priceProductSettingDiscount = 0.0;
 
         foreach ($cart as $key => $item) {
-            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
-            
-            // 1. Get original price
-            $originalPrice = 0.0;
-            if ($variantId) {
-                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                if ($variantModel) {
-                    $originalPrice = (float) $variantModel->price;
+            $isBundle = ($item['type'] ?? null) === 'bundle';
+            $bundleData = $item['bundle_data'] ?? null;
+
+            if ($isBundle && $bundleData) {
+                $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
+                $variantId = null;
+                $cart[$key]['bundle_data'] = $bundleData;
+            } else {
+                $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+
+                $originalPrice = 0.0;
+                if ($variantId) {
+                    $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                    if ($variantModel) {
+                        $originalPrice = (float) $variantModel->price;
+                    }
                 }
-            }
-            if ($originalPrice <= 0.0) {
-                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                if ($productModel) {
-                    $originalPrice = (float) $productModel->base_price;
+                if ($originalPrice <= 0.0) {
+                    $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                    if ($productModel) {
+                        $originalPrice = (float) $productModel->base_price;
+                    }
                 }
-            }
-            if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['price'];
+                if ($originalPrice <= 0.0) {
+                    $originalPrice = (float) $item['price'];
+                }
             }
 
             $quantity = (int) $item['quantity'];
@@ -353,6 +359,11 @@ class CheckoutController extends Controller
             $productDiscountNominal = $staticPromoDiscountTotal + (float) $resolved['volume_promo_discount'];
             $discountPercent = $originalSubtotal > 0 ? round(($productDiscountNominal / $originalSubtotal) * 100, 2) : 0.0;
 
+            $itemNotesValue = $item['item_note'] ?? ($itemNotes[$item['id']] ?? '');
+            if (($item['type'] ?? null) === 'bundle' && ($item['bundle_data'] ?? null)) {
+                $itemNotesValue = $item['bundle_data'];
+            }
+
             OrderItem::create([
                 'id' => Str::uuid(),
                 'order_id' => $order->id,
@@ -364,7 +375,7 @@ class CheckoutController extends Controller
                 'discount_nominal' => $productDiscountNominal,
                 'discount_percent' => $discountPercent,
                 'total' => max(0, $originalSubtotal - $productDiscountNominal),
-                'item_notes' => $item['item_note'] ?? ($itemNotes[$item['id']] ?? ''),
+                'item_notes' => is_array($itemNotesValue) ? json_encode($itemNotesValue) : $itemNotesValue,
             ]);
         }
 
@@ -446,10 +457,6 @@ class CheckoutController extends Controller
 
     public function payment(Request $request)
     {
-        if (!session()->get('is_logged_in')) {
-            return redirect()->route('home')->with('show_login', true);
-        }
-
         $orderData = session()->get('order_data', []);
         $orderIdFromUrl = $request->query('order_id');
         
@@ -638,6 +645,11 @@ class CheckoutController extends Controller
             return redirect()->back()->with('error', 'Order tidak dapat dibatalkan pada status ini.');
         }
 
+        // Guest users cannot cancel orders (no cancellation right for guests)
+        if (!session()->get('is_logged_in')) {
+            return redirect()->back()->with('error', 'Akun tamu tidak dapat membatalkan order. Hubungi layanan pelanggan kami.');
+        }
+
         $order->update([
             'status' => \App\Models\Frontend\Order::STATUS_CANCELLED,
             'notes' => ($order->notes ? $order->notes . ' | ' : '') . 'Order dibatalkan pelanggan pada ' . now()->format('d/m/Y H:i'),
@@ -662,29 +674,7 @@ class CheckoutController extends Controller
 
         // Restore cart items
         $userId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
-        $customerId = $this->resolveCustomerId();
-        $sessionId = session()->getId();
-
-        $buffer = Buffer::where(function ($q) use ($customerId, $sessionId) {
-                if ($customerId) {
-                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
-                } else {
-                    $q->where('session_id', $sessionId);
-                }
-            })
-            ->first();
-
-        if (!$buffer) {
-            $buffer = Buffer::create([
-                'id' => Str::uuid()->toString(),
-                'customer_id' => $customerId,
-                'session_id' => $sessionId,
-                'customer_name' => session()->get('user')['name'] ?? null,
-                'customer_email' => session()->get('user')['email'] ?? null,
-                'creator' => $userId,
-                'editor' => $userId,
-            ]);
-        }
+        $buffer = $this->findOrCreateBuffer();
 
         foreach ($order->items as $item) {
             $existingItem = BufferItem::where('buffer_id', $buffer->id)
@@ -905,24 +895,26 @@ class CheckoutController extends Controller
 
     private function calculateVoucherDiscountValue(Voucher $voucher, float $eligibleSubtotal, float $shippingCost): float
     {
+        $voucherValue = (float) $voucher->value;
+
         if ($voucher->type == 1) {
             $maxDiscount = ($voucher->max_discount !== null && (float) $voucher->max_discount > 0) ? (float) $voucher->max_discount : PHP_FLOAT_MAX;
-            return min(($eligibleSubtotal * $voucher->value / 100), $maxDiscount);
+            return (float) min(($eligibleSubtotal * $voucherValue / 100), $maxDiscount);
         }
 
         if ($voucher->type == 2) {
-            return min($voucher->value, $eligibleSubtotal);
+            return (float) min($voucherValue, $eligibleSubtotal);
         }
 
         if ($voucher->type == 3) {
-            return min($voucher->value, $shippingCost);
+            return (float) min($voucherValue, $shippingCost);
         }
 
         if ($voucher->type == 4) {
-            return 0; // Bonus produk ditangani terpisah
+            return 0.0; // Bonus produk ditangani terpisah
         }
 
-        return 0;
+        return 0.0;
     }
 
     private function calculatePriceProductSettingDiscount(array $cart, float $cartTotal): float
@@ -1107,97 +1099,49 @@ class CheckoutController extends Controller
         ];
     }
 
-    private function getCurrentBuffer(): ?Buffer
+    public function searchUser(Request $request)
     {
-        $customerId = $this->resolveCustomerId();
-        $sessionId = session()->getId();
-
-        return Buffer::where(function ($q) use ($customerId, $sessionId) {
-                if ($customerId) {
-                    $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
-                } else {
-                    $q->where('session_id', $sessionId);
-                }
-            })
-            ->first();
-    }
-
-    private function getBufferCartArray(Buffer $buffer): array
-    {
-        return $buffer->items()
-            ->with(['product.brand', 'variant'])
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'id' => $item->id,
-                    'product_id' => $item->product_id,
-                    'variant_id' => $item->product_variant_id,
-                    'name' => $item->name,
-                    'brand' => $item->product->brand->name ?? '',
-                    'image' => $item->product->thumbnail_url ?? '',
-                    'price' => (float) $item->unit_price,
-                    'quantity' => (int) $item->quantity,
-                    'item_note' => $item->item_notes ?? '',
-                ];
-            })
-            ->toArray();
-    }
-
-    private function recalculateBuffer(Buffer $buffer): void
-    {
-        $items = $buffer->items()->get();
-        $subtotal = $items->sum(fn($item) => (float) $item->unit_price * (int) $item->quantity);
-        $discount = $items->sum(function ($item) {
-            $itemTotal = (float) $item->unit_price * (int) $item->quantity;
-            $discountNominal = (float) $item->discount_nominal;
-            $discountPercent = $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
-            return $discountNominal + $discountPercent;
-        });
-        $tax = 0;
-        $total = $subtotal - $discount + $tax;
-
-        $buffer->update([
-            'subtotal' => $subtotal,
-            'discount' => $discount,
-            'tax' => $tax,
-            'total' => $total,
-        ]);
-    }
-
-    private function resolveCustomerId(): ?string
-    {
-        if (!session()->get('is_logged_in')) {
-            return null;
+        $term = $request->input('term');
+        if (strlen($term) < 4) {
+            return response()->json([]);
         }
 
-        $user = session()->get('user', []);
-        $userId = $user['id'] ?? $user['sub'] ?? null;
-        $email = $user['email'] ?? null;
+        $customers = Customer::where('email', 'ilike', '%' . $term . '%')
+            ->orWhere('phone', 'ilike', '%' . $term . '%')
+            ->orWhere('name', 'ilike', '%' . $term . '%')
+            ->take(5)
+            ->get();
 
-        if (!$userId) {
-            return null;
+        $results = [];
+        foreach ($customers as $c) {
+            $address = Address::where('user_id', $c->user_id)
+                ->where('deleted', false)
+                ->orderBy('is_primary', 'desc')
+                ->first();
+                
+            $results[] = [
+                'name' => $c->name,
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'address' => $address ? $address->address : '',
+                'sub_district_id' => $address ? $address->sub_district_id : '',
+                'postal_code' => $address ? $address->postal_code : '',
+            ];
         }
 
-        $customer = Customer::where('user_id', $userId)->first();
-
-        if (!$customer && $email) {
-            $customer = Customer::where('email', $email)->first();
-        }
-
-        return $customer?->id;
+        return response()->json($results);
     }
 
     public function checkUser(Request $request)
     {
         $email = $request->input('email');
         $phone = $request->input('phone');
-        
+
         $customer = null;
         if ($email) {
             $customer = Customer::where('email', $email)->first();
         } elseif ($phone) {
             $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
-            // Normalize 0 to 62
             if (str_starts_with($cleanPhone, '0')) {
                 $cleanPhone = '62' . substr($cleanPhone, 1);
             }
@@ -1207,13 +1151,13 @@ class CheckoutController extends Controller
                   ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '+', '') = ?", [$cleanPhone]);
             })->first();
         }
-        
+
         if ($customer) {
             $address = Address::where('user_id', $customer->user_id)
                 ->where('deleted', false)
                 ->orderBy('is_primary', 'desc')
                 ->first();
-                
+
             return response()->json([
                 'registered' => true,
                 'customer' => [
@@ -1226,10 +1170,10 @@ class CheckoutController extends Controller
                     'sub_district_id' => $address->sub_district_id,
                     'city' => $address->city->name ?? ($address->subDistrict->city->name ?? ''),
                     'postal_code' => $address->postal_code,
-                ] : null
+                ] : null,
             ]);
         }
-        
+
         return response()->json(['registered' => false]);
     }
 }

@@ -32,6 +32,10 @@ class User extends Authenticatable
         'firebase_token',
         'email_verified',
         'email_verified_at',
+        'is_guest',
+        'customer_type',
+        'membership_level',
+        'reseller_price_type',
     ];
 
 
@@ -54,6 +58,9 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'is_guest' => 'boolean',
+            'customer_type' => 'integer',
+            'membership_level' => 'string',
         ];
     }
 

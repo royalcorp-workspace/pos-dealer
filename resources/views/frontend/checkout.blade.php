@@ -5,8 +5,8 @@
 
 @section('content')
     @php
-        $cart = session()->get('cart', []);
-        $cartTotal = collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']);
+        $cart = $cart ?? session()->get('cart', []);
+        $cartTotal = $cartTotal ?? collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']);
         $form = $checkoutFormData ?? [];
         $selectedVoucherCodes = array_values(array_unique(array_map('strtoupper', (array) ($selectedVoucherCodes ?? []))));
         if (($selectedVoucher['code'] ?? null) && !in_array(strtoupper($selectedVoucher['code']), $selectedVoucherCodes, true)) {
@@ -98,10 +98,6 @@
                                         </option>
                                     @endforeach
                                 </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">Kota</label>
-                                <input type="text" name="city" id="city-display" value="{{ $defaultCity }}" required class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold bg-gray-50" placeholder="Kota akan terisi otomatis">
                             </div>
                         </div>
                         <div class="mt-4">
@@ -262,7 +258,7 @@
                                                     @if($discountPercent > 0)
                                                         <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountPercent }}% OFF</span>
                                                     @endif
-                                                    <span class="text-xs text-gray-400 line-through">Rp {{ number_format($op * $item['quantity'], 0, ',', '.') }}</span>
+                                                    <span class="text-xs text-gray-500 line-through">Rp {{ number_format($op * $item['quantity'], 0, ',', '.') }}</span>
                                                 </div>
                                             @endif
                                             <span class="font-semibold text-brand-dark">Rp {{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }}</span>
@@ -352,4 +348,117 @@
         @json($savedAddressesSafe)
     </script>
     <script src="{{ asset('js/frontend/checkout.js') }}?v={{ filemtime(public_path('js/frontend/checkout.js')) }}"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const emailInput = document.querySelector('input[name="email"]');
+            const phoneInput = document.querySelector('input[name="phone"]');
+            const nameInput = document.querySelector('input[name="name"]');
+            
+            let searchTimeout = null;
+            
+            function showLoading(inputElement) {
+                let loadingEl = document.getElementById('customer-loading-indicator');
+                if (!loadingEl) {
+                    loadingEl = document.createElement('span');
+                    loadingEl.id = 'customer-loading-indicator';
+                    loadingEl.className = 'absolute right-3 top-1/2 -translate-y-1/2 text-brand-gold text-xs font-semibold animate-pulse bg-white px-1';
+                    loadingEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Checking...';
+                }
+                // Pastikan selalu dipindahkan ke input yang sedang aktif
+                inputElement.parentNode.style.position = 'relative';
+                inputElement.parentNode.appendChild(loadingEl);
+                loadingEl.style.display = 'block';
+            }
+
+            function hideLoading() {
+                const loadingEl = document.getElementById('customer-loading-indicator');
+                if (loadingEl) loadingEl.style.display = 'none';
+            }
+
+            function handleCustomerSearch(e) {
+                const val = e.target.value.trim();
+                
+                if (val.length >= 4) {
+                    showLoading(e.target);
+                    fetch(`/checkout/search-user?term=${encodeURIComponent(val)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            hideLoading();
+                            if (data && data.length > 0) {
+                                // Ambil hasil pertama yang paling cocok
+                                const customer = data[0];
+                                
+                                // Isi otomatis (hanya jika kolom lain masih kosong, atau paksa timpa)
+                                if(emailInput && emailInput !== e.target) { emailInput.value = customer.email; emailInput.dispatchEvent(new Event('input')); }
+                                if(phoneInput && phoneInput !== e.target) { phoneInput.value = customer.phone; phoneInput.dispatchEvent(new Event('input')); }
+                                if(nameInput && nameInput.value === '') { nameInput.value = customer.name; nameInput.dispatchEvent(new Event('input')); }
+                                
+                                if (customer.address) {
+                                    const addrInput = document.querySelector('textarea[name="address"]');
+                                    if(addrInput && addrInput.value === '') { addrInput.value = customer.address; addrInput.dispatchEvent(new Event('input')); }
+                                }
+                                if (customer.postal_code) {
+                                    const postalInput = document.querySelector('input[name="postal_code"]');
+                                    if(postalInput && postalInput.value === '') { postalInput.value = customer.postal_code; postalInput.dispatchEvent(new Event('input')); }
+                                }
+                                if (customer.sub_district_id) {
+                                    const subSelect = document.querySelector('select[name="sub_district_id"]');
+                                    if(subSelect && subSelect.value === '') {
+                                        subSelect.value = customer.sub_district_id;
+                                        subSelect.dispatchEvent(new Event('change'));
+                                        subSelect.dispatchEvent(new Event('input'));
+                                    }
+                                }
+                            }
+                        })
+                        .catch(() => hideLoading());
+                }
+            }
+
+            if (emailInput) {
+                // Gunakan event 'change' agar dipicu saat berpindah kolom
+                emailInput.addEventListener('change', handleCustomerSearch);
+            }
+            if (phoneInput) {
+                phoneInput.addEventListener('change', handleCustomerSearch);
+            }
+            const formInputs = document.querySelectorAll('input[name="email"], input[name="name"], input[name="phone"], textarea[name="address"], input[name="postal_code"], select[name="sub_district_id"]');
+            
+            // 1. Muat ulang data dari sessionStorage jika ada (kecuali jika ada error validasi dari server)
+            const savedFormData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');
+            formInputs.forEach(input => {
+                // Jika input kosong (artinya bukan kembalian error dari server) dan ada data tersimpan
+                if (!input.value && savedFormData[input.name]) {
+                    input.value = savedFormData[input.name];
+                    if (input.name === 'sub_district_id') {
+                        input.dispatchEvent(new Event('change')); // Memicu event change untuk select
+                    }
+                }
+                
+                // 2. Simpan setiap perubahan ke sessionStorage
+                input.addEventListener('input', (e) => {
+                    const currentData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');
+                    currentData[e.target.name] = e.target.value;
+                    sessionStorage.setItem('checkout_form_data', JSON.stringify(currentData));
+                });
+            });
+
+            // 3. Bersihkan memori saat form sukses di-submit (opsional, ditaruh di event submit)
+            const checkoutForm = document.getElementById('checkout-form') || document.querySelector('form');
+            if (checkoutForm) {
+                checkoutForm.addEventListener('submit', () => {
+                    // Kita bisa membiarkannya agar kalau back masih ada, atau menghapusnya:
+                    // sessionStorage.removeItem('checkout_form_data'); 
+                });
+            }
+
+            document.addEventListener('click', function(e) {
+                const dropdown = document.getElementById('customer-suggestions');
+                if (dropdown && !e.target.closest('div.relative')) {
+                    dropdown.style.display = 'none';
+                }
+            });
+        });
+    </script>
 @endsection

@@ -56,6 +56,62 @@ class AuthController extends Controller
             'type' => 'Member'
         ]);
 
+        // Merge guest cart with logged-in user cart
+        $guestSessionId = session()->get('guest_session_id') ?: session()->getId();
+        $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $user->id)->first();
+        if ($customer && $guestSessionId) {
+            $guestBuffer = \App\Models\Frontend\Buffer\Buffer::where('session_id', $guestSessionId)
+                ->whereNull('customer_id')
+                ->first();
+                
+            if ($guestBuffer) {
+                $userBuffer = \App\Models\Frontend\Buffer\Buffer::where('customer_id', $customer->id)->first();
+                if ($userBuffer) {
+                    foreach ($guestBuffer->items as $guestItem) {
+                        $existingItem = \App\Models\Frontend\Buffer\BufferItem::where('buffer_id', $userBuffer->id)
+                            ->where('product_id', $guestItem->product_id)
+                            ->where('product_variant_id', $guestItem->product_variant_id)
+                            ->first();
+                            
+                        if ($existingItem) {
+                            $existingItem->update([
+                                'quantity' => $existingItem->quantity + $guestItem->quantity,
+                                'total' => $existingItem->unit_price * ($existingItem->quantity + $guestItem->quantity)
+                            ]);
+                            $guestItem->delete();
+                        } else {
+                            $guestItem->update([
+                                'buffer_id' => $userBuffer->id
+                            ]);
+                        }
+                    }
+                    $userItems = $userBuffer->items()->get();
+                    $subtotal = $userItems->sum(fn($item) => (float) $item->unit_price * (int) $item->quantity);
+                    $discount = $userItems->sum(function ($item) {
+                        $itemTotal = (float) $item->unit_price * (int) $item->quantity;
+                        $discountNominal = (float) $item->discount_nominal;
+                        $discountPercent = $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
+                        return $discountNominal + $discountPercent;
+                    });
+                    $userBuffer->update([
+                        'subtotal' => $subtotal,
+                        'discount' => $discount,
+                        'total' => $subtotal - $discount,
+                        'session_id' => $guestSessionId,
+                    ]);
+                    $guestBuffer->delete();
+                } else {
+                    $guestBuffer->update([
+                        'customer_id' => $customer->id,
+                        'customer_name' => $customer->name,
+                        'customer_email' => $customer->email,
+                        'creator' => $user->id,
+                        'editor' => $user->id,
+                    ]);
+                }
+            }
+        }
+
         $this->deviceSessions->register($request, $user, $email);
         $revokedCount = $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 

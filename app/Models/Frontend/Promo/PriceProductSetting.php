@@ -35,6 +35,8 @@ class PriceProductSetting extends Model
         'editor',
         'deleted',
         'volume_tiers',
+        'event_id',
+        'bundling_id',
     ];
 
     protected function casts(): array
@@ -63,26 +65,26 @@ class PriceProductSetting extends Model
         parent::boot();
 
         static::addGlobalScope('active', function ($query) {
-            $query->where('is_active', true)
-                ->where('deleted', false)
+            $query->where('price_product_settings.is_active', true)
+                ->where('price_product_settings.deleted', false)
                 ->where(function ($q) {
-                    $q->whereNull('start_date')->orWhere('start_date', '<=', now());
+                    $q->whereNull('price_product_settings.start_date')->orWhere('price_product_settings.start_date', '<=', now());
                 })
                 ->where(function ($q) {
-                    $q->whereNull('end_date')->orWhere('end_date', '>=', now());
+                    $q->whereNull('price_product_settings.end_date')->orWhere('price_product_settings.end_date', '>=', now());
                 });
         });
     }
 
     public function scopeActive($query)
     {
-        return $query->where('is_active', true)
-            ->where('deleted', false)
+        return $query->where('price_product_settings.is_active', true)
+            ->where('price_product_settings.deleted', false)
             ->where(function ($q) {
-                $q->whereNull('start_date')->orWhere('start_date', '<=', now());
+                $q->whereNull('price_product_settings.start_date')->orWhere('price_product_settings.start_date', '<=', now());
             })
             ->where(function ($q) {
-                $q->whereNull('end_date')->orWhere('end_date', '>=', now());
+                $q->whereNull('price_product_settings.end_date')->orWhere('price_product_settings.end_date', '>=', now());
             });
     }
 
@@ -94,6 +96,12 @@ class PriceProductSetting extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'price_product_setting_items', 'price_product_setting_id', 'product_id')
+            ->withPivot('discount_type', 'discount_value');
+    }
+
+    public function bundlings(): BelongsToMany
+    {
+        return $this->belongsToMany(\App\Models\Frontend\ProductsCatalog\ProductBundling::class, 'price_product_setting_items', 'price_product_setting_id', 'bundling_id')
             ->withPivot('discount_type', 'discount_value');
     }
 

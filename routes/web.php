@@ -10,8 +10,10 @@ use App\Http\Controllers\Frontend\HomeController;
 use App\Http\Controllers\Frontend\OrderTrackingController;
 use App\Http\Controllers\Frontend\PageController;
 use App\Http\Controllers\Frontend\PaymentMethodController;
+use App\Http\Controllers\Frontend\ProductBundlingController;
 use App\Http\Controllers\Frontend\ProductCatalogController;
 use App\Http\Controllers\Frontend\ReviewController;
+use App\Http\Controllers\Frontend\WishlistController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -30,6 +32,9 @@ Route::get('/category/{categorySlug}', [ProductCatalogController::class, 'index'
 Route::get('/brands', [PageController::class, 'brands'])->name('brands');
 Route::get('/brands/{brandSlug}', [ProductCatalogController::class, 'index'])->name('brands.show');
 Route::get('/categories', [PageController::class, 'categories'])->name('categories');
+Route::get('/bundling', [ProductBundlingController::class, 'index'])->name('bundling.index');
+Route::get('/bundling/{bundle:slug}', [ProductBundlingController::class, 'show'])->name('bundling.show');
+Route::post('/bundling/add', [ProductBundlingController::class, 'addToCart'])->name('bundling.add-to-cart');
 Route::get('/promos', [PageController::class, 'promos'])->name('promos');
 Route::get('/price-product-settings', [\App\Http\Controllers\Frontend\PriceProductSettingController::class, 'index'])->name('price-product-settings.index');
 Route::get('/price-product-settings/{code}', [\App\Http\Controllers\Frontend\PriceProductSettingController::class, 'show'])->name('price-product-settings.show');
@@ -41,6 +46,16 @@ Route::get('/klaim-garansi', [PageController::class, 'warranty'])->name('warrant
 Route::get('/syarat-dan-ketentuan', [PageController::class, 'terms'])->name('terms');
 Route::get('/kebijakan-privacy', [PageController::class, 'privacy'])->name('privacy');
 Route::get('/how-to-return', [PageController::class, 'returns'])->name('returns');
+
+Route::get('/lang/{locale}', [\App\Http\Controllers\Frontend\LanguageController::class, 'switch'])->name('lang.switch');
+Route::get('/notifications', [\App\Http\Controllers\Frontend\NotificationController::class, 'index'])->name('notifications.index');
+Route::get('/notifications/unread-count', [\App\Http\Controllers\Frontend\NotificationController::class, 'unreadCount'])->name('notifications.unread-count');
+Route::post('/notifications/{notification}/read', [\App\Http\Controllers\Frontend\NotificationController::class, 'markAsRead'])->name('notifications.read');
+Route::post('/notifications/read-all', [\App\Http\Controllers\Frontend\NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+
+Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
+Route::delete('/wishlist/{product}', [WishlistController::class, 'remove'])->name('wishlist.remove');
+Route::get('/wishlist/count', [WishlistController::class, 'count'])->name('wishlist.count');
 
 Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->name('payment-methods');
 
@@ -54,6 +69,7 @@ Route::post('/dashboard/addresses/{id}/primary', [DashboardController::class, 's
 Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.process');
 Route::post('/checkout/check-user', [CheckoutController::class, 'checkUser'])->name('checkout.check-user');
+Route::get('/checkout/search-user', [CheckoutController::class, 'searchUser'])->name('checkout.search-user');
 
 Route::get('/order-preview', [CheckoutController::class, 'orderPreview'])->name('order.preview');
 
@@ -89,7 +105,7 @@ Route::post('/api/expeditions/rates', [ExpeditionIntegrationController::class, '
 
 Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
 Route::post('/voucher/validate', [\App\Http\Controllers\Frontend\VoucherController::class, 'validate'])->name('voucher.validate');
-Route::post('/cart/toggle-wishlist', [CartController::class, 'toggleWishlist'])->name('cart.toggle-wishlist');
+Route::post('/cart/toggle-wishlist', [WishlistController::class, 'toggle'])->name('cart.toggle-wishlist');
 Route::post('/cart/update/{id}', [CartController::class, 'update'])->name('cart.update');
 Route::post('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
 Route::post('/orders/{order}/reorder', [CartController::class, 'reorder'])->name('orders.reorder');

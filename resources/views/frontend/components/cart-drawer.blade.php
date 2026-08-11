@@ -1,5 +1,57 @@
 @php
-    $cart = session()->get('cart', []);
+    $customerId = null;
+    if (session()->get('is_logged_in')) {
+        $user = session()->get('user', []);
+        $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
+        if ($userId) {
+            $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $userId)->first();
+            if (!$customer && $email) {
+                $customer = \App\Models\Frontend\Customer\Customer::where('email', $email)->first();
+            }
+            $customerId = $customer?->id;
+        }
+    }
+    $sessionId = session()->get('guest_session_id', session()->getId());
+    
+    $buffer = \App\Models\Frontend\Buffer\Buffer::where(function ($q) use ($customerId, $sessionId) {
+        if ($customerId) {
+            $q->where('customer_id', $customerId);
+            if ($sessionId) {
+                $q->orWhere('session_id', $sessionId);
+            }
+        } else if ($sessionId) {
+            $q->where('session_id', $sessionId);
+        }
+    })->first();
+
+    $cart = [];
+    if ($buffer) {
+        $cart = $buffer->items()
+            ->with(['product.brand', 'variant'])
+            ->get()
+            ->map(function ($item) {
+                $isBundle = str_starts_with($item->name ?? '', 'BUNDLE_');
+                $bundleNotes = [];
+                if ($isBundle && $item->item_notes) {
+                    $bundleNotes = json_decode($item->item_notes, true) ?? [];
+                }
+                return [
+                    'id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'variant_id' => $item->product_variant_id,
+                    'name' => $item->name,
+                    'brand' => $item->product->brand->name ?? '',
+                    'image' => $item->product->thumbnail_url ?? '',
+                    'price' => (float) $item->unit_price,
+                    'quantity' => (int) $item->quantity,
+                    'item_note' => $item->item_notes ?? '',
+                    'type' => $isBundle ? 'bundle' : 'product',
+                    'bundle_data' => $bundleNotes,
+                ];
+            })
+            ->toArray();
+    }
     $cartItemCount = collect($cart)->sum('quantity');
     $cartTotal = collect($cart)->sum(function($item) {
         return $item['price'] * $item['quantity'];

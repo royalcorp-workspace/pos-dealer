@@ -23,6 +23,8 @@ class Customer extends Model
         'name',
         'email',
         'phone',
+        'customer_type',
+        'membership_level',
         'meta',
         'creator',
         'editor',
@@ -32,6 +34,7 @@ class Customer extends Model
     protected function casts(): array
     {
         return [
+            'customer_type' => 'integer',
             'meta' => 'array',
             'deleted' => 'boolean',
             'created_at' => 'datetime',

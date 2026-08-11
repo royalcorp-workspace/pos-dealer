@@ -5,7 +5,7 @@
         }
     @endphp
     <div class="container mx-auto px-6 py-16 lg:py-20">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 lg:gap-8">
             <!-- Brand Column -->
             <div class="space-y-6">
                 <a href="{{ route('home') }}" class="text-3xl font-extrabold tracking-tight text-white flex items-center gap-2 font-serif">
@@ -17,29 +17,6 @@
                 <p class="text-brand-light/70 max-w-sm leading-relaxed">
                     Toko kasur dan perlengkapan tidur terpercaya. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga.
                 </p>
-                <div class="flex gap-4">
-                    @if($about && $about->social_media)
-                        @php
-                            $socialIcons = [
-                                'facebook' => ['icon' => 'fa-brands fa-facebook-f', 'aria' => 'Facebook'],
-                                'instagram' => ['icon' => 'fa-brands fa-instagram', 'aria' => 'Instagram'],
-                                'twitter' => ['icon' => 'fa-brands fa-x-twitter', 'aria' => 'Twitter'],
-                                'x' => ['icon' => 'fa-brands fa-x-twitter', 'aria' => 'X'],
-                                'linkedin' => ['icon' => 'fa-brands fa-linkedin-in', 'aria' => 'LinkedIn'],
-                                'youtube' => ['icon' => 'fa-brands fa-youtube', 'aria' => 'YouTube'],
-                                'tiktok' => ['icon' => 'fa-brands fa-tiktok', 'aria' => 'TikTok'],
-                                'whatsapp' => ['icon' => 'fa-brands fa-whatsapp', 'aria' => 'WhatsApp'],
-                            ];
-                        @endphp
-                        @foreach($about->social_media as $platform => $url)
-                            @if(!empty($url) && isset($socialIcons[$platform]))
-                                <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="footer-social w-10 h-10 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] hover:shadow-md transition-all" aria-label="{{ $socialIcons[$platform]['aria'] }}">
-                                    <i class="{{ $socialIcons[$platform]['icon'] }} w-5 h-5 footer-social-icon"></i>
-                                </a>
-                            @endif
-                        @endforeach
-                    @endif
-                </div>
             </div>
 
             <!-- Customer Service -->
@@ -111,6 +88,74 @@
                             <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[10px] font-bold text-brand-dark">Master</div>
                         @endforelse
                     </div>
+                </div>
+            </div>
+
+            <!-- Ikuti Kami (Social Media per Brand) -->
+            <div class="space-y-6">
+                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Ikuti Kami</h4>
+                <div class="space-y-4">
+                    @php
+                        $brandsForFooter = \App\Models\Frontend\ProductsCatalog\Brand::where('status', true)->where('deleted', false)->orderBy('sort_order', 'asc')->get();
+                        $socialIcons = [
+                            'facebook' => ['icon' => 'fa-brands fa-facebook-f', 'aria' => 'Facebook'],
+                            'instagram' => ['icon' => 'fa-brands fa-instagram', 'aria' => 'Instagram'],
+                            'twitter' => ['icon' => 'fa-brands fa-x-twitter', 'aria' => 'Twitter'],
+                            'x' => ['icon' => 'fa-brands fa-x-twitter', 'aria' => 'X'],
+                            'linkedin' => ['icon' => 'fa-brands fa-linkedin-in', 'aria' => 'LinkedIn'],
+                            'youtube' => ['icon' => 'fa-brands fa-youtube', 'aria' => 'YouTube'],
+                            'tiktok' => ['icon' => 'fa-brands fa-tiktok', 'aria' => 'TikTok'],
+                            'whatsapp' => ['icon' => 'fa-brands fa-whatsapp', 'aria' => 'WhatsApp'],
+                        ];
+                    @endphp
+
+                    <!-- Corporate IMG Socials -->
+                    <div class="mb-4">
+                        <span class="text-brand-light/90 font-bold block mb-2 text-sm">IMG</span>
+                        <div class="flex gap-2">
+                            @if($about && $about->social_media)
+                                @foreach($about->social_media as $platform => $url)
+                                    @if(!empty($url) && isset($socialIcons[$platform]))
+                                        <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] hover:border-[#c09d6b] transition-all">
+                                            <i class="{{ $socialIcons[$platform]['icon'] }} text-sm"></i>
+                                        </a>
+                                    @endif
+                                @endforeach
+                            @endif
+                        </div>
+                    </div>
+
+                    <!-- Brands Socials -->
+                    @foreach($brandsForFooter as $brand)
+                        @php
+                            $safeName = \Illuminate\Support\Str::slug($brand->name);
+                            $fb = $about->social_media[$safeName . '_facebook'] ?? null;
+                            $ig = $about->social_media[$safeName . '_instagram'] ?? null;
+                            $tk = $about->social_media[$safeName . '_tiktok'] ?? null;
+                            
+                            if (empty($fb) && empty($ig) && empty($tk)) continue;
+                        @endphp
+                        <div class="mb-4">
+                            <span class="text-brand-light/90 font-bold block mb-2 text-sm">{{ $brand->name }}</span>
+                            <div class="flex gap-2">
+                                @if(!empty($fb))
+                                    <a href="{{ $fb }}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] transition-all">
+                                        <i class="fa-brands fa-facebook-f text-sm"></i>
+                                    </a>
+                                @endif
+                                @if(!empty($ig))
+                                    <a href="{{ $ig }}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] transition-all">
+                                        <i class="fa-brands fa-instagram text-sm"></i>
+                                    </a>
+                                @endif
+                                @if(!empty($tk))
+                                    <a href="{{ $tk }}" target="_blank" rel="noopener noreferrer" class="w-8 h-8 rounded-full bg-brand-darker border border-brand-gold/30 flex items-center justify-center text-brand-gold hover:text-white hover:bg-[#c09d6b] transition-all">
+                                        <i class="fa-brands fa-tiktok text-sm"></i>
+                                    </a>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             </div>
         </div>

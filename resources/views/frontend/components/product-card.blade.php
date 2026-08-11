@@ -96,7 +96,7 @@
                 </span>
             @else
                 @if(isset($product['originalPrice']))
-                    <span class="text-sm text-gray-400 line-through decoration-gray-300">
+                    <span class="text-sm text-gray-500 line-through decoration-gray-300">
                         Rp {{ number_format($product['originalPrice'], 0, ',', '.') }}
                     </span>
                 @endif

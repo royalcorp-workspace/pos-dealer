@@ -18,10 +18,10 @@
         $maxPrice = $variantsData->max('price');
         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
         $firstVariantName = $variantsData->first()->variant_name ?? '';
-        $totalStock = $variantsData->sum('stock_quantity');
+        $totalStock = 999;
         $originalPrice = $hasVariants ? (float) $variantsData->first()->price : $basePrice;
         $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalPrice;
-        $staticPromo = \App\Services\StaticPromoService::forProduct($product);
+        $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
         $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
         $displayMaxPrice = $hasMultiplePrices ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
         $promoOriginalPrice = $staticPromo ? $originalPrice : null;
@@ -95,20 +95,7 @@
         ];
         @endphp
     <div class="container mx-auto px-4 md:px-6 py-8">
-        <!-- Breadcrumbs -->
-        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-8 font-sans">
-            <a href="{{ route('home') }}" class="hover:text-brand-dark transition-colors">Home</a>
-            <i class="fa-solid fa-chevron-right w-4 h-4 text-gray-400"></i>
-            <a href="{{ $product->category?->slug ? route('category.show', $product->category->slug) : route('categories') }}" class="hover:text-brand-dark transition-colors">
-                {{ $product->category->name ?? 'Uncategorized' }}
-            </a>
-            <i class="fa-solid fa-chevron-right w-4 h-4 text-gray-400"></i>
-            <a href="{{ $product->brand?->slug ? route('products.index', ['type' => 'brand', 'value' => $product->brand->slug]) : route('brands') }}" class="hover:text-brand-dark transition-colors">
-                {{ $product->brand->name ?? 'Unknown Brand' }}
-            </a>
-            <i class="fa-solid fa-chevron-right w-4 h-4 text-gray-400"></i>
-            <span class="text-brand-dark font-medium truncate">{{ $product->name }}</span>
-        </nav>
+        <!-- Breadcrumbs removed for cleaner aesthetic -->
 
         <div class="flex flex-col lg:flex-row gap-12">
             <!-- Left: Product Images -->
@@ -180,7 +167,7 @@
                     @endphp
                     @if($staticPromo)
                         <div class="flex flex-col gap-1 mb-2">
-                            <span class="text-sm text-gray-400 line-through">
+                            <span class="text-sm text-gray-500 line-through">
                                 Rp {{ number_format($promoOriginalPrice, 0, ',', '.') }}
                                 @if($hasMultiplePrices) - Rp {{ number_format($promoOriginalMaxPrice, 0, ',', '.') }} @endif
                             </span>
@@ -212,7 +199,7 @@
                                         class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 {{ $i === 0 ? 'border-brand-gold bg-brand-light text-brand-dark' : 'border-brand-muted bg-white text-gray-600' }}"
                                     >
                                         {{ $variant->variant_name }}
-                                        @if($variant->stock_quantity <= 0)
+                                        @if(false)
                                             <div class="text-xs text-gray-400 mt-1">Sold Out</div>
                                         @endif
                                     </button>
@@ -248,7 +235,7 @@
                     @endif
 
                     @php
-                        $totalStock = $product->variants->sum('stock_quantity');
+                        $totalStock = 999;
                     @endphp
 
                     <!-- Action Buttons -->
