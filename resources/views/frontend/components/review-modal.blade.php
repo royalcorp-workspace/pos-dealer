@@ -97,7 +97,7 @@
                 </div>
 
                 <div class="flex items-center gap-2 mt-1">
-                    <span class="text-sm text-gray-400 line-through" x-show="product?.originalPrice && product?.originalPrice > product?.price" x-text="'Rp ' + Number(product?.originalPrice).toLocaleString('id-ID')"></span>
+                    <span class="text-sm text-gray-500 line-through" x-show="product?.originalPrice && product?.originalPrice > product?.price" x-text="'Rp ' + Number(product?.originalPrice).toLocaleString('id-ID')"></span>
                     <span class="text-lg font-bold text-brand-darker bg-white px-4 py-2 rounded-lg shadow-sm border border-brand-muted"
                         x-text="product?.isVariable ? 'Rp ' + Number(product?.minPrice).toLocaleString('id-ID') + ' - ' + Number(product?.maxPrice).toLocaleString('id-ID') : 'Rp ' + Number(product?.price).toLocaleString('id-ID')">
                     </span>

@@ -183,11 +183,25 @@ window.toggleWishlist = function (el) {
         },
         body: JSON.stringify({ product_id: productId })
     })
-    .then((r) => r.json())
-    .then((data) => {
+    .then((r) => {
+        return r.json().then(data => ({ status: r.status, ok: r.ok, data }));
+    })
+    .then(({ status, ok, data }) => {
         hideLoading();
-        if (data.success) {
-            const icon = el.querySelector('i');
+        
+        if (status === 401 || data.require_login) {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: data.message || 'Silakan login terlebih dahulu.' } }));
+            window.dispatchEvent(new CustomEvent('open-auth'));
+            return;
+        }
+
+        if (!ok || !data.success) {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Terjadi kesalahan sistem.' } }));
+            return;
+        }
+
+        const icon = el.querySelector('i');
+        if (icon) {
             if (data.in_wishlist) {
                 icon.classList.remove('fa-regular');
                 icon.classList.add('fa-solid', 'text-brand-gold');
@@ -195,11 +209,14 @@ window.toggleWishlist = function (el) {
                 icon.classList.remove('fa-solid', 'text-brand-gold');
                 icon.classList.add('fa-regular');
             }
-
-            updateWishlistBadge(data.in_wishlist ? 1 : -1);
         }
+        updateWishlistBadge(data.in_wishlist ? 1 : -1);
     })
-    .catch((err) => { hideLoading(); console.error('Wishlist error:', err); });
+    .catch((err) => { 
+        hideLoading(); 
+        console.error('Wishlist error:', err); 
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Koneksi terputus atau terjadi kesalahan.' } }));
+    });
 };
 
 function initHeroMotion() {

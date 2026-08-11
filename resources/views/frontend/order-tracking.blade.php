@@ -167,7 +167,7 @@
                                             $discountedPrice = max(0, ($item->total ?? 0) - (($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) - ($item->discount_nominal ?? 0));
                                         @endphp
                                         @if(($item->discount_percent ?? 0) > 0 || ($item->discount_nominal ?? 0) > 0)
-                                            <p class="text-xs text-gray-400 line-through">{{ $formatRupiah($item->total ?? 0) }}</p>
+                                            <p class="text-xs text-gray-500 line-through">{{ $formatRupiah($item->total ?? 0) }}</p>
                                         @endif
                                         @if(($item->discount_percent ?? 0) > 0 && ($item->discount_nominal ?? 0) > 0)
                                             <p class="text-xs text-red-500">-{{ $formatRupiah(($item->total ?? 0) * ($item->discount_percent ?? 0) / 100 + ($item->discount_nominal ?? 0)) }}</p>

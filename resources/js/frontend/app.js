@@ -173,34 +173,34 @@ window.openProductReview = function (event, productId) {
 
 window.toggleWishlist = function (el) {
     const productId = el.dataset.productId;
-    showLoading();
     const routeCartToggleWishlist = document.body.dataset.routeCartToggleWishlist;
-    fetch(routeCartToggleWishlist, {
-        method: 'POST',
-        headers: {
-            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: JSON.stringify({ product_id: productId })
-    })
-    .then((r) => r.json())
-    .then((data) => {
-        hideLoading();
-        if (data.success) {
-            const icon = el.querySelector('i');
-            if (data.in_wishlist) {
-                icon.classList.remove('fa-regular');
-                icon.classList.add('fa-solid', 'text-brand-gold');
-            } else {
-                icon.classList.remove('fa-solid', 'text-brand-gold');
-                icon.classList.add('fa-regular');
-            }
 
-            updateWishlistBadge(data.in_wishlist ? 1 : -1);
-        }
-    })
-    .catch((err) => { hideLoading(); console.error('Wishlist error:', err); });
+    if (routeCartToggleWishlist) {
+        fetch(routeCartToggleWishlist, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ product_id: productId })
+        })
+        .then((r) => r.json())
+        .then((data) => {
+            if (data.success) {
+                const icon = el.querySelector('i');
+                if (data.in_wishlist) {
+                    icon.classList.remove('fa-regular');
+                    icon.classList.add('fa-solid', 'text-brand-gold');
+                } else {
+                    icon.classList.remove('fa-solid', 'text-brand-gold');
+                    icon.classList.add('fa-regular');
+                }
+                window.updateWishlistBadge(data.in_wishlist ? 1 : -1);
+            }
+        })
+        .catch((err) => console.error('Wishlist error:', err));
+    }
 };
 
 function initHeroMotion() {

@@ -37,6 +37,7 @@ class Product extends Model
         'base_price',
         'best_seller',
         'is_new',
+        'is_bundle',
         'sort_order',
         'status',
         'creator',
@@ -50,6 +51,7 @@ class Product extends Model
             'base_price' => 'decimal:2',
             'best_seller' => 'boolean',
             'is_new' => 'boolean',
+            'is_bundle' => 'boolean',
             'sort_order' => 'integer',
             'status' => 'boolean',
             'deleted' => 'boolean',
@@ -104,5 +106,10 @@ class Product extends Model
     {
         return $this->belongsToMany(\App\Models\Frontend\Promo\PriceProductSetting::class, 'price_product_setting_items', 'product_id', 'price_product_setting_id')
             ->withPivot('discount_type', 'discount_value');
+    }
+
+    public function bundlingItems(): HasMany
+    {
+        return $this->hasMany(ProductBundlingItem::class, 'product_id');
     }
 }

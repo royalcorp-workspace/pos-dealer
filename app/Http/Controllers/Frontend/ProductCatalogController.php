@@ -59,6 +59,40 @@ class ProductCatalogController extends Controller
             ->get();
 
         $query = Product::where('deleted', false)
+            ->select('products.*')
+            ->selectRaw('
+                COALESCE(
+                    (SELECT 
+                        CASE 
+                            WHEN ppsi.discount_type = 1 THEN CAST(products.base_price AS numeric) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
+                            ELSE CAST(products.base_price AS numeric) - CAST(ppsi.discount_value AS numeric)
+                        END
+                     FROM price_product_setting_items ppsi
+                     JOIN price_product_settings pps ON pps.id = ppsi.price_product_setting_id
+                     WHERE ppsi.product_id = products.id 
+                       AND ppsi.deleted = false 
+                       AND pps.is_active = true 
+                       AND pps.deleted = false
+                       AND (pps.start_date IS NULL OR pps.start_date <= NOW())
+                       AND (pps.end_date IS NULL OR pps.end_date >= NOW())
+                     LIMIT 1
+                    ),
+                    (SELECT
+                        CASE 
+                            WHEN pps.discount_type = 1 THEN CAST(products.base_price AS numeric) * (1 - CAST(pps.discount_value AS numeric) / 100)
+                            ELSE CAST(products.base_price AS numeric) - CAST(pps.discount_value AS numeric)
+                        END
+                     FROM price_product_settings pps
+                     WHERE pps.scope = 1
+                       AND pps.is_active = true 
+                       AND pps.deleted = false
+                       AND (pps.start_date IS NULL OR pps.start_date <= NOW())
+                       AND (pps.end_date IS NULL OR pps.end_date >= NOW())
+                     LIMIT 1
+                    ),
+                    CAST(products.base_price AS numeric)
+                ) as promo_price
+            ')
             ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
 
         // Apply existing type/value filters
@@ -106,10 +140,10 @@ class ProductCatalogController extends Controller
             });
         }
 
-        // Filter by stock
-        if ($inStock === '1') {
-            $query->whereHas('variants', fn($q) => $q->where('stock_quantity', '>', 0));
-        }
+        // Filter by stock (Bypassed)
+        // if ($inStock === '1') {
+        //     $query->whereHas('variants', fn($q) => $q->where('stock_quantity', '>', 0));
+        // }
 
         // Filter by selected brands (array)
         if (!empty($selectedBrands)) {
@@ -126,7 +160,14 @@ class ProductCatalogController extends Controller
             $query->whereHas('tags', fn($q) => $q->whereIn('slug', $selectedTags));
         }
 
-        $products = $query->orderBy('sort_order')->paginate(12)->withQueryString();
+        $products = $query;
+
+        $sort = $request->query('sort', 'best_seller');
+        $sortExpression = $this->getSortExpression($sort);
+
+        $products = $query->orderByRaw($sortExpression)
+            ->paginate(12)
+            ->withQueryString();
 
         if ($request->ajax() || $request->wantsJson() || $request->has('load_more')) {
             $gridHtml = '';
@@ -151,6 +192,7 @@ class ProductCatalogController extends Controller
             'filterType' => $filterType,
             'filterValue' => $filterValue,
             'filters' => $request->query(),
+            'sort' => $sort,
         ]);
     }
 
@@ -176,5 +218,21 @@ class ProductCatalogController extends Controller
         }
 
         return array_unique($ids);
+    }
+
+    private function getSortExpression(?string $sort): string
+    {
+        return match ($sort) {
+            'price_asc' => 'promo_price ASC, created_at DESC',
+            'price_desc' => 'promo_price DESC, created_at DESC',
+            'newest' => 'created_at DESC',
+            'best_seller' => 'best_seller DESC, created_at DESC',
+            'best_selling' => '(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_items.product_id = products.id) DESC',
+            'oldest' => 'created_at ASC',
+            'name_asc' => 'name ASC',
+            'name_desc' => 'name DESC',
+            'rating' => 'average_rating DESC NULLS LAST, created_at DESC',
+            default => 'best_seller DESC, created_at DESC',
+        };
     }
 }

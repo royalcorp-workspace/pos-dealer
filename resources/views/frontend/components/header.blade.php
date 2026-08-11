@@ -1,13 +1,84 @@
 @php
-    $cart = session()->get('cart', []);
+    $customerId = null;
+    if (session()->get('is_logged_in')) {
+        $user = session()->get('user', []);
+        $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
+        if ($userId) {
+            $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $userId)->first();
+            if (!$customer && $email) {
+                $customer = \App\Models\Frontend\Customer\Customer::where('email', $email)->first();
+            }
+            $customerId = $customer?->id;
+        }
+    }
+    $sessionId = session()->get('guest_session_id', session()->getId());
+    
+    $buffer = \App\Models\Frontend\Buffer\Buffer::where(function ($q) use ($customerId, $sessionId) {
+        if ($customerId) {
+            $q->where('customer_id', $customerId);
+            if ($sessionId) {
+                $q->orWhere('session_id', $sessionId);
+            }
+        } else if ($sessionId) {
+            $q->where('session_id', $sessionId);
+        }
+    })->first();
+
+    $cart = [];
+    if ($buffer) {
+        $cart = $buffer->items()
+            ->with(['product.brand', 'variant'])
+            ->get()
+            ->map(function ($item) {
+                $isBundle = str_starts_with($item->name ?? '', 'BUNDLE_');
+                $bundleNotes = [];
+                if ($isBundle && $item->item_notes) {
+                    $bundleNotes = json_decode($item->item_notes, true) ?? [];
+                }
+                return [
+                    'id' => $item->id,
+                    'product_id' => $item->product_id,
+                    'variant_id' => $item->product_variant_id,
+                    'name' => $item->name,
+                    'brand' => $item->product->brand->name ?? '',
+                    'image' => $item->product->thumbnail_url ?? '',
+                    'price' => (float) $item->unit_price,
+                    'quantity' => (int) $item->quantity,
+                    'item_note' => $item->item_notes ?? '',
+                    'type' => $isBundle ? 'bundle' : 'product',
+                    'bundle_data' => $bundleNotes,
+                ];
+            })
+            ->toArray();
+    }
     $cartItemCount = collect($cart)->sum('quantity');
     $cartTotal = collect($cart)->sum(function($item) {
         return ($item['price'] ?? 0) * ($item['quantity'] ?? 0);
     });
     $isLoggedIn = session()->get('is_logged_in', false);
     $user = session()->get('user');
-    $wishlist = session()->get('wishlist', []);
-    $wishlistCount = count($wishlist);
+             $wishlist = session()->get('wishlist', []);
+            $wishlistCount = count($wishlist);
+
+            if (session()->get('is_logged_in')) {
+                $userId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
+                $wishlistCount = \App\Models\Frontend\ProductsCatalog\Wishlist::where('user_id', $userId)->count();
+            }
+
+    $currentLocale = session()->get('locale', 'id');
+    $unreadNotificationCount = 0;
+    try {
+        $unreadNotificationCount = \App\Models\Frontend\Notification::where('is_active', true)
+            ->where('deleted', false)
+            ->where('is_read', false)
+            ->where(function ($q) {
+                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+            })
+            ->count();
+    } catch (\Throwable $e) {
+        $unreadNotificationCount = 0;
+    }
 
     try {
         $brands = \App\Models\Frontend\ProductsCatalog\Brand::where('deleted', false)
@@ -26,22 +97,22 @@
 
 <header class="w-full bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm font-sans" x-data="{ activeMegaMenu: null }">
     <!-- Top Bar -->
-    <div class="container mx-auto px-4 md:px-6 h-auto py-3 md:h-20 md:py-0 flex flex-wrap md:flex-nowrap items-center justify-between gap-4">
+    <div class="container mx-auto px-4 md:px-6 h-auto py-3 md:h-20 md:py-0 flex flex-nowrap items-center justify-between gap-2 md:gap-4">
         <!-- Logo -->
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3 md:gap-4 flex-shrink-0">
             <button 
-                class="md:hidden text-gray-700 hover:text-brand-gold transition-colors focus:outline-none"
+                class="md:hidden text-gray-700 hover:text-brand-gold transition-colors focus:outline-none relative w-6 h-6 flex-shrink-0"
                 @click="isMobileMenuOpen = !isMobileMenuOpen"
                 aria-label="Buka menu"
             >
                 <!-- menu icon -->
-                <svg x-show="!isMobileMenuOpen" class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg :class="isMobileMenuOpen ? 'opacity-0 scale-50' : 'opacity-100 scale-100'" class="w-6 h-6 absolute inset-0 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <!-- close icon -->
-                <svg x-show="isMobileMenuOpen" x-cloak class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg :class="isMobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50'" class="w-6 h-6 absolute inset-0 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <a href="{{ route('home') }}" class="text-3xl lg:text-4xl font-extrabold tracking-tight text-brand-dark flex items-center gap-2 font-serif text-left">
                 IMG
-                <span class="text-xs lg:text-sm font-sans tracking-widest text-brand-gold-dark uppercase leading-tight ml-2 border-l-2 border-brand-gold pl-2">
+                <span class="hidden md:block text-xs lg:text-sm font-sans tracking-widest text-brand-gold-dark uppercase leading-tight ml-2 border-l-2 border-brand-gold pl-2">
                     International<br/>Mattress Gallery
                 </span>
             </a>
@@ -68,8 +139,8 @@
             <!-- Wishlist Button -->
             <a 
                 id="wishlist-link"
-                href="{{ route('dashboard', ['tab' => 'wishlist']) }}" 
-                class="hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none relative" 
+                href="{{ route('wishlist.index') }}" 
+                class="flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none relative" 
                 aria-label="Wishlist ({{ $wishlistCount }} Produk)"
             >
                 <div class="relative">
@@ -83,11 +154,72 @@
             </a>
 
             <!-- Language Picker -->
-            <button class="hidden sm:flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-brand-gold transition-colors py-1">
-                <i class="fa-solid fa-globe w-4 h-4"></i>
-                <span>ID</span>
-                <i class="fa-solid fa-chevron-down w-3 h-3 text-gray-400"></i>
-            </button>
+            <div x-data="{ open: false }" class="hidden sm:flex items-center relative">
+                <button 
+                    @click="open = !open" 
+                    @click.outside="open = false"
+                    class="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-brand-gold transition-colors py-1 focus:outline-none"
+                >
+                    <span class="text-base leading-none">{{ $currentLocale === 'id' ? '🇮🇩' : '🇬🇧' }}</span>
+                    <span>{{ strtoupper($currentLocale) }}</span>
+                    <i class="fa-solid fa-chevron-down w-3 h-3 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                </button>
+                <div 
+                    x-show="open" 
+                    x-cloak
+                    x-transition
+                    class="absolute top-full right-0 mt-3 bg-white border border-gray-100 rounded-lg shadow-lg py-1 z-50 min-w-[100px]"
+                >
+                    <a href="{{ route('lang.switch', 'id') }}" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-brand-light hover:text-brand-gold transition-colors {{ $currentLocale === 'id' ? 'bg-brand-light text-brand-gold font-medium' : '' }}">
+                        <span class="text-base leading-none">🇮🇩</span> ID
+                    </a>
+                    <a href="{{ route('lang.switch', 'en') }}" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-brand-light hover:text-brand-gold transition-colors {{ $currentLocale === 'en' ? 'bg-brand-light text-brand-gold font-medium' : '' }}">
+                        <span class="text-base leading-none">🇬🇧</span> EN
+                    </a>
+                </div>
+            </div>
+
+            <!-- Notification Bell -->
+            <div x-data="{ open: false }" class="relative">
+                <button 
+                    @click="open = !open; if(open) { fetchNotifications(); }"
+                    @click.outside="open = false"
+                    class="flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none relative"
+                    aria-label="Notifikasi"
+                >
+                    <i class="fa-solid fa-bell w-5 h-5 text-brand-dark"></i>
+                    @if($unreadNotificationCount > 0)
+                        <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center shadow-sm">
+                            {{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}
+                        </span>
+                    @endif
+                </button>
+
+                <div 
+                    x-show="open"
+                    x-cloak
+                    x-transition
+                    x-transition:enter="transition ease-out duration-200 transform"
+                    x-transition:enter-start="opacity-0 scale-95"
+                    x-transition:enter-end="opacity-100 scale-100"
+                    class="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50"
+                >
+                    <div class="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                        <h3 class="font-bold text-sm text-gray-800">Notifikasi</h3>
+                        <button onclick="markAllRead()" class="text-xs text-brand-gold hover:text-brand-gold-dark font-medium">
+                            Tandai Semua Dibaca
+                        </button>
+                    </div>
+                    <div id="notification-list" class="max-h-80 overflow-y-auto">
+                        <div class="p-4 text-center text-sm text-gray-500">Memuat...</div>
+                    </div>
+                    <div class="border-t border-gray-100 px-4 py-2">
+                        <a href="{{ route('notifications.index') }}" class="text-center text-sm text-brand-gold hover:text-brand-gold-dark font-medium block">
+                            Lihat Semua Notifikasi
+                        </a>
+                    </div>
+                </div>
+            </div>
 
             <div class="h-5 w-px bg-gray-200 hidden sm:block"></div>
 
@@ -170,7 +302,7 @@
                     @mouseenter="activeMegaMenu = 'brands'"
                     @mouseleave="activeMegaMenu = null"
                 >
-                <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">Belanja Berdasarkan Brand <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
+                <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">Brand <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
                     
                     <!-- Brands Mega Menu Content -->
                     <div 
@@ -290,18 +422,24 @@
                     </div>
                 </li>
 
-                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                    <a href="{{ route('promos') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                        Promo Spesial
-                    </a>
-                </li>
-                
-                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                    <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                        Bantuan
-                    </a>
-                </li>
-            </ul>
+                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                     <a href="{{ route('promos') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
+                         Promo Spesial
+                     </a>
+                 </li>
+                 
+                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                     <a href="{{ route('bundling.index') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
+                         Bundling Hemat
+                     </a>
+                 </li>
+                 
+                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                     <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
+                         Bantuan
+                     </a>
+                 </li>
+             </ul>
         </div>
     </nav>
 
@@ -355,6 +493,7 @@
             <div class="w-full h-px bg-gray-100"></div>
             <div class="flex flex-col gap-3 py-2">
                 <a href="{{ route('promos') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Promo Spesial</a>
+                <a href="{{ route('bundling.index') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Bundling Hemat</a>
                 <a href="{{ route('blog') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Blog</a>
                 <a href="{{ route('help') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Bantuan</a>
             </div>

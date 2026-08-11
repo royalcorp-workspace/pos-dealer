@@ -91,21 +91,166 @@
         </script>
     @endpush
 
-    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[70vh]" x-data="{ viewMode: localStorage.getItem('productViewMode') || 'grid', isFilterOpen: false }" 
+    <!-- Category / Brand Banner -->
+    @php
+        $targetBannerObj = null;
+        $sliderBanners = collect();
+
+        if ($filterType === 'brand' && isset($brand)) {
+            $targetBannerObj = $brand;
+            $sliderBanners = \App\Models\Frontend\Banner::with('images')->where('type', 3)->where('target_id', $brand->id)->where('is_active', true)->orderBy('sort_order')->get();
+        } elseif ($filterType === 'category' && isset($category)) {
+            $targetBannerObj = $category;
+            $sliderBanners = \App\Models\Frontend\Banner::with('images')->where('type', 4)->where('target_id', $category->id)->where('is_active', true)->orderBy('sort_order')->get();
+        }
+
+        $sliderImages = $sliderBanners->flatMap(function($b) {
+            if ($b->content_type == 2) {
+                return [[ 'is_embed' => true, 'web' => $b->embed_web_content, 'mobile' => $b->embed_mobile_content ?: $b->embed_web_content, 'link' => $b->link_url, 'title' => $b->title ]];
+            } else {
+                if ($b->images->isNotEmpty()) {
+                    return $b->images->map(fn($img) => [
+                        'is_embed' => false,
+                        'web' => $img->image_web_url,
+                        'mobile' => $img->image_mobile_url ?: $img->image_web_url,
+                        'link' => $img->link_url ?: $b->link_url,
+                        'title' => $b->title
+                    ]);
+                } else {
+                    return [[
+                        'is_embed' => false,
+                        'web' => $b->image_web_url,
+                        'mobile' => $b->image_mobile_url ?: $b->image_web_url,
+                        'link' => $b->link_url,
+                        'title' => $b->title
+                    ]];
+                }
+            }
+        })->filter(fn($img) => !empty($img['web']) || !empty($img['is_embed']))->values();
+    @endphp
+
+    @push('jsonld')
+        <script type="application/ld+json">
+            @json($productCollectionSchema)
+        </script>
+        <script type="application/ld+json">
+            @json($productBreadcrumbSchema)
+        </script>
+    @endpush
+
+    <div class="container mx-auto px-4 md:px-6 pt-4 pb-12 md:pt-8 md:pb-12 min-h-[70vh]" x-data="{ viewMode: localStorage.getItem('productViewMode') || 'grid', isFilterOpen: false }" 
         @product-view-mode.window="viewMode = $event.detail" @open-filter.window="isFilterOpen = true">
+        
+        <!-- Category / Brand Banner -->
+        @if($sliderImages->isNotEmpty())
+            <!-- Dynamic Banner Slider -->
+            <section class="w-full mb-8 relative bg-brand-light overflow-hidden rounded-lg shadow-sm font-sans group" x-data="{ activeSlide: 0, slidesCount: {{ count($sliderImages) }} }" x-init="setInterval(() => activeSlide = (activeSlide + 1) % slidesCount, 6000)">
+                <div class="relative w-full h-[180px] sm:h-[250px] md:h-[320px] lg:h-[380px]">
+                    @foreach($sliderImages as $index => $img)
+                        <div x-show="activeSlide === {{ $index }}" 
+                             x-transition:enter="transition ease-out duration-700" 
+                             x-transition:enter-start="opacity-0" 
+                             x-transition:enter-end="opacity-100" 
+                             x-transition:leave="transition ease-in duration-500" 
+                             x-transition:leave-start="opacity-100" 
+                             x-transition:leave-end="opacity-0"
+                             class="absolute inset-0 w-full h-full">
+                            @if($img['link'])
+                                <a href="{{ $img['link'] }}" class="block w-full h-full">
+                            @endif
+                            
+                            @if($img['is_embed'])
+                                <div class="w-full h-full hidden md:block">{!! $img['web'] !!}</div>
+                                <div class="w-full h-full block md:hidden">{!! $img['mobile'] !!}</div>
+                            @else
+                                <div class="w-full h-full hidden md:block">
+                                    <img src="{{ cms_asset($img['web']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover md:object-center">
+                                </div>
+                                <div class="w-full h-full block md:hidden">
+                                    <img src="{{ cms_asset($img['mobile']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover object-center">
+                                </div>
+                            @endif
+
+                            @if($img['link'])
+                                </a>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+                
+                @if(count($sliderImages) > 1)
+                    <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+                        @foreach($sliderImages as $index => $img)
+                            <button @click="activeSlide = {{ $index }}" class="w-2.5 h-2.5 rounded-full transition-all duration-500" :class="activeSlide === {{ $index }} ? 'bg-brand-gold w-6' : 'bg-white/60 hover:bg-white'"></button>
+                        @endforeach
+                    </div>
+                @endif
+            </section>
+        @elseif($targetBannerObj && ($targetBannerObj->banner_web || $targetBannerObj->banner_mobile || $targetBannerObj->embed_web || $targetBannerObj->embed_mobile))
+            <!-- Fallback Banner (Image or Embed) -->
+            <section class="w-full mb-8 relative bg-brand-light rounded-lg shadow-sm overflow-hidden group">
+                @if(($targetBannerObj->banner_type ?? 1) == 2)
+                    @if(!empty($targetBannerObj->banner_link))
+                        <a href="{{ $targetBannerObj->banner_link }}" class="block w-full">
+                    @endif
+
+                    @if($targetBannerObj->embed_web)
+                        <img src="{{ $targetBannerObj->embed_web }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->embed_mobile ? 'hidden md:block' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
+                    @endif
+                    @if($targetBannerObj->embed_mobile)
+                        <img src="{{ $targetBannerObj->embed_mobile }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->embed_web ? 'block md:hidden' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
+                    @endif
+
+                    @if(!empty($targetBannerObj->banner_link))
+                        </a>
+                    @endif
+                @else
+                    @if(!empty($targetBannerObj->banner_link))
+                        <a href="{{ $targetBannerObj->banner_link }}" class="block w-full">
+                    @endif
+
+                    @if($targetBannerObj->banner_web)
+                        <img src="{{ cms_asset($targetBannerObj->banner_web) }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->banner_mobile ? 'hidden md:block' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
+                    @endif
+                    @if($targetBannerObj->banner_mobile)
+                        <img src="{{ cms_asset($targetBannerObj->banner_mobile) }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->banner_web ? 'block md:hidden' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
+                    @endif
+
+                    @if(!empty($targetBannerObj->banner_link))
+                        </a>
+                    @endif
+                @endif
+            </section>
+        @endif
+
         <!-- Listing Header -->
-        <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4 border-b border-gray-100 pb-6 font-sans">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 md:mb-8 gap-4 border-b border-gray-100 pb-4 md:pb-6 font-sans">
             <div>
-                <h1 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif mb-2">
+                <h1 class="text-xl md:text-4xl font-extrabold text-brand-dark tracking-tight font-serif mb-1 md:mb-2 leading-tight">
                     {{ $title }}
                 </h1>
-                <p class="text-gray-500">
-                    Menampilkan {{ $products->total() }} produk
-                </p>
             </div>
-            
-            <div class="flex items-center gap-3">
-                <button @click="$dispatch('open-filter')" class="flex items-center gap-2 px-4 py-2 border border-brand-muted rounded-lg text-sm font-semibold text-brand-dark hover:border-brand-gold transition-colors bg-white focus:outline-none">
+
+            <div class="flex items-center gap-3 font-sans">
+                <form method="GET" action="" class="inline-block" id="sort-form">
+                    @foreach(request()->except('sort') as $key => $val)
+                        @if(is_array($val))
+                            @foreach($val as $item)
+                                <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                            @endforeach
+                        @else
+                            <input type="hidden" name="{{ $key }}" value="{{ $val }}">
+                        @endif
+                    @endforeach
+                    <select name="sort" onchange="this.form.submit()" class="border border-brand-muted rounded-lg px-3 py-2 text-sm font-semibold text-brand-dark bg-white focus:ring-brand-gold focus:border-brand-gold cursor-pointer focus:outline-none">
+                        <option value="best_seller" {{ $sort === 'best_seller' ? 'selected' : '' }}>Best Seller</option>
+                        <option value="best_selling" {{ $sort === 'best_selling' ? 'selected' : '' }}>Terlaris</option>
+                        <option value="price_asc" {{ $sort === 'price_asc' ? 'selected' : '' }}>Harga: Terendah</option>
+                        <option value="price_desc" {{ $sort === 'price_desc' ? 'selected' : '' }}>Harga: Tertinggi</option>
+                        <option value="newest" {{ $sort === 'newest' ? 'selected' : '' }}>Terbaru</option>
+                    </select>
+                </form>
+                <button @click="$dispatch('open-filter')" class="flex items-center gap-2 px-4 py-2 border border-brand-muted rounded-lg text-sm font-semibold text-brand-dark hover:border-brand-gold transition-colors bg-white focus:outline-none xl:hidden">
                     <i class="fa-solid fa-filter w-4 h-4"></i> Filter
                 </button>
                 <div class="flex items-center border border-brand-muted rounded-lg overflow-hidden bg-white">
@@ -196,7 +341,7 @@
                 <!-- Products Grid/List -->
                 @if($products->count() > 0)
                     <!-- Grid View -->
-                    <div x-show="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 catalog-products-grid">
+                    <div x-show="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 catalog-products-grid">
                         @foreach($products as $product)
                             @include('frontend.components.product-card-dynamic', ['product' => $product])
                         @endforeach

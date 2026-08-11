@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class ProductCategory extends Model
 {
@@ -23,12 +24,16 @@ class ProductCategory extends Model
         'name',
         'slug',
         'description',
+        'banner_web',
+        'banner_mobile',
         'sort_order',
         'status',
         'creator',
         'editor',
         'deleted',
     ];
+
+    protected $appends = ['banner_web_url', 'banner_mobile_url'];
 
     protected function casts(): array
     {
@@ -73,5 +78,25 @@ class ProductCategory extends Model
         return Product::where('deleted', false)
             ->whereIn('category_id', array_unique($ids))
             ->count();
+    }
+
+    public function getBannerWebUrlAttribute(): ?string
+    {
+        return $this->banner_web ? asset('storage/' . $this->banner_web) : null;
+    }
+
+    public function getBannerMobileUrlAttribute(): ?string
+    {
+        return $this->banner_mobile ? asset('storage/' . $this->banner_mobile) : null;
+    }
+
+    public function brands(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Brand::class,
+            'brand_category_relations',
+            'category_id',
+            'brand_id'
+        );
     }
 }

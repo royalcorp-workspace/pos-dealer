@@ -15,17 +15,22 @@
                 <a href="{{ route('products.show', $product->slug) }}" class="hover:text-brand-gold">{{ $product->name }}</a>
             </h3>
             <div class="mt-2 space-y-1">
-                @if($product->discount_type === 'percentage' && $product->discount_value > 0)
+                @php
+                    $listDiscountedPrice = null;
+                    $listPctBadge = null;
+                    if ($product->discount_type === 'percentage' && $product->discount_value > 0) {
+                        $listDiscountedPrice = $product->price - ($product->price * $product->discount_value / 100);
+                        $listPctBadge = round($product->discount_value) . '% OFF';
+                    } elseif ($product->discount_type === 'fixed' && $product->discount_value > 0 && $product->price > 0) {
+                        $listDiscountedPrice = $product->price - $product->discount_value;
+                        $listPctBadge = round(($product->discount_value / $product->price) * 100) . '% OFF';
+                    }
+                @endphp
+                @if($listDiscountedPrice !== null)
                     <div class="flex items-center gap-2">
-                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format($product->price - ($product->price * $product->discount_value / 100), 0, ',', '.') }}</span>
+                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format($listDiscountedPrice, 0, ',', '.') }}</span>
                         <span class="text-gray-400 text-sm line-through">Rp {{ number_format($product->price, 0, ',', '.') }}</span>
-                        <span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">{{ $product->discount_value }}% OFF</span>
-                    </div>
-                @elseif($product->discount_type === 'fixed' && $product->discount_value > 0)
-                    <div class="flex items-center gap-2">
-                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format($product->price - $product->discount_value, 0, ',', '.') }}</span>
-                        <span class="text-gray-400 text-sm line-through">Rp {{ number_format($product->price, 0, ',', '.') }}</span>
-                        <span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">DISKON</span>
+                        <span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">{{ $listPctBadge }}</span>
                     </div>
                 @else
                     <span class="font-bold text-brand-dark text-lg">Rp {{ number_format($product->price, 0, ',', '.') }}</span>

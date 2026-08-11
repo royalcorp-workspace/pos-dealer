@@ -6,8 +6,56 @@ use App\Models\Frontend\Promo\PriceProductSetting;
 
 class StaticPromoService
 {
-    public static function forProduct(object $product): ?array
+    public static function forBundling(object $bundle, ?float $basePrice = null): ?array
     {
+        $dbPromo = PriceProductSetting::active()
+            ->whereIn('type', [1, 2])
+            ->whereHas('bundlings', fn($q) => $q->where('products_bundling.id', $bundle->id))
+            ->first();
+
+        if ($dbPromo) {
+            $pivot = $dbPromo->bundlings->first(fn($b) => $b->id === $bundle->id)?->pivot;
+            $discountType = $pivot->discount_type ?? $dbPromo->discount_type;
+            $discountValue = $pivot->discount_value ?? $dbPromo->discount_value;
+            
+            $type = $discountType == 1 ? 'percentage' : 'fixed';
+            return [
+                'discount_type'  => $type,
+                'discount_value' => (float) $discountValue,
+                'code'           => $dbPromo->code,
+                'label'          => self::percentLabel($type, (float) $discountValue, $basePrice),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Compute label always as percentage string.
+     * If discount_type is fixed (nominal), derive percentage from $basePrice.
+     */
+    private static function percentLabel(string $type, float $value, ?float $basePrice = null): string
+    {
+        if ($type === 'percentage') {
+            return round($value) . '%';
+        }
+        // fixed: calculate percent from base price if available
+        if ($basePrice && $basePrice > 0) {
+            $pct = ($value / $basePrice) * 100;
+            return round($pct) . '%';
+        }
+        // fallback: show nominal
+        return number_format($value, 0, ',', '.') . ' off';
+    }
+
+    public static function forProduct(object $product, ?float $basePrice = null): ?array
+    {
+        // Resolve base price if not provided
+        if ($basePrice === null) {
+            $firstVariant = $product->variants->first();
+            $basePrice = $firstVariant ? (float) $firstVariant->price : (float) ($product->base_price ?? 0);
+        }
+
         $dbPromo = PriceProductSetting::active()
             ->whereIn('type', [1, 2])
             ->where('scope', 2)
@@ -20,10 +68,10 @@ class StaticPromoService
             $discountValue = $pivot->discount_value ?? $dbPromo->discount_value;
             $type = $discountType == 1 ? 'percentage' : 'fixed';
             return [
-                'discount_type' => $type,
+                'discount_type'  => $type,
                 'discount_value' => (float) $discountValue,
-                'code' => $dbPromo->code,
-                'label' => ($type === 'percentage' ? (float) $discountValue . '%' : 'Rp ' . number_format((float) $discountValue, 0, ',', '.')),
+                'code'           => $dbPromo->code,
+                'label'          => self::percentLabel($type, (float) $discountValue, $basePrice),
             ];
         }
 
@@ -36,10 +84,10 @@ class StaticPromoService
         if ($globalPromo) {
             $type = $globalPromo->discount_type == 1 ? 'percentage' : 'fixed';
             return [
-                'discount_type' => $type,
+                'discount_type'  => $type,
                 'discount_value' => (float) $globalPromo->discount_value,
-                'code' => $globalPromo->code,
-                'label' => ($type === 'percentage' ? (float) $globalPromo->discount_value . '%' : 'Rp ' . number_format((float) $globalPromo->discount_value, 0, ',', '.')),
+                'code'           => $globalPromo->code,
+                'label'          => self::percentLabel($type, (float) $globalPromo->discount_value, $basePrice),
             ];
         }
 
@@ -100,21 +148,28 @@ class StaticPromoService
 
             $volumeDiscount = max(0.0, ($originalPrice - $promotionalPrice) * $quantity);
         } else {
-            $promoItem = \App\Models\Frontend\Promo\PriceProductSettingItem::where('product_id', $item['product_id'])
-                ->where('deleted', false)
-                ->whereHas('priceProductSetting', function($query) {
-                    $query->whereIn('type', [1, 2])->where('deleted', false);
-                })
-                ->where(function($q) use ($item) {
-                    $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
-                    if ($variantId) {
-                        $q->where('variant_id', $variantId)->orWhereNull('variant_id');
-                    } else {
-                        $q->whereNull('variant_id');
-                    }
-                })
-                ->orderByRaw('CASE WHEN variant_id IS NOT NULL THEN 1 ELSE 2 END')
+            $promoItem = null;
+            $specificSetting = PriceProductSetting::active()
+                ->whereIn('type', [1, 2])
+                ->where('scope', 2)
+                ->whereHas('products', fn($q) => $q->where('products.id', $item['product_id'])->where('products.deleted', false))
                 ->first();
+
+            if ($specificSetting) {
+                $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+                $promoItem = \App\Models\Frontend\Promo\PriceProductSettingItem::where('price_product_setting_id', $specificSetting->id)
+                    ->where('product_id', $item['product_id'])
+                    ->where('deleted', false)
+                    ->where(function($q) use ($variantId) {
+                        if ($variantId) {
+                            $q->where('variant_id', $variantId)->orWhereNull('variant_id');
+                        } else {
+                            $q->whereNull('variant_id');
+                        }
+                    })
+                    ->orderByRaw('CASE WHEN variant_id IS NOT NULL THEN 1 ELSE 2 END')
+                    ->first();
+            }
 
             if ($promoItem) {
                 $discountType = $promoItem->discount_type;

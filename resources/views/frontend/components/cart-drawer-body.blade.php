@@ -1,25 +1,86 @@
 @php
-    $cart = $cart ?? session()->get('cart', []);
+    if (!isset($cart)) {
+        $customerId = null;
+        if (session()->get('is_logged_in')) {
+            $user = session()->get('user', []);
+            $userId = $user['id'] ?? $user['sub'] ?? null;
+            $email = $user['email'] ?? null;
+            if ($userId) {
+                $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $userId)->first();
+                if (!$customer && $email) {
+                    $customer = \App\Models\Frontend\Customer\Customer::where('email', $email)->first();
+                }
+                $customerId = $customer?->id;
+            }
+        }
+        $sessionId = session()->get('guest_session_id', session()->getId());
+        
+        $buffer = \App\Models\Frontend\Buffer\Buffer::where(function ($q) use ($customerId, $sessionId) {
+            if ($customerId) {
+                $q->where('customer_id', $customerId);
+                if ($sessionId) {
+                    $q->orWhere('session_id', $sessionId);
+                }
+            } else if ($sessionId) {
+                $q->where('session_id', $sessionId);
+            }
+        })->first();
+
+        $cart = [];
+        if ($buffer) {
+            $cart = $buffer->items()
+                ->with(['product.brand', 'variant'])
+                ->get()
+                ->map(function ($item) {
+                    $isBundle = str_starts_with($item->name ?? '', 'BUNDLE_');
+                    $bundleNotes = [];
+                    if ($isBundle && $item->item_notes) {
+                        $bundleNotes = json_decode($item->item_notes, true) ?? [];
+                    }
+                    return [
+                        'id' => $item->id,
+                        'product_id' => $item->product_id,
+                        'variant_id' => $item->product_variant_id,
+                        'name' => $item->name,
+                        'brand' => $item->product->brand->name ?? '',
+                        'image' => $item->product->thumbnail_url ?? '',
+                        'price' => (float) $item->unit_price,
+                        'quantity' => (int) $item->quantity,
+                        'item_note' => $item->item_notes ?? '',
+                        'type' => $isBundle ? 'bundle' : 'product',
+                        'bundle_data' => $bundleNotes,
+                    ];
+                })
+                ->toArray();
+        }
+    }
     $cartItemCount = collect($cart)->sum('quantity');
     
     $cartTotal = 0.0;
     foreach($cart as $item) {
-        $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
-        $originalPrice = 0.0;
-        if ($variantId) {
-            $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-            if ($variantModel) {
-                $originalPrice = (float) $variantModel->price;
+        $isBundle = ($item['type'] ?? null) === 'bundle';
+        $bundleData = $item['bundle_data'] ?? null;
+
+        if ($isBundle && $bundleData) {
+            $originalPrice = (float) ($bundleData['bundle_price'] ?? ($bundleData['bundle_total_original'] ?? 0));
+        } else {
+            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+            $originalPrice = 0.0;
+            if ($variantId) {
+                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                if ($variantModel) {
+                    $originalPrice = (float) $variantModel->price;
+                }
             }
-        }
-        if ($originalPrice <= 0.0) {
-            $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-            if ($productModel) {
-                $originalPrice = (float) $productModel->base_price;
+            if ($originalPrice <= 0.0) {
+                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                if ($productModel) {
+                    $originalPrice = (float) $productModel->base_price;
+                }
             }
-        }
-        if ($originalPrice <= 0.0) {
-            $originalPrice = (float) $item['price'];
+            if ($originalPrice <= 0.0) {
+                $originalPrice = (float) $item['price'];
+            }
         }
         $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
         $cartTotal += $res['promotional_price'] * (int) $item['quantity'];
@@ -64,73 +125,95 @@
     <div class="flex-1 p-5 md:p-6 flex flex-col gap-6 overflow-y-auto">
         @foreach($cart as $item)
             @php
-                $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
-                $originalPrice = 0.0;
-                if ($variantId) {
-                    $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                    if ($variantModel) {
-                        $originalPrice = (float) $variantModel->price;
-                    }
-                }
-                if ($originalPrice <= 0.0) {
-                    $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                    if ($productModel) {
-                        $originalPrice = (float) $productModel->base_price;
-                    }
-                }
-                if ($originalPrice <= 0.0) {
-                    $originalPrice = (float) $item['price'];
-                }
+                $isBundle = ($item['type'] ?? null) === 'bundle';
+                $bundleData = $item['bundle_data'] ?? null;
 
+                if ($isBundle && $bundleData) {
+                    $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
+                } else {
+                    $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+                    $originalPrice = 0.0;
+                    if ($variantId) {
+                        $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                        if ($variantModel) {
+                            $originalPrice = (float) $variantModel->price;
+                        }
+                    }
+                    if ($originalPrice <= 0.0) {
+                        $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                        if ($productModel) {
+                            $originalPrice = (float) $productModel->base_price;
+                        }
+                    }
+                    if ($originalPrice <= 0.0) {
+                        $originalPrice = (float) $item['price'];
+                    }
+                }
                 $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
                 $itemPrice = $res['promotional_price'];
 
-                // Fetch applicable volume settings for suggestions
-                $itemVolumeSettings = \App\Models\Frontend\Promo\PriceProductSetting::active()
-                    ->where('type', 2)
-                    ->where(function($q) use ($item) {
-                        $q->where('scope', 1) // Global
-                          ->orWhereHas('products', function($q2) use ($item) {
-                              $q2->where('products.id', $item['product_id']);
-                          });
-                    })
-                    ->with('volumeTiers')
-                    ->get();
-                
                 $promoSuggest = null;
                 $currentQty = (int) $item['quantity'];
+                if (!$isBundle) {
+                    $itemVolumeSettings = \App\Models\Frontend\Promo\PriceProductSetting::active()
+                        ->where('type', 2)
+                        ->where(function($q) use ($item) {
+                            $q->where('scope', 1)
+                              ->orWhereHas('products', function($q2) use ($item) {
+                                  $q2->where('products.id', $item['product_id']);
+                              });
+                        })
+                        ->with('volumeTiers')
+                        ->get();
 
-                foreach ($itemVolumeSettings as $vs) {
-                    $tiers = $vs->volume_tiers ?? [];
-                    if (!empty($tiers) && is_array($tiers)) {
-                        // Sort tiers by min_quantity ascending
-                        usort($tiers, fn($a, $b) => $a['min_quantity'] <=> $b['min_quantity']);
-                        
-                        foreach ($tiers as $tier) {
-                            $minQty = (int) ($tier['min_quantity'] ?? 0);
-                            $discountVal = $tier['discount_value'] ?? 0;
-                            $discountType = $tier['discount_type'] ?? 1;
-                            $discountStr = $discountType == 1 ? $discountVal . '%' : 'Rp ' . number_format((float) $discountVal, 0, ',', '.');
-
-                            if ($currentQty < $minQty) {
-                                $neededQty = $minQty - $currentQty;
-                                $promoSuggest = "Beli {$neededQty} unit lagi untuk dapat diskon {$discountStr}!";
-                                break; // Show the closest next tier
+                    foreach ($itemVolumeSettings as $vs) {
+                        $tiers = $vs->volume_tiers ?? [];
+                        if (!empty($tiers) && is_array($tiers)) {
+                            usort($tiers, fn($a, $b) => $a['min_quantity'] <=> $b['min_quantity']);
+                            foreach ($tiers as $tier) {
+                                $minQty = (int) ($tier['min_quantity'] ?? 0);
+                                $discountVal = $tier['discount_value'] ?? 0;
+                                $discountType = $tier['discount_type'] ?? 1;
+                                $discountStr = $discountType == 1 ? $discountVal . '%' : 'Rp ' . number_format((float) $discountVal, 0, ',', '.');
+                                if ($currentQty < $minQty) {
+                                    $neededQty = $minQty - $currentQty;
+                                    $promoSuggest = "Beli {$neededQty} unit lagi untuk dapat diskon {$discountStr}!";
+                                    break;
+                                }
                             }
                         }
+                        if ($promoSuggest) break;
                     }
-                    if ($promoSuggest) break;
                 }
             @endphp
             <div data-cart-item-id="{{ $item['id'] }}" class="flex gap-4 p-4 border border-gray-100 rounded-2xl bg-white shadow-sm">
                 <div class="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0">
-                    <img src="{{ $item['image'] }}" alt="{{ $item['name'] }}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
+                    <img src="{{ $item['image'] }}" alt="{{ $isBundle ? ($bundleData['bundle_name'] ?? 'Bundle') : $item['name'] }}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
                 </div>
                 <div class="flex flex-col flex-1">
                     <div class="flex justify-between items-start">
                         <div>
-                            <span class="text-[10px] uppercase font-bold tracking-wider text-gray-400">{{ $item['brand'] }}</span>
-                            <h4 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 mt-0.5">{{ $item['name'] }}</h4>
+                            @if($isBundle)
+                                <span class="text-[10px] uppercase font-bold tracking-wider text-purple-600 bg-purple-100 px-2 py-0.5 rounded">Bundling Hemat</span>
+                            @else
+                                <span class="text-[10px] uppercase font-bold tracking-wider text-gray-400">{{ $item['brand'] }}</span>
+                            @endif
+                            <h4 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 mt-0.5">
+                                @if($isBundle)
+                                    {{ $bundleData['bundle_name'] ?? 'Bundle Product' }}
+                                @else
+                                    {{ $item['name'] }}
+                                @endif
+                            </h4>
+                            @if($isBundle && $bundleData)
+                                <div class="mt-1 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                                    @foreach(($bundleData['items'] ?? []) as $bundleItem)
+                                        <div class="flex justify-between">
+                                            <span>{{ $bundleItem['product_name'] ?? 'Produk' }} ({{ $bundleItem['quantity'] ?? 1 }}x)</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
                             @if(isset($item['color_name']) && $item['color_name'])
                                 <div class="text-xs text-brand-gold-dark mt-1 font-medium">Warna: {{ $item['color_name'] }}</div>
                             @endif
@@ -151,45 +234,51 @@
                                 <i class="fa-solid fa-trash-can w-4 h-4"></i>
                             </button>
                         </form>
-                            @if(!empty($item['item_note']))
-                                <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $item['item_note'] }}</p>
-                            @endif
-                        </div>
-                        <div class="mt-auto flex justify-between items-end">
-                        <div class="flex flex-col items-start">
-                            @if($res['volume_discount'] > 0 || $res['static_discount'] > 0)
+                        @if($isBundle)
+                            <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">
+                                Simpan <strong>{{ $bundleData['bundle_name'] ?? '' }}</strong> — dapatkan {{ count($bundleData['items'] ?? []) }} produk dalam paket hemat.
+                            </p>
+                        @elseif(!empty($item['item_note']))
+                            <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $item['item_note'] }}</p>
+                        @endif
+                    </div>
+                    <div class="mt-auto flex justify-between items-end">
+                    <div class="flex flex-col items-start">
+                        @if($res['volume_discount'] > 0 || $res['static_discount'] > 0 || ($isBundle && $bundleData && (float)($bundleData['bundle_price'] ?? 0) > 0))
+                            @php
+                                $discountPercent = $originalPrice > 0 ? round((($originalPrice - $itemPrice) / $originalPrice) * 100) : 0;
+                            @endphp
+                            @if($discountPercent > 0)
                                 <div class="flex items-center gap-1.5 mb-0.5">
-                                    <span class="text-xs line-through text-gray-400 font-semibold">Rp {{ number_format($originalPrice, 0, ',', '.') }}</span>
-                                    @php
-                                        $discountPercent = round((($originalPrice - $itemPrice) / $originalPrice) * 100);
-                                    @endphp
-                                    @if($discountPercent > 0)
-                                        <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountPercent }}% OFF</span>
-                                    @endif
+                                    <span class="text-xs line-through text-gray-400 font-semibold">
+                                        Rp {{ number_format($originalPrice, 0, ',', '.') }}
+                                    </span>
+                                    <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountPercent }}% OFF</span>
                                 </div>
                             @endif
-                            <span class="font-bold text-brand-dark tracking-tight">Rp {{ number_format($itemPrice, 0, ',', '.') }}</span>
-                        </div>
+                        @endif
+                        <span class="font-bold text-brand-dark tracking-tight">Rp {{ number_format($itemPrice, 0, ',', '.') }}</span>
+                    </div>
 
-                        <div class="flex items-center gap-3 bg-brand-light px-2 py-1 rounded-lg border border-brand-muted">
-                            <button
-                                type="button"
-                                onclick="updateCartQuantity(this, -1)"
-                                data-cart-id="{{ $item['id'] }}"
-                                class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none"
-                                aria-label="Kurangi jumlah"
-                            >-</button>
+                    <div class="flex items-center gap-3 bg-brand-light px-2 py-1 rounded-lg border border-brand-muted">
+                        <button
+                            type="button"
+                            onclick="updateCartQuantity(this, -1)"
+                            data-cart-id="{{ $item['id'] }}"
+                            class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none"
+                            aria-label="Kurangi jumlah"
+                        >-</button>
 
-                            <span class="cart-item-quantity text-sm font-semibold text-brand-darker">{{ $item['quantity'] }}</span>
+                        <span class="cart-item-quantity text-sm font-semibold text-brand-darker">{{ $item['quantity'] }}</span>
 
-                            <button
-                                type="button"
-                                onclick="updateCartQuantity(this, 1)"
-                                data-cart-id="{{ $item['id'] }}"
-                                class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none"
-                                aria-label="Tambah jumlah"
-                            >+</button>
-                        </div>
+                        <button
+                            type="button"
+                            onclick="updateCartQuantity(this, 1)"
+                            data-cart-id="{{ $item['id'] }}"
+                            class="text-gray-500 hover:text-brand-gold w-5 h-5 flex items-center justify-center font-medium focus:outline-none"
+                            aria-label="Tambah jumlah"
+                        >+</button>
+                    </div>
                     </div>
                 </div>
             </div>

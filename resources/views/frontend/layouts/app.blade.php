@@ -51,7 +51,8 @@
     <meta name="author" content="{{ $seoAuthor }}">
     <meta name="robots" content="{{ $seoRobots }}">
     <link rel="canonical" href="{{ $seoUrl }}">
-
+    <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
+    <link rel="shortcut icon" type="image/png" href="{{ asset('images/logo.png') }}">
     <meta property="og:locale" content="id_ID">
     <meta property="og:type" content="{{ $seoType }}">
     <meta property="og:title" content="{{ $seoTitle }}">
@@ -445,6 +446,15 @@
     <!-- App JS (deferred to avoid render-blocking; preserved order ensures Alpine loads after) -->
     <script defer src="{{ asset('js/frontend/app.js') }}?v={{ filemtime(public_path('js/frontend/app.js')) }}"></script>
     <script defer src="{{ asset('js/frontend/cart-drawer.js') }}?v={{ filemtime(public_path('js/frontend/cart-drawer.js')) }}"></script>
+    @if(file_exists(public_path('js/frontend/header.js')))
+        <script defer src="{{ asset('js/frontend/header.js') }}?v={{ filemtime(public_path('js/frontend/header.js')) }}"></script>
+    @endif
+    @if(file_exists(public_path('js/frontend/language-switcher.js')))
+        <script defer src="{{ asset('js/frontend/language-switcher.js') }}?v={{ filemtime(public_path('js/frontend/language-switcher.js')) }}"></script>
+    @endif
+    @if(file_exists(public_path('js/frontend/popup-event.js')))
+        <script defer src="{{ asset('js/frontend/popup-event.js') }}?v={{ filemtime(public_path('js/frontend/popup-event.js')) }}"></script>
+    @endif
     <script defer src="{{ asset('js/frontend/auth-modal.js') }}?v={{ filemtime(public_path('js/frontend/auth-modal.js')) }}"></script>
 
     <!-- Alpine.js -->
@@ -464,7 +474,7 @@
     $whatsappUrl = 'https://wa.me/' . $whatsappNumber;
 @endphp
 <body 
-    class="min-h-screen bg-brand-light/30 flex flex-col font-sans text-brand-dark selection:bg-brand-gold/30"
+    class="min-h-screen bg-brand-light/30 flex flex-col font-sans text-brand-dark selection:bg-brand-gold/30 pb-20 md:pb-0"
     data-route-home="{{ route('home') }}"
     data-route-cart-toggle-wishlist="{{ route('cart.toggle-wishlist') }}"
     data-route-cart-add="{{ route('cart.add') }}"
@@ -592,17 +602,54 @@
         </template>
     </div>
 
+    <!-- Mobile Bottom Navigation -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-[90] flex items-center justify-around h-[70px] shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-[env(safe-area-inset-bottom)]">
+        <a href="{{ route('home') }}" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors {{ request()->routeIs('home') ? 'text-brand-gold' : '' }}">
+            <i class="fa-solid fa-house text-[22px] mb-1"></i>
+            <span class="text-[10px] font-medium">Home</span>
+        </a>
+        <a href="{{ route('products.index') }}" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors {{ request()->routeIs('products.*') ? 'text-brand-gold' : '' }}">
+            <i class="fa-solid fa-store text-[22px] mb-1"></i>
+            <span class="text-[10px] font-medium">Shop</span>
+        </a>
+        <button @click="isCartOpen = true" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors relative focus:outline-none">
+            <div class="relative">
+                <i class="fa-solid fa-cart-shopping text-[22px] mb-1"></i>
+                @php
+                    $navCartCount = collect($cart ?? [])->sum('quantity');
+                @endphp
+                @if($navCartCount > 0)
+                    <span class="absolute -top-1.5 -right-2 bg-brand-gold text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
+                        {{ $navCartCount }}
+                    </span>
+                @endif
+            </div>
+            <span class="text-[10px] font-medium">Cart</span>
+        </button>
+        @if(session()->get('is_logged_in'))
+            <a href="{{ route('dashboard') }}" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors {{ request()->routeIs('dashboard') ? 'text-brand-gold' : '' }}">
+                <i class="fa-solid fa-user text-[22px] mb-1"></i>
+                <span class="text-[10px] font-medium">Account</span>
+            </a>
+        @else
+            <button @click="isAuthOpen = true" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors focus:outline-none">
+                <i class="fa-solid fa-user text-[22px] mb-1"></i>
+                <span class="text-[10px] font-medium">Account</span>
+            </button>
+        @endif
+    </nav>
+
     <a 
         href="{{ $whatsappUrl }}"
         target="_blank"
         rel="noopener noreferrer"
-        class="fixed bottom-6 right-6 z-[80] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-2xl transition-transform hover:scale-105 hover:bg-green-600 focus:outline-none focus:ring-4 focus:ring-green-500/30"
+        class="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[80] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-2xl transition-transform hover:scale-105 hover:bg-green-600 focus:outline-none focus:ring-4 focus:ring-green-500/30"
         aria-label="Hubungi kami via WhatsApp"
     >
         <i class="fa-brands fa-whatsapp text-3xl"></i>
     </a>
-
-
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     @stack('scripts')
   </body>

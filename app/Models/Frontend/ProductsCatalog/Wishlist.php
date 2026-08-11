@@ -19,22 +19,26 @@ class Wishlist extends Model
 
     protected $fillable = [
         'user_id',
+        'customer_id',
         'product_id',
+        'session_id',
         'notes',
+        'deleted',
     ];
-
-    protected static function boot(): void
-    {
-        parent::boot();
-        static::addGlobalScope('active', fn($q) => $q->where('deleted', false));
-    }
 
     protected function casts(): array
     {
         return [
+            'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+        static::addGlobalScope('not-deleted', fn($q) => $q->where('wishlists.deleted', false));
     }
 
     public function product(): BelongsTo
