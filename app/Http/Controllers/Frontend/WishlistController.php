@@ -18,14 +18,16 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        if (!$userId) {
+        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+
+        if (!$customerId) {
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json(['wishlists' => [], 'count' => 0]);
             }
             return redirect()->route('home')->with('error', 'Silakan login untuk melihat wishlist.');
         }
 
-        $wishlists = Wishlist::where('user_id', $userId)
+        $wishlists = Wishlist::where('customer_id', $customerId)
             ->with(['product.brand', 'product.category', 'product.images', 'product.variants'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -51,7 +53,9 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        if (!$userId) {
+        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+
+        if (!$customerId) {
             return response()->json([
                 'success' => false,
                 'message' => 'Silakan login untuk menambahkan ke wishlist.',
@@ -59,7 +63,7 @@ class WishlistController extends Controller
             ], 401);
         }
 
-        $wishlist = Wishlist::where('user_id', $userId)
+        $wishlist = Wishlist::where('customer_id', $customerId)
             ->where('product_id', $productId)
             ->first();
 
@@ -70,12 +74,13 @@ class WishlistController extends Controller
             Wishlist::create([
                 'id' => Str::uuid()->toString(),
                 'user_id' => $userId,
+                'customer_id' => $customerId,
                 'product_id' => $productId,
             ]);
             $inWishlist = true;
         }
 
-        $count = Wishlist::where('user_id', $userId)->count();
+        $count = Wishlist::where('customer_id', $customerId)->count();
 
         return response()->json([
             'success' => true,
@@ -90,8 +95,10 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        if ($userId) {
-            Wishlist::where('user_id', $userId)
+        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+
+        if ($customerId) {
+            Wishlist::where('customer_id', $customerId)
                 ->where('product_id', $product->id)
                 ->delete();
         }
@@ -109,11 +116,13 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        if (!$userId) {
+        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+
+        if (!$customerId) {
             return response()->json(['count' => 0]);
         }
 
-        $count = Wishlist::where('user_id', $userId)->count();
+        $count = Wishlist::where('customer_id', $customerId)->count();
 
         return response()->json(['count' => $count]);
     }

@@ -292,13 +292,7 @@
 
                                         <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                             @if(in_array($order->status, [0, 1, 2]))
-                                                <form action="{{ route('order.cancel', $order->id) }}" method="POST" onsubmit="return confirm('Batalkan order ini?');" class="inline">
-                                                    @csrf
-                                                    <button type="submit" class="w-full sm:w-auto px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-extrabold text-sm transition-colors">
-                                                        <i class="fa-solid fa-xmark w-4 h-4 mr-1"></i>
-                                                        Batalkan
-                                                    </button>
-                                                </form>
+                                                <!-- Cancel order button removed per user request -->
                                             @endif
 
                                             @if($order->status === 7)

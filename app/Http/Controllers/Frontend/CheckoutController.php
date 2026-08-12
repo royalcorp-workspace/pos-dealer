@@ -628,34 +628,7 @@ class CheckoutController extends Controller
 
     public function cancelOrder(Request $request, string $orderId)
     {
-        $order = null;
-        if (\Illuminate\Support\Str::isUuid($orderId)) {
-            $order = \App\Models\Frontend\Order::where('id', $orderId)->first();
-        }
-        if (!$order) {
-            $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
-        }
-
-        if (!$order) {
-            return redirect()->back()->with('error', 'Order tidak ditemukan.');
-        }
-
-        // Only allow cancellation before processing
-        if (!in_array($order->status, [\App\Models\Frontend\Order::STATUS_DRAFT, \App\Models\Frontend\Order::STATUS_PENDING_APPROVAL, \App\Models\Frontend\Order::STATUS_CONFIRMED])) {
-            return redirect()->back()->with('error', 'Order tidak dapat dibatalkan pada status ini.');
-        }
-
-        // Guest users cannot cancel orders (no cancellation right for guests)
-        if (!session()->get('is_logged_in')) {
-            return redirect()->back()->with('error', 'Akun tamu tidak dapat membatalkan order. Hubungi layanan pelanggan kami.');
-        }
-
-        $order->update([
-            'status' => \App\Models\Frontend\Order::STATUS_CANCELLED,
-            'notes' => ($order->notes ? $order->notes . ' | ' : '') . 'Order dibatalkan pelanggan pada ' . now()->format('d/m/Y H:i'),
-        ]);
-
-        return redirect()->route('dashboard')->with('success', 'Order berhasil dibatalkan.');
+        return redirect()->back()->with('error', 'Sesuai kebijakan, pesanan yang sudah dibuat tidak dapat dibatalkan.');
     }
 
     public function reorder(string $orderId)
