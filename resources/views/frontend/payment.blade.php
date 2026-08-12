@@ -193,12 +193,7 @@
                     
                     @php $orderId = $orderData['id'] ?? null; @endphp
                     @if($orderId)
-                        <form method="POST" action="{{ route('order.cancel', $orderId) }}" onsubmit="return confirm('Batalkan order ini?');">
-                            @csrf
-                            <button type="submit" class="w-full py-2 text-center text-red-600 hover:text-red-700 transition-colors text-sm">
-                                Batalkan Order
-                            </button>
-                        </form>
+                        <!-- Cancel button removed per requirement -->
                     @endif
                     
                     <a href="{{ route('checkout') }}" class="w-full py-2 text-center text-gray-500 hover:text-brand-dark transition-colors text-sm block mt-2">

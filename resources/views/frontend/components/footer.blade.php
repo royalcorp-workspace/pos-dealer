@@ -60,9 +60,17 @@
                     @if($about && $about->email)
                     <div class="flex items-center gap-3">
                         <i class="fa-solid fa-envelope w-5 h-5 text-brand-gold flex-shrink-0"></i>
-                        <span class="font-medium">{{ $about->email }}</span>
+                        <a href="mailto:{{ $about->email }}" class="hover:text-brand-gold transition-colors font-medium">{{ $about->email }}</a>
                     </div>
                     @endif
+                    <div class="pt-4 border-t border-brand-gold/20 mt-4">
+                        <h5 class="text-white text-sm font-bold mb-2">Jam Operasional</h5>
+                        <ul class="space-y-1 text-sm">
+                            <li class="flex justify-between"><span>Senin - Jumat:</span> <span>08:00 - 17:00</span></li>
+                            <li class="flex justify-between"><span>Sabtu:</span> <span>08:00 - 14:00</span></li>
+                            <li class="flex justify-between"><span>Minggu / Libur:</span> <span class="text-red-400">Tutup</span></li>
+                        </ul>
+                    </div>
                 </div>
                 
                 <div class="pt-4">

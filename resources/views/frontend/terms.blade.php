@@ -21,7 +21,7 @@
                     <p class="mb-4">Dengan menggunakan layanan kami, Anda dianggap telah membaca dan menerima syarat serta ketentuan yang berlaku.</p>
                     
                     <h2 class="text-xl font-bold text-brand-dark mt-6 mb-3">Pemesanan</h2>
-                    <p class="mb-4">Pesanan dapat dibatalkan dalam 24 jam sejak pembayaran dengan syarat produk belum dikirim.</p>
+                    <p class="mb-4">Pesanan yang sudah masuk dan dibayar tidak dapat dibatalkan dengan alasan apapun.</p>
                     
                     <h2 class="text-xl font-bold text-brand-dark mt-6 mb-3">Pengiriman</h2>
                     <p class="mb-4">Kami tidak bertanggung jawab atas keterlambatan pengiriman yang diakibatkan oleh pihak ketiga.</p>

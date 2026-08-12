@@ -119,6 +119,10 @@ Route::get('/products/{product}/reviews', [ReviewController::class, 'filter'])->
 Route::post('/reviews/{review}/report', [ReviewController::class, 'report'])->name('reviews.report');
 
 Route::get('/{tagSlug}', [ProductCatalogController::class, 'index'])->where('tagSlug', '^[a-z0-9-]+(-[a-z0-9-]+)*$')->name('products.by-tag');
+
+Route::get('/chat/messages', [\App\Http\Controllers\Frontend\ChatController::class, 'index'])->name('chat.index');
+Route::post('/chat/messages', [\App\Http\Controllers\Frontend\ChatController::class, 'store'])->name('chat.store');
+
 Route::get('/400', [PageController::class, 'error400'])->name('errors.400');
 Route::get('/403', [PageController::class, 'error403'])->name('errors.403');
 Route::get('/404', [PageController::class, 'error404'])->name('errors.404');

@@ -98,10 +98,32 @@
                         </div>
                         <div>
                             <h4 class="text-sm text-gray-500 mb-1">{{ $contact['label'] }}</h4>
-                            <p class="font-bold text-brand-dark text-lg">{{ $contact['value'] }}</p>
+                            <p class="text-lg font-bold text-brand-dark group-hover:text-brand-gold transition-colors">{{ $contact['value'] }}</p>
                         </div>
                     </a>
                 @endforeach
+            </div>
+
+            <!-- Jam Operasional -->
+            <div class="mt-8 p-6 bg-brand-light/30 border border-brand-muted rounded-2xl">
+                <h3 class="text-lg font-bold text-brand-dark mb-4 flex items-center gap-2">
+                    <i class="fa-regular fa-clock text-brand-gold"></i>
+                    Jam Operasional
+                </h3>
+                <ul class="space-y-3 text-gray-600">
+                    <li class="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <span>Senin - Jumat</span> 
+                        <span class="font-bold text-brand-dark">08:00 - 17:00 WIB</span>
+                    </li>
+                    <li class="flex justify-between items-center border-b border-gray-100 pb-2">
+                        <span>Sabtu</span> 
+                        <span class="font-bold text-brand-dark">08:00 - 14:00 WIB</span>
+                    </li>
+                    <li class="flex justify-between items-center">
+                        <span>Minggu & Hari Libur</span> 
+                        <span class="font-bold text-red-500">Tutup</span>
+                    </li>
+                </ul>
             </div>
         </div>
 
