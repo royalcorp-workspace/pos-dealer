@@ -341,7 +341,7 @@
                 <!-- Products Grid/List -->
                 @if($products->count() > 0)
                     <!-- Grid View -->
-                    <div x-show="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 catalog-products-grid">
+                    <div x-show="viewMode === 'grid'" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 catalog-products-grid">
                         @foreach($products as $product)
                             @include('frontend.components.product-card-dynamic', ['product' => $product])
                         @endforeach
