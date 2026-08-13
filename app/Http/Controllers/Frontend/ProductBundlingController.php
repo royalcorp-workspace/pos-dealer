@@ -51,11 +51,8 @@ class ProductBundlingController extends Controller
             ->withQueryString();
 
         foreach ($bundlings as $bundle) {
-            $bundle->total_original = 0;
-            foreach ($bundle->items as $item) {
-                $unitPrice = $item->variant ? (float) $item->variant->price : ($item->product ? (float) $item->product->base_price : 0);
-                $bundle->total_original += $unitPrice * $item->quantity;
-            }
+            // Use header price as the original normal price
+            $bundle->total_original = (float) $bundle->price;
 
             // Harga dasar Bundling adalah Harga Fix yang diinput Admin
             $bundlePrice = (float) $bundle->price;
@@ -99,12 +96,8 @@ class ProductBundlingController extends Controller
             'items.variant',
         ]);
 
-        // Hitung total harga asli dari isi paketnya
-        $bundle->total_original = 0;
-        foreach ($bundle->items as $item) {
-            $unitPrice = $item->variant ? (float) $item->variant->price : ($item->product ? (float) $item->product->base_price : 0);
-            $bundle->total_original += $unitPrice * $item->quantity;
-        }
+        // Use header price as the original normal price
+        $bundle->total_original = (float) $bundle->price;
 
         // Harga dasar Bundling adalah Harga Fix yang diinput Admin
         $bundlePrice = (float) $bundle->price;

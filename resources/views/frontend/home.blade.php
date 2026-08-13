@@ -1,7 +1,7 @@
 @extends('frontend.layouts.app')
 
-@section('title', 'Toko Kasur Dan Perlengkapan Tidur Premium - IMG')
-@section('meta_description', 'Toko kasur dan perlengkapan tidur premium di IMG. Temukan springbed, kasur, bantal, dan aksesori tidur terbaik dengan garansi resmi, cicilan 0%, serta konsultasi gratis.')
+@section('title', 'Premium Mattress Gallery And Sleep Accessories - IMG')
+@section('meta_description', 'Destinasi perlengkapan tidur eksklusif di IMG. Temukan koleksi kasur premium, bantal, dan aksesori tidur terbaik dengan garansi resmi, cicilan 0%, serta konsultasi gratis.')
 @section('canonical', route('home'))
 @section('og_image', 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800')
 
@@ -31,7 +31,7 @@
             '@id' => route('home') . '#website',
             'name' => 'IMG International Mattress Gallery',
             'url' => route('home'),
-            'description' => 'Toko kasur dan perlengkapan tidur premium dengan koleksi springbed, bantal, dan aksesori tidur berkualitas.',
+            'description' => 'Destinasi perlengkapan tidur eksklusif dengan koleksi kasur premium, bantal, dan aksesori tidur berkualitas.',
             'publisher' => [
                 '@type' => 'Organization',
                 'name' => 'IMG International Mattress Gallery',
@@ -67,12 +67,18 @@
             'itemListElement' => $categoryItems,
         ];
 
-        $featuredOriginalPrice = $featured ? (($featured->variants->isNotEmpty() ? (float) $featured->variants->min('price') : (float) ($featured->base_price ?? 0))) : 0;
+        $featuredValidVariants = $featured ? $featured->variants->where('price', '>', 0) : collect();
+        $featuredIsVariable = $featuredValidVariants->isNotEmpty();
+        
+        $featuredOriginalPrice = $featured ? (($featuredIsVariable ? (float) $featuredValidVariants->min('price') : (float) ($featured->base_price ?? 0))) : 0;
+        
         $featuredPromo = $featured ? \App\Services\StaticPromoService::forProduct($featured, $featuredOriginalPrice) : null;
         $featuredPrice = $featured ? \App\Services\StaticPromoService::discountedPrice($featuredOriginalPrice, $featuredPromo) : 0;
-        $featuredOriginalMaxPrice = $featured && $featured->variants->isNotEmpty() && $featured->variants->max('price') ? (float) $featured->variants->max('price') : $featuredOriginalPrice;
+        
+        $featuredOriginalMaxPrice = $featured && $featuredIsVariable && $featuredValidVariants->max('price') ? (float) $featuredValidVariants->max('price') : $featuredOriginalPrice;
         $featuredPriceMax = $featured ? \App\Services\StaticPromoService::discountedPrice($featuredOriginalMaxPrice, $featuredPromo) : 0;
-        $featuredHasPriceRange = $featured && $featured->variants->isNotEmpty() && $featured->variants->min('price') != $featured->variants->max('price');
+        
+        $featuredHasPriceRange = $featured && $featuredIsVariable && $featuredValidVariants->min('price') != $featuredValidVariants->max('price');
     @endphp
 
     @push('jsonld')

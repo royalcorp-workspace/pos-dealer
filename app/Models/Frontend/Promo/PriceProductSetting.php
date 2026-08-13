@@ -66,26 +66,14 @@ class PriceProductSetting extends Model
 
         static::addGlobalScope('active', function ($query) {
             $query->where('price_product_settings.is_active', true)
-                ->where('price_product_settings.deleted', false)
-                ->where(function ($q) {
-                    $q->whereNull('price_product_settings.start_date')->orWhere('price_product_settings.start_date', '<=', now());
-                })
-                ->where(function ($q) {
-                    $q->whereNull('price_product_settings.end_date')->orWhere('price_product_settings.end_date', '>=', now());
-                });
+                ->where('price_product_settings.deleted', false);
         });
     }
 
     public function scopeActive($query)
     {
         return $query->where('price_product_settings.is_active', true)
-            ->where('price_product_settings.deleted', false)
-            ->where(function ($q) {
-                $q->whereNull('price_product_settings.start_date')->orWhere('price_product_settings.start_date', '<=', now());
-            })
-            ->where(function ($q) {
-                $q->whereNull('price_product_settings.end_date')->orWhere('price_product_settings.end_date', '>=', now());
-            });
+            ->where('price_product_settings.deleted', false);
     }
 
     public function scopeFeatured($query)

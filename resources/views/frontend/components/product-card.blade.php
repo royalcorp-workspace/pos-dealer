@@ -25,6 +25,7 @@
                 loading="lazy"
                 decoding="async"
                 class="product-card__image w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
+                onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';"
             />
         </a>
         

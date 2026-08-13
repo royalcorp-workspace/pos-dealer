@@ -56,6 +56,23 @@ class ProductBundling extends Model
     {
         parent::boot();
         static::addGlobalScope('not-deleted', fn($q) => $q->where('products_bundling.deleted', false));
+        static::addGlobalScope('in_promo', function ($q) {
+            $hasActiveEvent = \App\Models\Frontend\Event::where('is_active', true)
+                ->where('deleted', false)
+                ->where(function($query) {
+                    $query->whereNull('start_date')->orWhere('start_date', '<=', now());
+                })
+                ->where(function($query) {
+                    $query->whereNull('end_date')->orWhere('end_date', '>=', now());
+                })->exists();
+
+            if ($hasActiveEvent) {
+                $q->whereHas('priceProductSettings', function ($q2) {
+                    $q2->where('price_product_settings.is_active', true)
+                       ->where('price_product_settings.deleted', false);
+                });
+            }
+        });
     }
 
     public function getRouteKeyName(): string

@@ -70,7 +70,8 @@ class HomeController extends Controller
 
         foreach ($brands as $brand) {
             $brand->top_promo_products = $brand->products->map(function($product) {
-                $originalPrice = $product->variants->isNotEmpty() ? (float) $product->variants->min('price') : (float) ($product->base_price ?? 0);
+                $validVariants = $product->variants->where('price', '>', 0);
+                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('price') : (float) ($product->base_price ?? 0);
                 $promo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
                 $discountedPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $promo);
                 
@@ -109,11 +110,8 @@ class HomeController extends Controller
             ->get();
 
         foreach ($bundles as $bundle) {
-            $bundle->total_original = 0;
-            foreach ($bundle->items as $item) {
-                $unitPrice = $item->variant ? (float) $item->variant->price : ($item->product ? (float) $item->product->base_price : 0);
-                $bundle->total_original += $unitPrice * $item->quantity;
-            }
+            // Use header price as the original normal price
+            $bundle->total_original = (float) $bundle->price;
 
             // Harga dasar Bundling adalah Harga Fix yang diinput Admin
             $bundlePrice = (float) $bundle->price;

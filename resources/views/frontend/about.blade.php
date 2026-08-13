@@ -1,7 +1,7 @@
 @extends('frontend.layouts.app')
 
 @section('title', 'Tentang Kami - IMG')
-@section('meta_description', 'IMG International Mattress Gallery - Toko kasur dan perlengkapan tidur premium dengan koleksi lengkap springbed, bantal, dan aksesori tidur berkualitas.')
+@section('meta_description', 'IMG International Mattress Gallery - Pusat perlengkapan tidur eksklusif dengan koleksi premium springbed, bantal, dan aksesori tidur berkualitas.')
 @section('canonical', route('about'))
 
 @section('content')
@@ -75,7 +75,7 @@
                 <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark font-serif mb-6">Tentang Kami</h1>
                 
                 <div class="prose prose-lg max-w-none text-gray-600">
-                    <p class="mb-4">IMG International Mattress Gallery adalah toko kasur dan perlengkapan tidur premium yang berkomitmen menyediakan kenyamanan tidur terbaik untuk Anda.</p>
+                    <p class="mb-4">IMG International Mattress Gallery adalah destinasi perlengkapan tidur eksklusif yang berkomitmen menyediakan kenyamanan tidur terbaik untuk Anda.</p>
                     
                     <p class="mb-4">Kami menampilkan koleksi produk dari berbagai brand matras dan perlengkapan tidur terkemuka dunia dengan standar kualitas internasional.</p>
                     

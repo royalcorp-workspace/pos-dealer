@@ -1,11 +1,12 @@
 @props(['product'])
 
 @php
-    $isVariable = $product->variants->isNotEmpty();
+    $validVariants = $product->variants->where('price', '>', 0);
+    $isVariable = $validVariants->isNotEmpty();
     $hasStock = true;
     $isSoldOut = false;
-    $minPrice = $product->variants->min('price');
-    $maxPrice = $product->variants->max('price');
+    $minPrice = $isVariable ? $validVariants->min('price') : null;
+    $maxPrice = $isVariable ? $validVariants->max('price') : null;
     $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) ($product->base_price ?? 0);
     $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
     $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
@@ -63,6 +64,7 @@
                 loading="lazy"
                 decoding="async"
                 class="product-card__image w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
+                onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';"
             />
         </a>
         

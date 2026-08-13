@@ -24,9 +24,10 @@ class ChatController extends Controller
             return response()->json(['success' => false, 'message' => 'Customer not found'], 404);
         }
 
-        $conversation = Conversation::firstOrCreate([
-            'customer_id' => $customer->id,
-        ]);
+        $conversation = Conversation::firstOrCreate(
+            ['customer_id' => $customer->id],
+            ['status' => 'open']
+        );
 
         $messages = $conversation->messages()->orderBy('created_at', 'asc')->get();
 
@@ -54,9 +55,10 @@ class ChatController extends Controller
             return response()->json(['success' => false, 'message' => 'Customer not found'], 404);
         }
 
-        $conversation = Conversation::firstOrCreate([
-            'customer_id' => $customer->id,
-        ]);
+        $conversation = Conversation::firstOrCreate(
+            ['customer_id' => $customer->id],
+            ['status' => 'open']
+        );
 
         $message = $conversation->messages()->create([
             'sender_id' => $customer->id,
