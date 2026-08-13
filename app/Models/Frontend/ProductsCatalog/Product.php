@@ -23,6 +23,31 @@ class Product extends Model
     {
         parent::boot();
         static::addGlobalScope('not-deleted', fn($q) => $q->where('products.deleted', false));
+        static::addGlobalScope('sellable', function ($q) {
+            $q->where(function ($query) {
+                $query->where('products.base_price', '>', 0)
+                      ->orWhereHas('variants', function ($q2) {
+                          $q2->where('price', '>', 0);
+                      });
+            });
+        });
+        static::addGlobalScope('in_promo', function ($q) {
+            $hasActiveEvent = \App\Models\Frontend\Event::where('is_active', true)
+                ->where('deleted', false)
+                ->where(function($query) {
+                    $query->whereNull('start_date')->orWhere('start_date', '<=', now());
+                })
+                ->where(function($query) {
+                    $query->whereNull('end_date')->orWhere('end_date', '>=', now());
+                })->exists();
+
+            if ($hasActiveEvent) {
+                $q->whereHas('priceProductSettings', function ($q2) {
+                    $q2->where('price_product_settings.is_active', true)
+                       ->where('price_product_settings.deleted', false);
+                });
+            }
+        });
     }
 
     protected $fillable = [
@@ -67,9 +92,9 @@ class Product extends Model
 
     protected $appends = ['thumbnail_url'];
 
-    public function getThumbnailUrlAttribute(): ?string
+    public function getThumbnailUrlAttribute(): string
     {
-        return $this->thumbnail ? asset('storage/' . $this->thumbnail) : null;
+        return $this->thumbnail ? asset('storage/' . $this->thumbnail) : asset('images/dummy/header.jpg');
     }
 
     public function brand(): BelongsTo
@@ -91,6 +116,7 @@ class Product extends Model
     {
         return $this->hasMany(ProductVariant::class, 'product_id');
     }
+
 
     public function colors(): HasMany
     {

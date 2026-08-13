@@ -3,11 +3,26 @@
 namespace App\Services;
 
 use App\Models\Frontend\Promo\PriceProductSetting;
+use App\Models\Frontend\Event;
 
 class StaticPromoService
 {
+    private static function hasActiveEvent(): bool
+    {
+        return Event::where('is_active', true)
+            ->where('deleted', false)
+            ->where(function($query) {
+                $query->whereNull('start_date')->orWhere('start_date', '<=', now());
+            })
+            ->where(function($query) {
+                $query->whereNull('end_date')->orWhere('end_date', '>=', now());
+            })->exists();
+    }
     public static function forBundling(object $bundle, ?float $basePrice = null): ?array
     {
+        if (!self::hasActiveEvent()) {
+            return null;
+        }
         $dbPromo = PriceProductSetting::active()
             ->whereIn('type', [1, 2])
             ->whereHas('bundlings', fn($q) => $q->where('products_bundling.id', $bundle->id))
@@ -50,9 +65,12 @@ class StaticPromoService
 
     public static function forProduct(object $product, ?float $basePrice = null): ?array
     {
+        if (!self::hasActiveEvent()) {
+            return null;
+        }
         // Resolve base price if not provided
         if ($basePrice === null) {
-            $firstVariant = $product->variants->first();
+            $firstVariant = $product->variants->where('price', '>', 0)->first();
             $basePrice = $firstVariant ? (float) $firstVariant->price : (float) ($product->base_price ?? 0);
         }
 

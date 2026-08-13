@@ -754,13 +754,8 @@
                 toggleChat() {
                     if (!this.isLoggedIn) {
                         this.isOpen = false;
-                        // Open Auth Modal by finding the parent x-data property
-                        if (typeof isAuthOpen !== 'undefined') {
-                            isAuthOpen = true;
-                        } else {
-                            // Dispatch event if they use events, or manually click login
-                            document.querySelector('body').__x.$data.isAuthOpen = true;
-                        }
+                        // Dispatch custom event to open auth modal
+                        window.dispatchEvent(new CustomEvent('open-auth'));
                     } else {
                         this.isOpen = !this.isOpen;
                         if (this.isOpen) {

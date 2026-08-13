@@ -10,16 +10,17 @@
 @section('content')
     @php
         $variantsData = $product->variants;
+        $validVariants = $variantsData->where('price', '>', 0);
         $colorsData = $product->colors;
-        $hasVariants = $variantsData->isNotEmpty();
+        $hasVariants = $validVariants->isNotEmpty();
         $hasColors = $colorsData->isNotEmpty();
         $basePrice = (float)($product->base_price ?? 0);
-        $minPrice = $variantsData->min('price');
-        $maxPrice = $variantsData->max('price');
+        $minPrice = $hasVariants ? $validVariants->min('price') : null;
+        $maxPrice = $hasVariants ? $validVariants->max('price') : null;
         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
-        $firstVariantName = $variantsData->first()->variant_name ?? '';
+        $firstVariantName = $hasVariants ? $validVariants->first()->variant_name : '';
         $totalStock = 999;
-        $originalPrice = $hasVariants ? (float) $variantsData->first()->price : $basePrice;
+        $originalPrice = $hasVariants ? (float) $validVariants->first()->price : $basePrice;
         $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalPrice;
         $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
         $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
@@ -99,31 +100,45 @@
 
         <div class="flex flex-col lg:flex-row gap-12">
             <!-- Left: Product Images -->
-            <div class="w-full lg:w-1/2 space-y-4">
+            <div class="w-full lg:w-1/2 space-y-4" x-data="{ mainImage: '{{ $product->thumbnail_url }}' }">
                 <div class="aspect-[4/3] bg-brand-light rounded-3xl overflow-hidden border border-brand-muted relative">
                     <img 
-                        src="{{ $product->thumbnail_url ?? 'https://via.placeholder.com/600x400' }}" 
+                        :src="mainImage" 
                         alt="{{ $product->alt_text ?? $product->name }}" 
                         decoding="async"
-                        class="w-full h-full object-cover"
+                        class="w-full h-full object-cover transition-all duration-300"
+                        onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';"
                     />
                     @if($product->best_seller)
-                        <span class="absolute top-4 left-4 bg-brand-dark text-brand-gold text-xs font-bold px-3 py-1.5 rounded-sm uppercase tracking-wider">
+                        <span class="absolute top-4 left-4 bg-brand-dark text-brand-gold text-xs font-bold px-3 py-1.5 rounded-sm uppercase tracking-wider shadow-sm">
                             Best Seller
                         </span>
                     @endif
                 </div>
                 
                 <!-- Image Gallery -->
-                @if($product->images->isNotEmpty())
-                    <div class="grid grid-cols-4 gap-4">
-                        @foreach($product->images as $image)
-                            <div class="aspect-square bg-brand-light rounded-xl overflow-hidden border-2 cursor-pointer border-brand-gold">
-                                <img src="{{ $image->image_url ?? ($image->image ? asset('storage/' . $image->image) : 'https://via.placeholder.com/150') }}" alt="{{ $image->alt_text }}" loading="lazy" decoding="async" class="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity" />
-                            </div>
-                        @endforeach
+                @php
+                    $galleryImages = $product->images->isNotEmpty() 
+                        ? $product->images->map(fn($i) => $i->image_url ?? ($i->image ? asset('storage/' . $i->image) : asset('images/dummy/detail-1.jpg')))->toArray()
+                        : [
+                            asset('images/dummy/detail-1.jpg'),
+                            asset('images/dummy/detail-2.jpg'),
+                            asset('images/dummy/detail-3.jpg'),
+                            asset('images/dummy/detail-4.jpg'),
+                            asset('images/dummy/detail-5.jpg'),
+                            asset('images/dummy/detail-6.jpg'),
+                        ];
+                @endphp
+                <div class="flex overflow-x-auto gap-3 pb-3 snap-x scrollbar-hide">
+                    <div class="aspect-square bg-brand-light rounded-xl overflow-hidden border-2 cursor-pointer flex-shrink-0 w-24 border-brand-gold transition-colors snap-start hover:opacity-100 opacity-100" @click="mainImage = '{{ $product->thumbnail_url }}'; $el.parentNode.querySelectorAll('div').forEach(d => { d.classList.remove('border-brand-gold'); d.classList.add('border-transparent', 'opacity-70'); }); $el.classList.add('border-brand-gold'); $el.classList.remove('border-transparent', 'opacity-70');">
+                        <img src="{{ $product->thumbnail_url }}" alt="Thumbnail" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';" />
                     </div>
-                @endif
+                    @foreach($galleryImages as $index => $image)
+                        <div class="aspect-square bg-brand-light rounded-xl overflow-hidden border-2 cursor-pointer border-transparent flex-shrink-0 w-24 opacity-70 hover:opacity-100 transition-colors snap-start" @click="mainImage = '{{ $image }}'; $el.parentNode.querySelectorAll('div').forEach(d => { d.classList.remove('border-brand-gold'); d.classList.add('border-transparent', 'opacity-70'); }); $el.classList.add('border-brand-gold'); $el.classList.remove('border-transparent', 'opacity-70');">
+                            <img src="{{ $image }}" alt="Gallery {{ $index }}" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='{{ asset('images/dummy/detail-' . (($index % 6) + 1) . '.jpg') }}';" />
+                        </div>
+                    @endforeach
+                </div>
             </div>
 
             <!-- Right: Product Info -->
@@ -160,10 +175,10 @@
                 <!-- Price Card -->
                 <div class="mb-8 p-6 bg-brand-muted/30 rounded-2xl border border-brand-light">
                     @php
-                        $minPrice = $variantsData->min('price');
-                        $maxPrice = $variantsData->max('price');
+                        $minPrice = $hasVariants ? $validVariants->min('price') : null;
+                        $maxPrice = $hasVariants ? $validVariants->max('price') : null;
                         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
-                        $firstVariantName = $variantsData->first()->variant_name ?? '';
+                        $firstVariantName = $hasVariants ? $validVariants->first()->variant_name : '';
                     @endphp
                     @if($staticPromo)
                         <div class="flex flex-col gap-1 mb-2">

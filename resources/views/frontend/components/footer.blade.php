@@ -15,7 +15,7 @@
                     </span>
                 </a>
                 <p class="text-brand-light/70 max-w-sm leading-relaxed">
-                    Toko kasur dan perlengkapan tidur terpercaya. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga.
+                    Destinasi perlengkapan tidur eksklusif. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga dengan koleksi kasur premium pilihan.
                 </p>
             </div>
 

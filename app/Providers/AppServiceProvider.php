@@ -31,7 +31,9 @@ namespace App\Providers {
          */
         public function boot(): void
         {
-            //
+            if (env('APP_ENV') !== 'local' || env('FORCE_HTTPS', true)) {
+                \Illuminate\Support\Facades\URL::forceScheme('https');
+            }
         }
     }
 }
