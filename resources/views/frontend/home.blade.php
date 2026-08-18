@@ -286,11 +286,14 @@
     <!-- Categories / Quick Filter -->
     <section class="py-16">
         <div class="container mx-auto px-6">
-            <div class="flex items-center justify-between mb-8">
+            <div class="flex flex-col md:flex-row items-end justify-between mb-8 gap-4">
                 <div>
                     <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Kategori Pilihan Untuk Kamu') }}</h2>
                     <p class="text-gray-500 mt-1">{{ __('Jelajahi koleksi terlengkap dari brand terkemuka.') }}</p>
                 </div>
+                <a href="{{ route('categories') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
+                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                </a>
             </div>
             
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
@@ -318,9 +321,14 @@
     @if(isset($brands) && $brands->isNotEmpty())
     <section class="py-16 bg-white border-t border-brand-muted/50">
         <div class="container mx-auto px-6">
-            <div class="text-center mb-10">
-                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Pilihan Brand') }}</h2>
-                <p class="text-gray-500 mt-2 text-lg">{{ __('Merek kasur dan perlengkapan tidur pilihan terbaik untuk istirahat Anda.') }}</p>
+            <div class="flex flex-col md:flex-row items-end justify-between mb-10 gap-4">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Pilihan Brand') }}</h2>
+                    <p class="text-gray-500 mt-2 text-lg">{{ __('Merek kasur dan perlengkapan tidur pilihan terbaik untuk istirahat Anda.') }}</p>
+                </div>
+                <a href="{{ route('brands') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
+                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                </a>
             </div>
             
             @php
@@ -354,9 +362,9 @@
                         
                         <!-- Logo & Text Overlay -->
                         <div class="absolute bottom-0 left-0 right-0 p-6 flex flex-col items-start transform group-hover:-translate-y-2 transition-transform duration-500">
-                            <!-- <div class="flex items-center gap-2 text-white/90 text-sm font-semibold group-hover:text-brand-gold transition-colors">
-                                Lihat Koleksi Lengkap <i class="fa-solid fa-arrow-right"></i>
-                            </div> -->
+                            <div class="flex items-center gap-2 text-white/90 text-sm font-semibold group-hover:text-brand-gold transition-colors">
+                                Lihat Produk <i class="fa-solid fa-arrow-right"></i>
+                            </div>
                         </div>
                     </a>
                 @endforeach

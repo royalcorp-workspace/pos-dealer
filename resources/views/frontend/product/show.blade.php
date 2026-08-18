@@ -9,9 +9,12 @@
 
 @section('content')
     @php
-        $variantsData = $product->variants;
+        $variantsData = $product->variants->sortBy(function($variant) {
+            preg_match('/\d+/', $variant->variant_name, $matches);
+            return $matches ? (int) $matches[0] : 999999;
+        })->values();
         $validVariants = $variantsData->where('price', '>', 0);
-        $colorsData = $product->colors;
+        $colorsData = $product->colors->sortBy('color_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $hasVariants = $validVariants->isNotEmpty();
         $hasColors = $colorsData->isNotEmpty();
         $basePrice = (float)($product->base_price ?? 0);

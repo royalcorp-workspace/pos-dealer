@@ -244,8 +244,23 @@
                                 <div class="py-3 border-b">
                                     <div class="flex justify-between items-start gap-3">
                                         <div>
-                                            <span class="font-medium text-brand-dark">{{ $item['name'] }}</span>
-                                            <span class="text-sm text-gray-500"> x {{ $item['quantity'] }}</span>
+                                            @if(($item['type'] ?? '') === 'bundle')
+                                                <div class="font-medium text-brand-dark flex items-center gap-2">
+                                                    {{ $item['bundle_data']['bundle_name'] ?? 'Paket Bundling' }}
+                                                    <span class="text-[10px] font-bold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded uppercase tracking-wider">Bundling</span>
+                                                </div>
+                                                <div class="mt-1.5 pl-2 border-l-2 border-purple-200 text-xs text-gray-500 space-y-1">
+                                                    @foreach(($item['bundle_data']['items'] ?? []) as $bundleItem)
+                                                        <div>
+                                                            &bull; {{ $bundleItem['product_name'] ?? 'Produk' }} ({{ $bundleItem['quantity'] ?? 1 }}x)
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                                <div class="text-sm text-gray-500 mt-2 font-medium">Qty Paket: {{ $item['quantity'] }}</div>
+                                            @else
+                                                <span class="font-medium text-brand-dark">{{ $item['name'] }}</span>
+                                                <span class="text-sm text-gray-500"> x {{ $item['quantity'] }}</span>
+                                            @endif
                                         </div>
                                         <div class="text-right flex flex-col items-end">
                                             @if(($item['original_price'] ?? $item['price']) > $item['price'])

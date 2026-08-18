@@ -212,3 +212,12 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Hapus data form checkout agar pesanan berikutnya tidak terisi data lama secara tidak sengaja
+        sessionStorage.removeItem('checkout_form_data');
+    });
+</script>
+@endpush
