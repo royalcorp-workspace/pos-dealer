@@ -1,15 +1,15 @@
 @extends('frontend.layouts.app')
 
 @php
-    $title = 'Semua Produk';
+    $title = __('Semua Produk');
     if ($filterType === 'brand' && $filterValue) {
         $brand = $brands->first(fn($b) => $b->slug === $filterValue);
-        $title = $brand ? 'Brand: ' . $brand->name : 'Brand: ' . $filterValue;
+        $title = $brand ? __('Brand') . ': ' . $brand->name : __('Brand') . ': ' . $filterValue;
     } elseif ($filterType === 'category' && $filterValue) {
         $category = $categories->first(fn($c) => $c->slug === $filterValue);
-        $title = $category ? 'Kategori: ' . $category->name : 'Kategori: ' . $filterValue;
+        $title = $category ? __('Kategori') . ': ' . $category->name : __('Kategori') . ': ' . $filterValue;
     } elseif ($filterType === 'search' && $filterValue) {
-        $title = 'Pencarian: "' . $filterValue . '"';
+        $title = __('Pencarian') . ': "' . $filterValue . '"';
     }
 @endphp
 
@@ -243,15 +243,15 @@
                         @endif
                     @endforeach
                     <select name="sort" onchange="this.form.submit()" class="border border-brand-muted rounded-lg px-3 py-2 text-sm font-semibold text-brand-dark bg-white focus:ring-brand-gold focus:border-brand-gold cursor-pointer focus:outline-none">
-                        <option value="best_seller" {{ $sort === 'best_seller' ? 'selected' : '' }}>Best Seller</option>
-                        <option value="best_selling" {{ $sort === 'best_selling' ? 'selected' : '' }}>Terlaris</option>
-                        <option value="price_asc" {{ $sort === 'price_asc' ? 'selected' : '' }}>Harga: Terendah</option>
-                        <option value="price_desc" {{ $sort === 'price_desc' ? 'selected' : '' }}>Harga: Tertinggi</option>
-                        <option value="newest" {{ $sort === 'newest' ? 'selected' : '' }}>Terbaru</option>
+                        <option value="best_seller" {{ $sort === 'best_seller' ? 'selected' : '' }}>{{ __('Best Seller') }}</option>
+                        <option value="best_selling" {{ $sort === 'best_selling' ? 'selected' : '' }}>{{ __('Terlaris') }}</option>
+                        <option value="price_asc" {{ $sort === 'price_asc' ? 'selected' : '' }}>{{ __('Harga: Terendah') }}</option>
+                        <option value="price_desc" {{ $sort === 'price_desc' ? 'selected' : '' }}>{{ __('Harga: Tertinggi') }}</option>
+                        <option value="newest" {{ $sort === 'newest' ? 'selected' : '' }}>{{ __('Terbaru') }}</option>
                     </select>
                 </form>
                 <button @click="$dispatch('open-filter')" class="flex items-center gap-2 px-4 py-2 border border-brand-muted rounded-lg text-sm font-semibold text-brand-dark hover:border-brand-gold transition-colors bg-white focus:outline-none xl:hidden">
-                    <i class="fa-solid fa-filter w-4 h-4"></i> Filter
+                    <i class="fa-solid fa-filter w-4 h-4"></i> {{ __('Filter') }}
                 </button>
                 <div class="flex items-center border border-brand-muted rounded-lg overflow-hidden bg-white">
                     <button type="button" @click="viewMode = 'grid'; localStorage.setItem('productViewMode', 'grid')" 
@@ -315,7 +315,7 @@
                             <div class="h-full flex flex-col bg-white shadow-2xl overflow-y-scroll">
                                 <div class="flex items-center justify-between p-5 border-b border-brand-muted bg-brand-light">
                                     <h2 class="text-lg font-bold text-brand-dark flex items-center gap-2">
-                                        <i class="fa-solid fa-filter"></i> Filter Produk
+                                        <i class="fa-solid fa-filter"></i> {{ __('Filter Produk') }}
                                     </h2>
                                     <button 
                                         @click="isFilterOpen = false" 
@@ -341,7 +341,7 @@
                 <!-- Products Grid/List -->
                 @if($products->count() > 0)
                     <!-- Grid View -->
-                    <div x-show="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 catalog-products-grid">
+                    <div x-show="viewMode === 'grid'" class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 catalog-products-grid">
                         @foreach($products as $product)
                             @include('frontend.components.product-card-dynamic', ['product' => $product])
                         @endforeach
@@ -364,7 +364,7 @@
                                     class="group px-8 py-3.5 rounded-full font-bold text-brand-darker bg-white border-2 border-brand-dark shadow-sm transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-xl focus:outline-none"
                                     data-next-page-url="{{ $products->nextPageUrl() }}"
                                 >
-                                    Muat Lebih Banyak <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
+                                    {!! __('Muat Lebih Banyak') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
                                 </button>
                             </div>
                         @endif
@@ -378,13 +378,13 @@
                         <div class="w-20 h-20 bg-brand-light rounded-full flex items-center justify-center text-brand-gold mx-auto mb-4">
                             <i class="fa-solid fa-border-all w-10 h-10"></i>
                         </div>
-                        <h2 class="text-xl font-bold text-brand-dark mb-2">Produk Tidak Ditemukan</h2>
+                        <h2 class="text-xl font-bold text-brand-dark mb-2">{{ __('Produk Tidak Ditemukan') }}</h2>
                         <p class="text-gray-500 max-w-md mx-auto">
-                            Maaf, kami belum memiliki produk untuk {{ $filterType === 'brand' ? 'brand' : ($filterType === 'category' ? 'kategori' : 'pencarian') }} "{{ $filterValue }}". Silakan lihat pilihan lain.
+                            {{ __('Maaf, kami belum memiliki produk untuk :type ":value". Silakan lihat pilihan lain.', ['type' => $filterType === 'brand' ? __('brand') : ($filterType === 'category' ? __('kategori') : __('pencarian')), 'value' => $filterValue]) }}
                         </p>
                         <div class="mt-6">
                             <a href="{{ route('home') }}" class="inline-block px-6 py-2.5 bg-brand-dark text-brand-gold rounded-xl font-bold hover:bg-brand-darker transition-colors">
-                                Kembali ke Home
+                                {{ __('Kembali ke Home') }}
                             </a>
                         </div>
                     </div>

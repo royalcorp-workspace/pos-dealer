@@ -15,35 +15,35 @@
                     </span>
                 </a>
                 <p class="text-brand-light/70 max-w-sm leading-relaxed">
-                    Destinasi perlengkapan tidur eksklusif. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga dengan koleksi kasur premium pilihan.
+                    {{ __('Destinasi perlengkapan tidur eksklusif. Memberikan kualitas istirahat terbaik untuk Anda dan keluarga dengan koleksi kasur premium pilihan.') }}
                 </p>
             </div>
 
             <!-- Customer Service -->
             <div>
-                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Layanan Konsumen</h4>
+                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">{{ __('Layanan Konsumen') }}</h4>
                 <ul class="space-y-4">
-                    <li><a href="{{ route('help') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Pusat Bantuan</a></li>
-                    <li><a href="{{ route('warranty') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Klaim Garansi</a></li>
-                    <li><a href="{{ route('returns') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Cara Pengembalian</a></li>
-                    <li><a href="{{ route('order.tracking') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Informasi Pengiriman</a></li>
+                    <li><a href="{{ route('help') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Pusat Bantuan') }}</a></li>
+                    <li><a href="{{ route('warranty') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Klaim Garansi') }}</a></li>
+                    <li><a href="{{ route('returns') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Cara Pengembalian') }}</a></li>
+                    <li><a href="{{ route('order.tracking') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Informasi Pengiriman') }}</a></li>
                 </ul>
             </div>
 
             <!-- Company Info -->
             <div>
-                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Perusahaan</h4>
+                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">{{ __('Perusahaan') }}</h4>
                 <ul class="space-y-4">
-                    <li><a href="{{ route('about') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Tentang Kami</a></li>
-                    <li><a href="{{ route('terms') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Syarat Dan Ketentuan</a></li>
-                    <li><a href="{{ route('privacy') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Kebijakan Privasi</a></li>
-                    <li><a href="{{ route('blog') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">Blog Dan Tips Tidur</a></li>
+                    <li><a href="{{ route('about') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Tentang Kami') }}</a></li>
+                    <li><a href="{{ route('terms') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Syarat Dan Ketentuan') }}</a></li>
+                    <li><a href="{{ route('privacy') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Kebijakan Privasi') }}</a></li>
+                    <li><a href="{{ route('blog') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Blog Dan Tips Tidur') }}</a></li>
                 </ul>
             </div>
 
             <!-- Contact & Trust -->
             <div class="space-y-6">
-                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Hubungi Kami</h4>
+                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">{{ __('Hubungi Kami') }}</h4>
                 <div class="space-y-4 text-brand-light/70">
                     @if($about && $about->address)
                     <div class="flex items-start gap-3">
@@ -64,17 +64,17 @@
                     </div>
                     @endif
                     <div class="pt-4 border-t border-brand-gold/20 mt-4">
-                        <h5 class="text-white text-sm font-bold mb-2">Jam Operasional</h5>
+                        <h5 class="text-white text-sm font-bold mb-2">{{ __('Jam Operasional') }}</h5>
                         <ul class="space-y-1 text-sm">
-                            <li class="flex justify-between"><span>Senin - Jumat:</span> <span>08:00 - 17:00</span></li>
-                            <li class="flex justify-between"><span>Sabtu:</span> <span>08:00 - 14:00</span></li>
-                            <li class="flex justify-between"><span>Minggu / Libur:</span> <span class="text-red-400">Tutup</span></li>
+                            <li class="flex justify-between"><span>{{ __('Senin - Jumat:') }}</span> <span>08:00 - 17:00</span></li>
+                            <li class="flex justify-between"><span>{{ __('Sabtu:') }}</span> <span>08:00 - 14:00</span></li>
+                            <li class="flex justify-between"><span>{{ __('Minggu / Libur:') }}</span> <span class="text-red-400">{{ __('Tutup') }}</span></li>
                         </ul>
                     </div>
                 </div>
                 
                 <div class="pt-4">
-                    <h4 class="font-bold text-brand-gold mb-4 uppercase tracking-wider text-sm">Metode Pembayaran</h4>
+                    <h4 class="font-bold text-brand-gold mb-4 uppercase tracking-wider text-sm">{{ __('Metode Pembayaran') }}</h4>
                     <div class="flex flex-wrap gap-2">
                         @php
                             $paymentMethods = \App\Models\PaymentMethod::active()->orderBy('sort_order')->get();
@@ -101,7 +101,7 @@
 
             <!-- Ikuti Kami (Social Media per Brand) -->
             <div class="space-y-6">
-                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">Ikuti Kami</h4>
+                <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">{{ __('Ikuti Kami') }}</h4>
                 <div class="space-y-4">
                     @php
                         $brandsForFooter = \App\Models\Frontend\ProductsCatalog\Brand::where('status', true)->where('deleted', false)->orderBy('sort_order', 'asc')->get();
@@ -169,9 +169,9 @@
         </div>
         
         <div class="border-t border-brand-gold/20 mt-16 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p class="text-brand-light/50 text-sm font-medium">&copy; {{ date('Y') }} IMG (International Mattress Gallery). Hak Cipta Dilindungi.</p>
+            <p class="text-brand-light/50 text-sm font-medium">&copy; {{ date('Y') }} IMG (International Mattress Gallery). {{ __('Hak Cipta Dilindungi.') }}</p>
             <div class="flex gap-2 text-brand-light/50 text-sm">
-                <span>Didesain dengan ❤️ untuk tidur yang lebih baik.</span>
+                <span>{{ __('Didesain dengan ❤️ untuk tidur yang lebih baik.') }}</span>
             </div>
         </div>
     </div>

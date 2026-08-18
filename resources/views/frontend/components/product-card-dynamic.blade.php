@@ -72,27 +72,27 @@
         <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 flex flex-col gap-1 sm:gap-2 z-10">
             @if($staticPromo)
                 <span class="bg-red-600 text-white text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                    Diskon {{ $staticPromo['label'] }}
+                    {{ __('Diskon') }} {{ $staticPromo['label'] }}
                 </span>
             @endif
             @if($product->best_seller)
                 <span class="bg-brand-dark text-white text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                    Best Seller
+                    {{ __('Best Seller') }}
                 </span>
             @endif
             @if($product->is_new)
                 <span class="bg-brand-gold text-brand-dark text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                    New
+                    {{ __('New') }}
                 </span>
             @endif
             @if($product->is_bundle)
                 <span class="bg-purple-600 text-white text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                    Bundling Hemat
+                    {{ __('Bundling Hemat') }}
                 </span>
             @endif
             @if($isSoldOut)
                 <span class="bg-gray-800 text-white text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                    Sold Out
+                    {{ __('Sold Out') }}
                 </span>
             @endif
         </div>
@@ -156,7 +156,7 @@
                 <svg class="w-3 sm:w-4 h-3 sm:h-4 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>
             </div>
             <span class="text-xs sm:text-sm font-medium text-gray-700">{{ $reviewPayload['rating'] }}</span>
-            <span class="text-[10px] sm:text-xs text-gray-500 hover:text-brand-gold-dark underline-offset-2 hover:underline">({{ $reviewPayload['reviewsCount'] }} Ulasan)</span>
+            <span class="text-[10px] sm:text-xs text-gray-500 hover:text-brand-gold-dark underline-offset-2 hover:underline">({{ $reviewPayload['reviewsCount'] }} {{ __('Ulasan') }})</span>
         </div>
 
         <!-- Pricing -->
@@ -183,14 +183,14 @@
                     disabled
                     class="w-full py-2.5 rounded-xl font-bold text-sm flex justify-center items-center gap-2 bg-gray-100 text-gray-400 cursor-not-allowed"
                 >
-                    Sold Out
+                    {{ __('Sold Out') }}
                 </button>
             @elseif($isVariable)
                 <a 
                     href="{{ route('products.show', $product->slug) }}"
                     class="product-card__btn w-full py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-xs sm:text-sm flex justify-center items-center gap-2 bg-white border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white group-hover:bg-brand-dark group-hover:text-white shadow-sm transition-all duration-300 text-center"
                 >
-                    Pilih Opsi
+                    {{ __('Pilih Opsi') }}
                 </a>
             @else
                 <form action="{{ route('cart.add') }}" method="POST">
@@ -202,7 +202,7 @@
                         class="product-card__btn w-full py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-sm flex justify-center items-center gap-1.5 bg-white border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white group-hover:bg-brand-dark group-hover:text-white shadow-sm transition-all duration-300 focus:outline-none"
                     >
                         <svg class="w-3 sm:w-4 h-3 sm:h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M6 6h15l-1 12h-12L4 4H2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1" fill="currentColor"/><circle cx="18" cy="20" r="1" fill="currentColor"/></svg>
-                        + Keranjang
+                        {{ __('+ Keranjang') }}
                     </button>
                 </form>
             @endif

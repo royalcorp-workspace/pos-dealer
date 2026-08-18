@@ -1,4 +1,4 @@
-<h3 class="font-bold text-brand-dark mb-4 text-lg">Kategori</h3>
+<h3 class="font-bold text-brand-dark mb-4 text-lg">{{ __('Kategori') }}</h3>
 
 @foreach($categories as $category)
     @php

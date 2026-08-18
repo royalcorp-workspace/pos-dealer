@@ -10,6 +10,12 @@ window.addEventListener('beforeunload', () => {
     if (overlay) overlay.style.display = 'flex';
 });
 
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        hideLoading();
+    }
+});
+
 window.showLoading = function () {
     const overlay = getLoadingOverlay();
     if (overlay) {

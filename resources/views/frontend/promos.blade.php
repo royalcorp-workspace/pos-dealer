@@ -1,7 +1,7 @@
 @extends('frontend.layouts.app')
 
-@section('title', 'Promo Spesial - IMG')
-@section('meta_description', 'Dapatkan promo kasur, springbed, dan perlengkapan tidur premium di IMG. Nikmati diskon dan gratis ongkir untuk kenyamanan tidur Anda.')
+@section('title', __('Promo Spesial') . ' - IMG')
+@section('meta_description', __('Dapatkan promo kasur, springbed, dan perlengkapan tidur premium di IMG. Nikmati diskon dan gratis ongkir untuk kenyamanan tidur Anda.'))
 @section('canonical', route('promos'))
 
 @section('content')
@@ -64,13 +64,13 @@
 
         <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh]" x-data="{ copiedCode: null }">
             <div class="text-center mb-12">
-                <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark mb-4 font-serif">Promo Spesial</h1>
-                <p class="text-gray-500 max-w-2xl mx-auto">Nikmati berbagai penawaran eksklusif dan voucher diskon yang bisa Anda gunakan hari ini.</p>
+                <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark mb-4 font-serif">{{ __('Promo Spesial') }}</h1>
+                <p class="text-gray-500 max-w-2xl mx-auto">{{ __('Nikmati berbagai penawaran eksklusif dan voucher diskon yang bisa Anda gunakan hari ini.') }}</p>
             </div>
 
             @if($promos->isEmpty())
                 <div class="text-center text-gray-500 py-12">
-                    <p>Belum ada promo aktif saat ini. Silakan cek kembali nanti.</p>
+                    <p>{{ __('Belum ada promo aktif saat ini. Silakan cek kembali nanti.') }}</p>
                 </div>
             @else
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
@@ -83,21 +83,21 @@
                             $daysLeftAbs = $daysLeft !== null ? abs((int) $daysLeft) : null;
 
                             if ($endDate === null) {
-                                $expiryText = 'Berlaku Selamanya';
+                                $expiryText = __('Berlaku Selamanya');
                             } elseif ($isExpired) {
-                                $expiryText = 'Berakhir';
+                                $expiryText = __('Berakhir');
                             } elseif ($daysLeftAbs === 0) {
-                                $expiryText = 'Hari Ini';
+                                $expiryText = __('Hari Ini');
                             } else {
-                                $expiryText = $daysLeftAbs . ' Hari Lagi';
+                                $expiryText = $daysLeftAbs . ' ' . __('Hari Lagi');
                             }
 
                             $discountLabel = match ((int) $promo->type) {
-                                1 => 'Persentase',
-                                2 => 'Nominal',
-                                3 => 'Gratis Ongkir',
-                                4 => 'Bonus Produk',
-                                default => 'Voucher',
+                                1 => __('Persentase'),
+                                2 => __('Nominal'),
+                                3 => __('Gratis Ongkir'),
+                                4 => __('Bonus Produk'),
+                                default => __('Voucher'),
                             };
 
                             $discountSuffix = match ((int) $promo->type) {
@@ -115,7 +115,7 @@
                                         ? 'Rp ' . number_format((float) $promo->value, 0, ',', '.')
                                         : (string) (int) $promo->value . ' ' . $discountSuffix);
                             } else {
-                                $promoDisplay = 'Voucher';
+                                $promoDisplay = __('Voucher');
                             }
                         @endphp
 
@@ -138,7 +138,7 @@
 
                                 <div class="flex items-center justify-center gap-1.5 text-xs font-semibold {{ $isExpired ? 'text-gray-400' : 'text-red-500' }}">
                                     <i class="fa-regular fa-clock w-3.5 h-3.5"></i>
-                                    Sisa: {{ $expiryText }}
+                                    {{ __('Sisa:') }} {{ $expiryText }}
                                 </div>
 
                                 @if($promo->value > 0)

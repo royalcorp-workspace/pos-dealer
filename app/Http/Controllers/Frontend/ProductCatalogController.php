@@ -16,25 +16,29 @@ class ProductCatalogController extends Controller
         $filterType = $request->query('type');
         $filterValue = $request->query('value');
 
-        // Handle tag slug in URL path
-        $tagSlug = $request->route()->parameter('tagSlug');
-        if ($tagSlug && !$filterType) {
-            $filterType = 'search';
-            $filterValue = $tagSlug;
-        }
-
-        // Handle category slug in URL path (SEO-friendly)
-        $categorySlug = $request->route()->parameter('categorySlug');
-        if ($categorySlug && !$filterType) {
-            $filterType = 'category';
-            $filterValue = $categorySlug;
-        }
-
-        // Handle brand slug in URL path
-        $brandSlug = $request->route()->parameter('brandSlug');
-        if ($brandSlug && !$filterType) {
-            $filterType = 'brand';
-            $filterValue = $brandSlug;
+        // Handle direct root slug (catch-all route)
+        $urlSlug = $request->route()->parameter('tagSlug') ?? $request->route()->parameter('categorySlug') ?? $request->route()->parameter('brandSlug');
+        
+        if ($urlSlug && !$filterType) {
+            // Check if it's a Category
+            if (ProductCategory::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterType = 'category';
+                $filterValue = $urlSlug;
+            } 
+            // Check if it's a Brand
+            elseif (Brand::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterType = 'brand';
+                $filterValue = $urlSlug;
+            }
+            // Check if it's a Tag
+            elseif (ProductTag::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterType = 'tag';
+                $filterValue = $urlSlug;
+            }
+            // If it doesn't match any entity, it's an invalid URL, so 404
+            else {
+                abort(404);
+            }
         }
 
         $minPrice = $request->query('min_price', 0);
@@ -105,26 +109,46 @@ class ProductCatalogController extends Controller
                     $categoryIds = $this->getCategoryHierarchyIds($category);
                     $query->whereIn('category_id', $categoryIds);
                 }
+            } elseif ($filterType === 'tag') {
+                $query->whereHas('tags', fn($q) => $q->where('slug', $filterValue));
             } elseif ($filterType === 'search') {
                 $query->where(function ($q) use ($filterValue) {
-                    $q->where('name', 'like', "%{$filterValue}%")
-                        ->orWhere('slug', 'like', "%{$filterValue}%")
-                        ->orWhereHas('brand', fn($b) => $b->where('name', 'like', "%{$filterValue}%"))
-                        ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$filterValue}%"));
-                });
+                    $terms = array_filter(explode(' ', strtolower(trim($filterValue))));
+                    
+                    // Build a fuzzy string for typos: 'k a s u r' -> '%k%a%s%u%r%'
+                    $fuzzyString = '%';
+                    foreach (str_split(str_replace(' ', '', strtolower(trim($filterValue)))) as $char) {
+                        $fuzzyString .= $char . '%';
+                    }
 
-                // Fuzzy search: split terms and search each separately for typo tolerance
-                $terms = explode(' ', $filterValue);
-                foreach ($terms as $term) {
-                    if (strlen($term) > 2) {
-                        $query->orWhere(function ($q) use ($term) {
-                            $q->where('name', 'like', "%{$term}%")
-                                ->orWhere('slug', 'like', "%{$term}%")
-                                ->orWhereHas('brand', fn($b) => $b->where('name', 'like', "%{$term}%"))
-                                ->orWhereHas('tags', fn($t) => $t->where('name', 'like', "%{$term}%"));
+                    // 1. Exact phrase match
+                    $q->where('name', 'ilike', '%' . $filterValue . '%')
+                      ->orWhere('code', 'ilike', '%' . $filterValue . '%')
+                      ->orWhere('slug', 'ilike', '%' . $filterValue . '%');
+
+                    // 2. Multi-word match (e.g., "Kasur 200 100" requires ALL words to match somewhere)
+                    if (count($terms) > 1) {
+                        $q->orWhere(function ($q2) use ($terms) {
+                            foreach ($terms as $term) {
+                                $q2->where(function ($q3) use ($term) {
+                                    $q3->where('name', 'ilike', '%' . $term . '%')
+                                       ->orWhere('code', 'ilike', '%' . $term . '%')
+                                       ->orWhereHas('category', function ($qCat) use ($term) {
+                                           $qCat->where('name', 'ilike', '%' . $term . '%');
+                                       })
+                                       ->orWhereHas('brand', function ($qBrand) use ($term) {
+                                           $qBrand->where('name', 'ilike', '%' . $term . '%');
+                                       });
+                                });
+                            }
                         });
                     }
-                }
+
+                    // 3. Typo/Fuzzy match ("ksur" -> "%k%s%u%r%")
+                    if (strlen($filterValue) <= 15) {
+                        $q->orWhere('name', 'ilike', $fuzzyString);
+                    }
+                });
             }
         }
 
@@ -198,9 +222,97 @@ class ProductCatalogController extends Controller
 
     public function show(Product $product)
     {
-        $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
+        $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags', 'suggestedProducts.images']);
 
         return view('frontend.product.show', compact('product'));
+    }
+
+    public function searchSuggestions(Request $request)
+    {
+        $query = strtolower(trim($request->query('q')));
+        
+        if (!$query || strlen($query) < 2) {
+            return response()->json([]);
+        }
+
+        $words = array_filter(explode(' ', $query));
+        
+        // Build a fuzzy string for typos: 'k a s u r' -> '%k%a%s%u%r%'
+        $fuzzyString = '%';
+        foreach (str_split(str_replace(' ', '', $query)) as $char) {
+            $fuzzyString .= $char . '%';
+        }
+
+        $products = Product::where('deleted', false)
+            ->where(function ($q) use ($query, $words, $fuzzyString) {
+                // 1. Exact phrase match
+                $q->where('name', 'ilike', '%' . $query . '%')
+                  ->orWhere('code', 'ilike', '%' . $query . '%');
+
+                // 2. Multi-word match (e.g., "Kasur 200 100")
+                if (count($words) > 1) {
+                    $q->orWhere(function ($q2) use ($words) {
+                        foreach ($words as $word) {
+                            $q2->where(function ($q3) use ($word) {
+                                $q3->where('name', 'ilike', '%' . $word . '%')
+                                   ->orWhere('code', 'ilike', '%' . $word . '%')
+                                   ->orWhereHas('category', function ($qCat) use ($word) {
+                                       $qCat->where('name', 'ilike', '%' . $word . '%');
+                                   })
+                                   ->orWhereHas('brand', function ($qBrand) use ($word) {
+                                       $qBrand->where('name', 'ilike', '%' . $word . '%');
+                                   });
+                            });
+                        }
+                    });
+                }
+                
+                // 3. Typo/Fuzzy match ("ksur" -> "%k%s%u%r%")
+                if (strlen($query) <= 15) {
+                    $q->orWhere('name', 'ilike', $fuzzyString);
+                }
+            })
+            ->with(['category', 'brand'])
+            ->limit(20) // Fetch more to sort by relevance in PHP
+            ->get();
+
+        // Sort in PHP to ensure the most relevant (exact matches) appear first
+        $products = $products->sortByDesc(function ($product) use ($query, $words) {
+            $name = strtolower($product->name);
+            $score = 0;
+            
+            if ($name === $query) return 1000;
+            if (str_contains($name, $query)) $score += 500;
+            if (str_starts_with($name, $query)) $score += 200;
+            
+            foreach ($words as $word) {
+                if (str_contains($name, $word)) $score += 50;
+            }
+            return $score;
+        })
+        ->take(5)
+        ->values()
+        ->map(function ($product) {
+            $variantsData = $product->variants;
+            $validVariants = $variantsData->where('price', '>', 0);
+            $hasVariants = $validVariants->isNotEmpty();
+            $basePrice = (float)($product->base_price ?? 0);
+            $originalPrice = $hasVariants ? (float) $validVariants->first()->price : $basePrice;
+            $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
+            $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
+
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'slug' => $product->slug,
+                'thumbnail_url' => $product->thumbnail_url,
+                'price' => $price,
+                'category' => $product->category->name ?? '',
+                'brand' => $product->brand->name ?? ''
+            ];
+        });
+
+        return response()->json($products);
     }
 
     private function getCategoryHierarchyIds(ProductCategory $category): array
