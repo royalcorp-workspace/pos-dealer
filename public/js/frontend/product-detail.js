@@ -53,3 +53,51 @@ function updateQty(change) {
     val = Math.max(1, val + change);
     input.value = val;
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const qtyInput = document.getElementById('quantity-input');
+    const addToCartBtn = document.getElementById('add-to-cart-btn');
+    
+    if (qtyInput) {
+        qtyInput.addEventListener('input', function() {
+            let val = parseInt(qtyInput.value);
+            if (isNaN(val) || val < 1) {
+                if (addToCartBtn) addToCartBtn.disabled = true;
+            } else {
+                if (addToCartBtn) addToCartBtn.disabled = false;
+            }
+        });
+
+        const validateQty = function() {
+            let val = parseInt(qtyInput.value);
+            if (isNaN(val) || val < 1) {
+                qtyInput.value = 1;
+                if (addToCartBtn) addToCartBtn.disabled = false;
+            }
+        };
+        qtyInput.addEventListener('change', validateQty);
+        qtyInput.addEventListener('blur', validateQty);
+    }
+
+    const forms = document.querySelectorAll('form[action*="cart"]');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const variantInput = document.getElementById('variant-id-input');
+            const hasVariants = document.querySelector('[data-variant-id]') !== null;
+            
+            if (hasVariants && variantInput && !variantInput.value) {
+                e.preventDefault();
+                alert('Silakan pilih ukuran terlebih dahulu sebelum menambahkan ke keranjang.');
+                return;
+            }
+            
+            const colorInput = document.getElementById('color-id-input');
+            const hasColors = document.querySelector('[data-color-id]') !== null;
+            if (hasColors && colorInput && !colorInput.value) {
+                e.preventDefault();
+                alert('Silakan pilih warna terlebih dahulu sebelum menambahkan ke keranjang.');
+                return;
+            }
+        });
+    });
+});

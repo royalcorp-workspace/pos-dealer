@@ -193,7 +193,13 @@
                         </div>
                     @endif
                     <span class="text-3xl font-extrabold text-brand-dark tracking-tight" id="product-price">Rp {{ number_format($price, 0, ',', '.') }}@if($hasMultiplePrices) - Rp {{ number_format($displayMaxPrice, 0, ',', '.') }}@endif</span>
-                    <span class="block text-sm text-brand-gold-dark mt-2" id="price-label">Harga untuk ukuran: {{ $firstVariantName }}</span>
+                    <span class="block text-sm text-brand-gold-dark mt-2" id="price-label">
+                        @if($hasMultiplePrices)
+                            Silakan pilih ukuran terlebih dahulu
+                        @else
+                            Harga untuk ukuran: {{ $firstVariantName }}
+                        @endif
+                    </span>
                 </div>
 
 
@@ -214,7 +220,7 @@
                                         data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->price, $staticPromo) }}"
                                         data-variant-original-price="{{ $variant->price }}"
                                         onclick="selectVariant(this)"
-                                        class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 {{ $i === 0 ? 'border-brand-gold bg-brand-light text-brand-dark' : 'border-brand-muted bg-white text-gray-600' }}"
+                                        class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 border-brand-muted bg-white text-gray-600"
                                     >
                                         {{ $variant->variant_name }}
                                         @if(false)
@@ -224,7 +230,7 @@
                                 @endforeach
                             </div>
                         </div>
-                        <input type="hidden" name="variant_id" id="variant-id-input" value="{{ $variantsData->first()->id }}">
+                        <input type="hidden" name="variant_id" id="variant-id-input" value="">
                     @endif
 
                     <!-- Options (Colors) -->
@@ -239,7 +245,7 @@
                                         data-color-name="{{ $color->color_name }}"
                                         data-color-code="{{ $color->color_code ?? '' }}"
                                         onclick="selectColor(this)"
-                                        class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 {{ $i === 0 ? 'border-brand-gold bg-brand-light text-brand-dark' : 'border-brand-muted bg-white text-gray-600' }}"
+                                        class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 border-brand-muted bg-white text-gray-600"
                                     >
                                         {{ $color->color_name }}
                                         @if($color->color_code)
@@ -249,7 +255,7 @@
                                 @endforeach
                             </div>
                         </div>
-                        <input type="hidden" name="color_id" id="color-id-input" value="{{ $colorsData->first()->id }}">
+                        <input type="hidden" name="color_id" id="color-id-input" value="">
                     @endif
 
                     @php
@@ -270,7 +276,8 @@
                                 <div class="w-4/5 flex gap-2">
                                     <button 
                                         type="submit"
-                                        class="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 bg-brand-dark text-brand-gold hover:bg-brand-darker shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none"
+                                        id="add-to-cart-btn"
+                                        class="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 bg-brand-dark text-brand-gold hover:bg-brand-darker shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                                     >
                                         <i class="fa-solid fa-cart-shopping w-4 h-4"></i>
                                         Tambah ke Keranjang
@@ -298,11 +305,11 @@
                 </form>
 
                 <!-- Features list -->
+                @php
+                    $hasWarranty = $product->category->has_warranty ?? false;
+                    $warrantyDuration = $product->warranty_duration ?? '15 Tahun';
+                @endphp
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-                    <div class="flex items-center gap-3 p-4 bg-brand-light rounded-xl border border-brand-muted/50">
-                        <i class="fa-solid fa-shield-halved w-6 h-6 text-brand-gold flex-shrink-0"></i>
-                        <span class="text-sm font-semibold text-brand-dark">Garansi Resmi 15 Tahun</span>
-                    </div>
                     <div class="flex items-center gap-3 p-4 bg-brand-light rounded-xl border border-brand-muted/50">
                         <i class="fa-solid fa-truck w-6 h-6 text-brand-gold flex-shrink-0"></i>
                         <span class="text-sm font-semibold text-brand-dark">Gratis Ongkir Jabodetabek</span>
@@ -347,7 +354,7 @@
                     <h3 class="text-xl font-bold text-brand-dark mb-4">Informasi Penting</h3>
                     <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div class="bg-brand-light rounded-xl p-4">
-                            <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Merek</dt>
+                            <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Brand</dt>
                             <dd class="mt-1 font-semibold text-brand-dark">{{ $brandName }}</dd>
                         </div>
                         <div class="bg-brand-light rounded-xl p-4">
@@ -360,7 +367,11 @@
                         </div>
                         <div class="bg-brand-light rounded-xl p-4">
                             <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Layanan</dt>
-                            <dd class="mt-1 font-semibold text-brand-dark">Garansi resmi, konsultasi gratis, dan pengiriman Jabodetabek.</dd>
+                            <dd class="mt-1 font-semibold text-brand-dark">Konsultasi gratis dan pengiriman Jabodetabek.</dd>
+                        </div>
+                        <div class="bg-brand-light rounded-xl p-4">
+                            <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Garansi</dt>
+                            <dd class="mt-1 font-semibold text-brand-dark">{{ $hasWarranty ? "Resmi $warrantyDuration" : 'Tidak ada garansi' }}</dd>
                         </div>
                     </dl>
                 </div>
