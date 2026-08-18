@@ -1,6 +1,4 @@
-<form method="GET" class="space-y-6">
-    <input type="hidden" name="type" value="{{ $filterType }}">
-    <input type="hidden" name="value" value="{{ $filterValue }}">
+<form action="{{ route('products.index') }}" method="GET" class="space-y-6">
 
     <div>
         <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">{{ __('Kategori') }}</h3>
