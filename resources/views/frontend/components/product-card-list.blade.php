@@ -20,10 +20,10 @@
                     $listPctBadge = null;
                     if ($product->discount_type === 'percentage' && $product->discount_value > 0) {
                         $listDiscountedPrice = $product->price - ($product->price * $product->discount_value / 100);
-                        $listPctBadge = round($product->discount_value) . '% OFF';
+                        $listPctBadge = round($product->discount_value) . '% ' . __('OFF');
                     } elseif ($product->discount_type === 'fixed' && $product->discount_value > 0 && $product->price > 0) {
                         $listDiscountedPrice = $product->price - $product->discount_value;
-                        $listPctBadge = round(($product->discount_value / $product->price) * 100) . '% OFF';
+                        $listPctBadge = round(($product->discount_value / $product->price) * 100) . '% ' . __('OFF');
                     }
                 @endphp
                 @if($listDiscountedPrice !== null)
@@ -44,7 +44,7 @@
                 onclick="addToCart('{{ $product->id }}')"
                 class="px-4 py-2 bg-brand-dark text-brand-gold rounded-lg font-bold text-sm hover:bg-brand-darker transition-colors"
             >
-                <i class="fa-solid fa-cart-plus w-4 h-4 mr-2"></i> Tambah ke Keranjang
+                <i class="fa-solid fa-cart-plus w-4 h-4 mr-2"></i> {{ __('Tambah ke Keranjang') }}
             </button>
         </div>
     </div>

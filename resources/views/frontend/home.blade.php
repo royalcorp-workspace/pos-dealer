@@ -1,7 +1,7 @@
 @extends('frontend.layouts.app')
 
-@section('title', 'Premium Mattress Gallery And Sleep Accessories - IMG')
-@section('meta_description', 'Destinasi perlengkapan tidur eksklusif di IMG. Temukan koleksi kasur premium, bantal, dan aksesori tidur terbaik dengan garansi resmi, cicilan 0%, serta konsultasi gratis.')
+@section('title', __('Premium Mattress Gallery And Sleep Accessories') . ' - IMG')
+@section('meta_description', __('Destinasi perlengkapan tidur eksklusif di IMG. Temukan koleksi kasur premium, bantal, dan aksesori tidur terbaik dengan garansi resmi, cicilan 0%, serta konsultasi gratis.'))
 @section('canonical', route('home'))
 @section('og_image', 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800')
 
@@ -199,20 +199,20 @@
                     </div>
                     
                     <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-brand-dark tracking-tight leading-tight font-serif hero-title">
-                        Tingkatkan <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-gold to-brand-gold-dark">Kualitas Tidur Anda</span> Hari Ini.
+                        {{ __('Tingkatkan') }} <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-gold to-brand-gold-dark">{{ __('Kualitas Tidur Anda') }}</span> {{ __('Hari Ini.') }}
                     </h1>
                     
                     <p class="text-lg text-brand-dark/80 max-w-xl mx-auto lg:mx-0 font-medium hero-copy">
-                        Temukan koleksi kasur premium dan perlengkapan tidur terbaik dari brand pilihan untuk istirahat yang lebih maksimal.
+                        {{ __('Temukan koleksi kasur premium dan perlengkapan tidur terbaik dari brand pilihan untuk istirahat yang lebih maksimal.') }}
                     </p>
                     
                     <div class="flex flex-col sm:flex-row items-center gap-4 pt-4 justify-center lg:justify-start hero-cta">
                         <a href="{{ route('categories') }}" class="w-full sm:w-auto px-8 py-4 bg-brand-dark hover:bg-brand-darker text-white font-bold rounded-full transition-all shadow-lg shadow-brand-dark/20 flex justify-center items-center gap-2 group">
-                            Belanja Sekarang
+                            {{ __('Belanja Sekarang') }}
                             <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </a>
                         <a href="{{ route('promos') }}" class="w-full sm:w-auto px-8 py-4 bg-white hover:bg-brand-light text-brand-dark font-bold rounded-full transition-all shadow-sm border border-brand-gold/30 hover:border-brand-gold text-center">
-                            Lihat Promo
+                            {{ __('Lihat Promo') }}
                         </a>
                     </div>
                 </div>
@@ -246,15 +246,15 @@
                                 <path d="M8.5 12.5l1.8 1.8L15.5 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
                             </svg>
                         </div>
-                    <h4 class="font-bold text-brand-dark">Garansi Resmi</h4>
-                    <p class="text-sm text-gray-500">Hingga 15 Tahun</p>
+                    <h4 class="font-bold text-brand-dark">{{ __('Garansi Resmi') }}</h4>
+                    <p class="text-sm text-gray-500">{{ __('Hingga 15 Tahun') }}</p>
                 </div>
                 <div class="flex flex-col items-center gap-3 px-4">
                     <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
                             <i class="fa-solid fa-award w-6 h-6"></i>
                         </div>
-                    <h4 class="font-bold text-brand-dark">Produk Original</h4>
-                    <p class="text-sm text-gray-500">100% Produk Asli</p>
+                    <h4 class="font-bold text-brand-dark">{{ __('Produk Original') }}</h4>
+                    <p class="text-sm text-gray-500">{{ __('100% Produk Asli') }}</p>
                 </div>
                 <div class="flex flex-col items-center gap-3 px-4">
                     <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
@@ -265,8 +265,8 @@
                                 <rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.6" fill="none" />
                             </svg>
                         </div>
-                    <h4 class="font-bold text-brand-dark">Cicilan 0%</h4>
-                    <p class="text-sm text-gray-500">Tanpa Kartu Kredit</p>
+                    <h4 class="font-bold text-brand-dark">{{ __('Cicilan 0%') }}</h4>
+                    <p class="text-sm text-gray-500">{{ __('Tanpa Kartu Kredit') }}</p>
                 </div>
                 <div class="flex flex-col items-center gap-3 px-4">
                     <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
@@ -275,8 +275,8 @@
                                 <circle cx="12" cy="18" r="0.8" fill="currentColor" />
                             </svg>
                         </div>
-                    <h4 class="font-bold text-brand-dark">Gratis Konsultasi</h4>
-                    <p class="text-sm text-gray-500">Pilih Sesuai Kebutuhan</p>
+                    <h4 class="font-bold text-brand-dark">{{ __('Gratis Konsultasi') }}</h4>
+                    <p class="text-sm text-gray-500">{{ __('Pilih Sesuai Kebutuhan') }}</p>
                 </div>
             </div>
         </div>
@@ -288,8 +288,8 @@
         <div class="container mx-auto px-6">
             <div class="flex items-center justify-between mb-8">
                 <div>
-                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">Kategori Pilihan Untuk Kamu</h2>
-                    <p class="text-gray-500 mt-1">Jelajahi koleksi terlengkap dari brand terkemuka.</p>
+                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Kategori Pilihan Untuk Kamu') }}</h2>
+                    <p class="text-gray-500 mt-1">{{ __('Jelajahi koleksi terlengkap dari brand terkemuka.') }}</p>
                 </div>
             </div>
             
@@ -319,8 +319,8 @@
     <section class="py-16 bg-white border-t border-brand-muted/50">
         <div class="container mx-auto px-6">
             <div class="text-center mb-10">
-                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">Pilihan Brand</h2>
-                <p class="text-gray-500 mt-2 text-lg">Merek kasur dan perlengkapan tidur pilihan terbaik untuk istirahat Anda.</p>
+                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Pilihan Brand') }}</h2>
+                <p class="text-gray-500 mt-2 text-lg">{{ __('Merek kasur dan perlengkapan tidur pilihan terbaik untuk istirahat Anda.') }}</p>
             </div>
             
             @php
@@ -378,9 +378,9 @@
             <div class="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
                 <div class="text-center md:text-left">
                     <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif flex items-center justify-center md:justify-start gap-2">
-                        Promo Brand Spesial <i class="fa-solid fa-tags text-brand-gold text-2xl"></i>
+                        {{ __('Promo Brand Spesial') }} <i class="fa-solid fa-tags text-brand-gold text-2xl"></i>
                     </h2>
-                    <p class="text-gray-500 mt-2 text-base md:text-lg">Penawaran eksklusif dan diskon besar dari merek favorit Anda.</p>
+                    <p class="text-gray-500 mt-2 text-base md:text-lg">{{ __('Penawaran eksklusif dan diskon besar dari merek favorit Anda.') }}</p>
                 </div>
             </div>
 
@@ -413,7 +413,7 @@
                         <!-- 3 Promo Products (Right) -->
                         <div class="w-full md:w-2/3 order-2 md:order-2 overflow-hidden">
                             <div class="flex items-center justify-between mb-5">
-                                <h3 class="font-bold text-brand-dark text-lg md:text-2xl font-serif">Koleksi Promo {{ $brand->name }}</h3>
+                                <h3 class="font-bold text-brand-dark text-lg md:text-2xl font-serif">{{ __('Koleksi Promo') }} {{ $brand->name }}</h3>
                             </div>
                             
                             @if(isset($brand->top_promo_products) && $brand->top_promo_products->isNotEmpty())
@@ -430,14 +430,14 @@
                                             <div class="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                                                 <i class="fa-solid fa-arrow-right"></i>
                                             </div>
-                                            <span class="font-bold text-sm text-center">Lihat<br>Semua</span>
+                                            <span class="font-bold text-sm text-center">{!! __('Lihat<br>Semua') !!}</span>
                                         </a>
                                     </div>
                                 </div>
                             @else
                                 <div class="w-full h-full min-h-[250px] flex flex-col items-center justify-center text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200 shadow-sm">
                                     <i class="fa-solid fa-box-open text-4xl mb-3 text-gray-300"></i>
-                                    <p class="text-sm font-medium">Belum ada produk promo.</p>
+                                    <p class="text-sm font-medium">{{ __('Belum ada produk promo.') }}</p>
                                 </div>
                             @endif
                         </div>
@@ -466,11 +466,11 @@
                             <!-- Banner Text & Logo -->
                             <div class="absolute inset-0 p-6 flex flex-col justify-end text-center items-center">
                                 <h3 class="text-white font-extrabold text-2xl md:text-3xl font-serif leading-tight drop-shadow-md">
-                                    Diskon Ekstra<br>Terbatas
+                                    {!! __('Diskon Ekstra<br>Terbatas') !!}
                                 </h3>
-                                <p class="text-white/80 text-sm mt-3 font-medium">Dapatkan kualitas tidur premium dengan harga terbaik bulan ini.</p>
+                                <p class="text-white/80 text-sm mt-3 font-medium">{{ __('Dapatkan kualitas tidur premium dengan harga terbaik bulan ini.') }}</p>
                                 <a href="{{ route('brands.show', $brand->slug) }}" class="mt-5 w-fit px-6 py-2.5 bg-brand-gold text-white rounded-full font-bold text-sm hover:bg-brand-gold-dark transition-colors shadow-lg">
-                                    Beli Sekarang
+                                    {{ __('Beli Sekarang') }}
                                 </a>
                             </div>
                         </div>
@@ -491,12 +491,12 @@
             <div class="flex flex-col md:flex-row items-end justify-between mb-10 gap-4">
                 <div>
                     <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight flex items-center gap-2 font-serif">
-                        Product Best Seller <i class="fa-solid fa-award"></i>
+                        {{ __('Product Best Seller') }} <i class="fa-solid fa-award"></i>
                     </h2>
-                    <p class="text-gray-500 mt-2 text-lg">Produk paling laris dengan rating tertinggi minggu ini.</p>
+                    <p class="text-gray-500 mt-2 text-lg">{{ __('Produk paling laris dengan rating tertinggi minggu ini.') }}</p>
                 </div>
                 <a href="{{ route('categories') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
-                    Lihat Semua <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
                 </a>
             </div>
             
@@ -516,8 +516,8 @@
         
         <div class="container mx-auto px-6 relative z-10">
             <div class="text-center max-w-2xl mx-auto mb-12">
-                <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight mb-4 font-serif text-brand-gold">Spesial Buat Kamu Hari Ini</h2>
-                <p class="text-brand-light/90 text-lg">Rekomendasi khusus berdasarkan preferensi dan tren pencarian terbaik untuk kenyamanan tidur Anda.</p>
+                <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight mb-4 font-serif text-brand-gold">{{ __('Spesial Buat Kamu Hari Ini') }}</h2>
+                <p class="text-brand-light/90 text-lg">{{ __('Rekomendasi khusus berdasarkan preferensi dan tren pencarian terbaik untuk kenyamanan tidur Anda.') }}</p>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-5xl mx-auto bg-white/5 backdrop-blur border border-brand-gold/20 rounded-3xl p-6 lg:p-10 shadow-2xl">
@@ -530,7 +530,7 @@
                     />
                     <div class="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>
                     <div class="absolute bottom-6 left-6 flex gap-2">
-                        <span class="bg-brand-gold text-brand-dark text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">Top Pick</span>
+                        <span class="bg-brand-gold text-brand-dark text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">{{ __('Top Pick') }}</span>
                     </div>
                 </div>
                 
@@ -540,7 +540,7 @@
                         <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
                         <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
                         <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                        <span class="text-brand-light/80 ml-2 text-sm">(128 Ulasan)</span>
+                        <span class="text-brand-light/80 ml-2 text-sm">{{ __('(128 Ulasan)') }}</span>
                     </div>
                     
                     <h3 class="text-2xl lg:text-3xl font-bold leading-tight text-white">{{ $featured->name ?? 'No Product' }}</h3>
@@ -553,7 +553,7 @@
                                     Rp {{ number_format($featuredOriginalPrice, 0, ',', '.') }}
                                     @if($featuredHasPriceRange) - Rp {{ number_format($featuredOriginalMaxPrice, 0, ',', '.') }} @endif
                                 </span>
-                                <span class="text-sm font-bold text-red-300">Hemat {{ $featuredPromo['label'] }}</span>
+                                <span class="text-sm font-bold text-red-300">{{ __('Hemat') }} {{ $featuredPromo['label'] }}</span>
                             @endif
                             <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featuredPrice, 0, ',', '.') }}@if($featuredHasPriceRange) - Rp {{ number_format($featuredPriceMax, 0, ',', '.') }}@endif</span>
                         </div>
@@ -562,7 +562,7 @@
                             class="bg-brand-gold text-brand-dark hover:bg-brand-light font-bold px-6 py-3 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-2"
                         >
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 7h12l-1 12H7L6 7Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                            Pilih Opsi
+                            {{ __('Pilih Opsi') }}
                         </a>
                     </div>
                 </div>
@@ -577,8 +577,8 @@
     <section class="py-16 bg-white border-t border-brand-muted/50">
         <div class="container mx-auto px-6">
             <div class="text-center mb-10">
-                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">Promo Brand</h2>
-                <p class="text-gray-500 mt-2 text-lg">Temukan produk diskon dan promo menarik dari brand-brand andalan.</p>
+                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Promo Brand') }}</h2>
+                <p class="text-gray-500 mt-2 text-lg">{{ __('Temukan produk diskon dan promo menarik dari brand-brand andalan.') }}</p>
             </div>
 
             <!-- Tabs -->
@@ -659,11 +659,11 @@
         <div class="container mx-auto px-6">
             <div class="flex items-center justify-between mb-8">
                 <div>
-                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">Paket Bundling Hemat</h2>
-                    <p class="text-gray-500 mt-1">Dapatkan kombinasi produk pilihan dengan harga lebih hemat.</p>
+                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Paket Bundling Hemat') }}</h2>
+                    <p class="text-gray-500 mt-1">{{ __('Dapatkan kombinasi produk pilihan dengan harga lebih hemat.') }}</p>
                 </div>
                 <a href="{{ route('bundling.index') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
-                    Lihat Semua <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
                 </a>
             </div>
 
@@ -681,7 +681,7 @@
                                 @endif
                                 @if($bundle->discount_percent > 0)
                                     <span class="absolute top-3 left-3 bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-sm shadow-sm uppercase">
-                                        Diskon {{ $bundle->discount_percent }}%
+                                        {{ __('Diskon') }} {{ $bundle->discount_percent }}%
                                     </span>
                                 @endif
                             </div>
@@ -713,8 +713,8 @@
     <section class="py-16 bg-brand-light/30 border-t border-brand-muted/50">
         <div class="container mx-auto px-6">
             <div class="text-center mb-12">
-                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">Rekomendasi Lainnya</h2>
-                <p class="text-gray-500 mt-2 text-lg">Pilihan aksesori dan kasur populer untuk melengkapi kamar Anda.</p>
+                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Rekomendasi Lainnya') }}</h2>
+                <p class="text-gray-500 mt-2 text-lg">{{ __('Pilihan aksesori dan kasur populer untuk melengkapi kamar Anda.') }}</p>
             </div>
             
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 recommended-products-grid">
@@ -731,7 +731,7 @@
                     data-route="{{ route('home.load-more') }}"
                     data-offset="8"
                 >
-                    Muat Lebih Banyak <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
+                    {!! __('Muat Lebih Banyak') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
                 </button>
             </div>
             @endif

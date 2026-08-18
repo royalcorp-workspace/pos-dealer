@@ -715,7 +715,10 @@ class CheckoutController extends Controller
                 }
             }
         }
-        
+        if (!$order) {
+            return redirect()->route('home')->with('error', 'Pesanan tidak ditemukan.');
+        }
+
         return view('frontend.thankyou', compact('order'));
     }
 

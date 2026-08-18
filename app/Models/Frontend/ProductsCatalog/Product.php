@@ -138,4 +138,14 @@ class Product extends Model
     {
         return $this->hasMany(ProductBundlingItem::class, 'product_id');
     }
+
+    public function suggestedProducts(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Product::class,
+            'product_suggestions',
+            'product_id',
+            'suggested_product_id'
+        )->withPivot('sort_order')->orderByPivot('sort_order');
+    }
 }

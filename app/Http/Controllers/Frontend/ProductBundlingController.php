@@ -51,7 +51,19 @@ class ProductBundlingController extends Controller
             ->withQueryString();
 
         foreach ($bundlings as $bundle) {
-            // Use header price as the original normal price
+            // Hitung total harga normal produk-produk di dalam bundling
+            $totalProductPrice = 0;
+            if ($bundle->items) {
+                foreach ($bundle->items as $item) {
+                    if ($item->variant) {
+                        $totalProductPrice += (float) $item->variant->price * $item->quantity;
+                    } elseif ($item->product) {
+                        $totalProductPrice += (float) $item->product->base_price * $item->quantity;
+                    }
+                }
+            }
+
+            // Secara default, harga coret adalah harga bundle itu sendiri (jika tidak ada diskon)
             $bundle->total_original = (float) $bundle->price;
 
             // Harga dasar Bundling adalah Harga Fix yang diinput Admin
@@ -63,6 +75,11 @@ class ProductBundlingController extends Controller
                 // Potong diskon PPS dari Harga Fix Bundling
                 $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
                 $bundle->pps_label = $ppsPromo['label'];
+                
+                // Jika masuk PPS, harga coretnya ngambil ke total harga produk (sum of items)
+                if ($totalProductPrice > 0) {
+                    $bundle->total_original = $totalProductPrice;
+                }
             }
 
             $bundle->total_price = $bundlePrice;
@@ -96,7 +113,19 @@ class ProductBundlingController extends Controller
             'items.variant',
         ]);
 
-        // Use header price as the original normal price
+        // Hitung total harga normal produk-produk di dalam bundling
+        $totalProductPrice = 0;
+        if ($bundle->items) {
+            foreach ($bundle->items as $item) {
+                if ($item->variant) {
+                    $totalProductPrice += (float) $item->variant->price * $item->quantity;
+                } elseif ($item->product) {
+                    $totalProductPrice += (float) $item->product->base_price * $item->quantity;
+                }
+            }
+        }
+
+        // Secara default, harga coret adalah harga bundle itu sendiri
         $bundle->total_original = (float) $bundle->price;
 
         // Harga dasar Bundling adalah Harga Fix yang diinput Admin
@@ -108,6 +137,11 @@ class ProductBundlingController extends Controller
             // Potong diskon PPS dari Harga Fix Bundling
             $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
             $bundle->pps_label = $ppsPromo['label'];
+            
+            // Jika masuk PPS, harga coretnya ngambil ke total harga produk
+            if ($totalProductPrice > 0) {
+                $bundle->total_original = $totalProductPrice;
+            }
         }
 
         $bundle->total_price = $bundlePrice;

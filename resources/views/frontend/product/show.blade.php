@@ -363,6 +363,18 @@
                 </div>
             </div>
         </div>
+
+        @if($product->suggestedProducts->isNotEmpty())
+        <!-- Suggested Products -->
+        <div class="border-t border-brand-muted pt-12 mt-16">
+            <h3 class="text-2xl md:text-3xl font-extrabold text-brand-dark mb-8 font-serif">Mungkin Anda Juga Suka</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                @foreach($product->suggestedProducts as $suggestedProduct)
+                    @include('frontend.components.product-card-dynamic', ['product' => $suggestedProduct])
+                @endforeach
+            </div>
+        </div>
+        @endif
     </div>
 
     @push('jsonld')

@@ -119,19 +119,87 @@
         </div>
 
         <!-- Search Bar -->
-        <div class="hidden md:flex flex-1 max-w-2xl mx-6 relative">
-            <form action="{{ route('products.index') }}" method="GET" class="relative w-full">
+        <div class="hidden md:flex flex-1 max-w-2xl mx-6 relative" x-data="{
+            query: '{{ request('value', '') }}',
+            suggestions: [],
+            showSuggestions: false,
+            loading: false,
+            debounce: null,
+            fetchSuggestions() {
+                if (this.query.length < 2) {
+                    this.suggestions = [];
+                    this.showSuggestions = false;
+                    return;
+                }
+                this.loading = true;
+                this.showSuggestions = true;
+                clearTimeout(this.debounce);
+                this.debounce = setTimeout(async () => {
+                    try {
+                        const res = await fetch('/products/search-suggestions?q=' + encodeURIComponent(this.query));
+                        const data = await res.json();
+                        this.suggestions = data;
+                    } catch (e) {
+                        console.error(e);
+                    } finally {
+                        this.loading = false;
+                    }
+                }, 300);
+            }
+        }" @click.outside="showSuggestions = false">
+            <form action="{{ route('products.index') }}" method="GET" class="relative w-full z-50">
                 <input type="hidden" name="type" value="search">
                 <input 
                     type="text" 
                     name="value"
-                    placeholder="Cari kasur, bantal, atau brand impianmu..." 
+                    x-model="query"
+                    @input="fetchSuggestions()"
+                    @focus="if(query.length >= 2) showSuggestions = true"
+                    placeholder="{{ __('Cari kasur, bantal, atau brand impianmu...') }}" 
                     class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-5 pr-12 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-all placeholder:text-gray-400"
+                    autocomplete="off"
                 />
-                <button type="submit" class="absolute right-1 top-1 p-1.5 bg-brand-dark hover:bg-brand-darker text-white rounded-full transition-colors" aria-label="Cari">
-                    <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
+                <button type="submit" class="absolute right-1 top-1 p-1.5 bg-brand-dark hover:bg-brand-darker text-white rounded-full transition-colors flex items-center justify-center min-w-[28px]" aria-label="Cari">
+                    <i class="fa-solid fa-magnifying-glass text-xs" x-show="!loading"></i>
+                    <i class="fa-solid fa-spinner fa-spin text-xs" x-show="loading" style="display: none;"></i>
                 </button>
             </form>
+
+            <!-- Search Suggestions Dropdown -->
+            <div 
+                x-show="showSuggestions" 
+                x-transition
+                style="display: none;"
+                class="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-[100]"
+            >
+                <div x-show="suggestions.length > 0" class="flex flex-col">
+                    <div class="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{{ __('Produk Terkait') }}</span>
+                    </div>
+                    <template x-for="item in suggestions" :key="item.id">
+                        <a :href="'/products/' + item.slug" class="flex items-center gap-3 p-3 hover:bg-brand-light/50 transition-colors border-b border-gray-50 last:border-0 group">
+                            <div class="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
+                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="w-full h-full object-cover">
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="text-sm font-extrabold text-brand-dark truncate group-hover:text-brand-gold transition-colors" x-text="item.name"></h4>
+                                <div class="flex items-center gap-2 mt-1 text-xs">
+                                    <span class="text-gray-500 font-medium truncate max-w-[120px]" x-text="item.category"></span>
+                                    <span class="text-gray-300">•</span>
+                                    <span class="font-bold text-brand-gold-dark truncate" x-text="'Rp ' + Number(item.price).toLocaleString('id-ID')"></span>
+                                </div>
+                            </div>
+                        </a>
+                    </template>
+                    <a :href="'/products?type=search&value=' + encodeURIComponent(query)" class="block text-center py-3 text-sm font-bold text-brand-gold hover:text-brand-gold-dark hover:bg-brand-light transition-colors border-t border-gray-100">
+                        {{ __('Lihat Semua Hasil') }} <i class="fa-solid fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+                <div x-show="suggestions.length === 0 && !loading" class="p-8 text-center text-gray-500">
+                    <i class="fa-solid fa-box-open mb-3 text-3xl text-gray-200"></i>
+                    <p class="text-sm font-medium">{{ __('Tidak menemukan produk untuk pencarian ini.') }}</p>
+                </div>
+            </div>
         </div>
 
         <!-- Right Actions -->
@@ -205,17 +273,17 @@
                     class="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50"
                 >
                     <div class="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                        <h3 class="font-bold text-sm text-gray-800">Notifikasi</h3>
+                        <h3 class="font-bold text-sm text-gray-800">{{ __('Notifikasi') }}</h3>
                         <button onclick="markAllRead()" class="text-xs text-brand-gold hover:text-brand-gold-dark font-medium">
-                            Tandai Semua Dibaca
+                            {{ __('Tandai Semua Dibaca') }}
                         </button>
                     </div>
                     <div id="notification-list" class="max-h-80 overflow-y-auto">
-                        <div class="p-4 text-center text-sm text-gray-500">Memuat...</div>
+                        <div class="p-4 text-center text-sm text-gray-500">{{ __('Memuat...') }}</div>
                     </div>
                     <div class="border-t border-gray-100 px-4 py-2">
                         <a href="{{ route('notifications.index') }}" class="text-center text-sm text-brand-gold hover:text-brand-gold-dark font-medium block">
-                            Lihat Semua Notifikasi
+                            {{ __('Lihat Semua Notifikasi') }}
                         </a>
                     </div>
                 </div>
@@ -232,7 +300,7 @@
                     <div class="w-8 h-8 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold">
                         {{ substr($user['name'] ?? 'B', 0, 1) }}
                     </div>
-                    <span class="hidden lg:block font-bold">Akun Saya</span>
+                    <span class="hidden lg:block font-bold">{{ __('Akun Saya') }}</span>
                 </a>
             @else
                 <button 
@@ -242,7 +310,7 @@
                     <div class="w-8 h-8 rounded-full bg-brand-light flex items-center justify-center text-brand-gold-dark">
                         <i class="fa-solid fa-user w-4 h-4"></i>
                     </div>
-                    <span class="hidden lg:block">Masuk / Daftar</span>
+                    <span class="hidden lg:block">{{ __('Masuk / Daftar') }}</span>
                 </button>
             @endif
 
@@ -291,9 +359,7 @@
             <ul class="flex items-center gap-8 h-14 relative">
                 <!-- Home -->
                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                    <a href="{{ route('home') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                        Home
-                    </a>
+                    <a href="{{ route('home') }}" class="py-2 text-sm font-semibold hover:text-brand-gold transition-colors text-brand-dark {{ request()->routeIs('home') ? 'text-brand-gold' : '' }}">{{ __('Home') }}</a>
                 </li>
 
                 <!-- Brands Mega Menu Trigger -->
@@ -302,7 +368,7 @@
                     @mouseenter="activeMegaMenu = 'brands'"
                     @mouseleave="activeMegaMenu = null"
                 >
-                <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">Brand <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
+                <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">{{ __('Brand') }} <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
                     
                     <!-- Brands Mega Menu Content -->
                     <div 
@@ -335,7 +401,7 @@
                     @mouseenter="activeMegaMenu = 'categories'"
                     @mouseleave="activeMegaMenu = null"
                 >
-                <a href="{{ route('categories') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">Kategori Produk <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
+                <a href="{{ route('categories') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">{{ __('Kategori Produk') }} <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
 
                     <!-- Categories Mega Menu Content -->
                     <div 
@@ -400,7 +466,7 @@
                                     <p class="text-xs text-gray-300 mb-4 line-clamp-3">
                                         {{ $promoProduct->short_description ?? 'Temukan kenyamanan tidur tak tertandingi.' }}
                                     </p>
-                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">Lihat Koleksi &rarr;</span>
+                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">{{ __('Lihat Koleksi') }} &rarr;</span>
                                 </div>
                             </a>
                         @else
@@ -412,10 +478,10 @@
                                     <i class="fa-solid fa-bag-shopping w-full h-full text-brand-gold"></i>
                                 </div>
                                 <div class="relative z-10">
-                                    <span class="inline-block bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">New Arrival</span>
-                                    <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors">Koleksi Springbed 2026</h4>
-                                    <p class="text-sm text-gray-300 mb-4">Temukan kenyamanan tidur tak tertandingi.</p>
-                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">Lihat Koleksi &rarr;</span>
+                                    <span class="inline-block bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">{{ __('New Arrival') }}</span>
+                                    <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors">{{ __('Koleksi Springbed 2026') }}</h4>
+                                    <p class="text-sm text-gray-300 mb-4">{{ __('Temukan kenyamanan tidur tak tertandingi.') }}</p>
+                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">{{ __('Lihat Koleksi') }} &rarr;</span>
                                 </div>
                             </a>
                         @endif
@@ -424,19 +490,19 @@
 
                  <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
                      <a href="{{ route('promos') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                         Promo Spesial
+                         {{ __('Promo Spesial') }}
                      </a>
                  </li>
                  
                  <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
                      <a href="{{ route('bundling.index') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                         Bundling Hemat
+                         {{ __('Bundling Hemat') }}
                      </a>
                  </li>
                  
                  <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
                      <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                         Bantuan
+                         {{ __('Bantuan') }}
                      </a>
                  </li>
              </ul>
@@ -457,14 +523,14 @@
     >
         <div class="p-4 space-y-6">
             <a href="{{ route('home') }}" class="text-sm text-gray-600 font-semibold text-left flex justify-between items-center" @click="isMobileMenuOpen = false">
-                Home
+                {{ __('Home') }}
                 <span class="text-gray-400 -rotate-90 inline-block transition-transform">&rarr;</span>
             </a>
             <div>
-                <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">Brands</h4>
+                <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">{{ __('Brand') }}</h4>
                 <div class="grid grid-cols-2 gap-2">
                     @foreach($brands as $brand)
-<a 
+                        <a 
                              href="{{ route('brands.show', $brand->slug) }}" 
                              class="text-sm text-gray-600 py-1.5 text-left"
                              @click="isMobileMenuOpen = false"
@@ -476,7 +542,7 @@
             </div>
             <div class="w-full h-px bg-gray-100"></div>
             <div>
-                <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">Kategori</h4>
+                <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">{{ __('Kategori Produk') }}</h4>
                 <div class="grid grid-cols-1 gap-2">
                     @foreach($categories as $category)
                         <a 
@@ -492,10 +558,10 @@
             </div>
             <div class="w-full h-px bg-gray-100"></div>
             <div class="flex flex-col gap-3 py-2">
-                <a href="{{ route('promos') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Promo Spesial</a>
-                <a href="{{ route('bundling.index') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Bundling Hemat</a>
-                <a href="{{ route('blog') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Blog</a>
-                <a href="{{ route('help') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">Bantuan</a>
+                <a href="{{ route('promos') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Promo Spesial') }}</a>
+                <a href="{{ route('bundling.index') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Bundling Hemat') }}</a>
+                <a href="{{ route('blog') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Blog') }}</a>
+                <a href="{{ route('help') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Bantuan') }}</a>
             </div>
         </div>
     </div>

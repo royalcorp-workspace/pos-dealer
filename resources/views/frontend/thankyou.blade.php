@@ -158,12 +158,11 @@
             
             <!-- Right Column: Upsell / Reward -->
             <div class="lg:col-span-5 space-y-6">
-                <!-- Voucher Gift Card -->
+                <!-- Voucher Gift Card 
                 <div class="relative bg-gradient-to-br from-brand-gold to-yellow-500 rounded-3xl p-1 overflow-hidden shadow-2xl shadow-brand-gold/30 group">
                     <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                     <div class="bg-white rounded-[22px] h-full p-8 relative overflow-hidden flex flex-col items-center text-center">
                         
-                        <!-- Confetti/Stars decoration -->
                         <div class="absolute top-0 right-0 -mr-4 -mt-4 text-brand-gold/20 text-6xl rotate-12"><i class="fa-solid fa-certificate"></i></div>
                         
                         <div class="w-16 h-16 bg-brand-light rounded-full flex items-center justify-center mb-5 text-brand-gold-dark z-10">
@@ -195,6 +194,7 @@
                         </a>
                     </div>
                 </div>
+                -->
                 
                 <!-- Support Banner -->
                 <div class="bg-white rounded-3xl p-6 border border-brand-muted flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">

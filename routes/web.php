@@ -26,6 +26,7 @@ Route::get('/sitemap.xml', [PageController::class, 'sitemap'])->name('sitemap');
 Route::get('/robots.txt', [PageController::class, 'robots']);
 
 Route::get('/products', [ProductCatalogController::class, 'index'])->name('products.index');
+Route::get('/products/search-suggestions', [ProductCatalogController::class, 'searchSuggestions'])->name('products.search-suggestions');
 Route::get('/products/{product:slug}', [ProductCatalogController::class, 'show'])->name('products.show');
 Route::get('/category/{categorySlug}', [ProductCatalogController::class, 'index'])->name('category.show');
 

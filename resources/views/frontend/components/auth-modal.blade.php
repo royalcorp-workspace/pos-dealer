@@ -100,15 +100,15 @@
                 <!-- Login Form -->
                 <div x-show="isLoginForm && !isForgotPassword" x-cloak>
                     <div class="text-center mb-8">
-                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Welcome Back</h2>
-                        <p class="text-gray-500 text-sm mt-2">Masuk untuk mengakses keranjang dan pesanan Anda.</p>
+                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ __('Welcome Back') }}</h2>
+                        <p class="text-gray-500 text-sm mt-2">{{ __('Masuk untuk mengakses keranjang dan pesanan Anda.') }}</p>
                     </div>
 
                     <form action="/login" method="POST" class="space-y-4" id="loginModalForm">
                         @csrf
                         <div x-show="errorMessage" x-html="errorMessage" class="p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl" x-cloak></div>
                         <div>
-                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">Email Address</label>
+                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">{{ __('Email Address') }}</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <svg class="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.5v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m3 7.5 9 6 9-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -118,8 +118,8 @@
                         </div>
                         <div>
                             <div class="flex justify-between items-center mb-2">
-                                <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider">Password</label>
-                                <button type="button" @click="isForgotPassword = true; isLoginForm = false" class="text-xs font-bold text-brand-gold hover:text-brand-dark transition-colors focus:outline-none">Lost password?</button>
+                                <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider">{{ __('Password') }}</label>
+                                <button type="button" @click="isForgotPassword = true; isLoginForm = false" class="text-xs font-bold text-brand-gold hover:text-brand-dark transition-colors focus:outline-none">{{ __('Lost password?') }}</button>
                             </div>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -133,11 +133,11 @@
                                 <div :class="rememberMe ? 'bg-brand-gold border-brand-gold' : 'bg-white border border-brand-muted'" class="w-5 h-5 rounded border flex items-center justify-center transition-colors">
                                     <svg x-show="rememberMe" class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 12.5l3 3 9-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                 </div>
-                                <span class="text-sm font-medium text-gray-600 hover:text-brand-dark transition-colors">Remember me</span>
+                                <span class="text-sm font-medium text-gray-600 hover:text-brand-dark transition-colors">{{ __('Remember me') }}</span>
                             </button>
                         </div>
                         <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 mt-2 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50">
-                            <span x-show="!isSubmitting">Sign In</span><span x-show="isSubmitting">Memproses...</span>
+                            <span x-show="!isSubmitting">{{ __('Sign In') }}</span><span x-show="isSubmitting">{{ __('Memproses...') }}</span>
                         </button>
                     </form>
                 </div>
@@ -145,13 +145,13 @@
                 <!-- Forgot Password Form -->
                 <div x-show="isForgotPassword && !isOtpStep" x-cloak>
                     <div class="text-center mb-8">
-                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Reset Password</h2>
-                        <p class="text-gray-500 text-sm mt-2">Masukkan email/SMS untuk menerima kode OTP.</p>
+                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ __('Reset Password') }}</h2>
+                        <p class="text-gray-500 text-sm mt-2">{{ __('Masukkan email/SMS untuk menerima kode OTP.') }}</p>
                     </div>
                     <form action="/api/auth/forgot-password" method="POST" class="space-y-4" id="forgotPasswordModalForm">
                         @csrf
                         <div>
-                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">Email atau No. HP</label>
+                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">{{ __('Email atau No. HP') }}</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <svg class="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.5v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m3 7.5 9 6 9-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -175,7 +175,7 @@
                                         : 'bg-white text-gray-500 border-brand-muted'"
                                     class="text-center py-3 px-4 rounded-xl border font-semibold transition-all"
                                 >
-                                    Email
+                                    {{ __('Email') }}
                                 </div>
                             </label>
 
@@ -194,25 +194,25 @@
                                         : 'bg-white text-gray-500 border-brand-muted'"
                                     class="text-center py-3 px-4 rounded-xl border font-semibold transition-all"
                                 >
-                                    SMS
+                                    {{ __('SMS') }}
                                 </div>
                             </label>
                         </div>
-                        <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50"><span x-show="!isSubmitting">Lanjutkan</span><span x-show="isSubmitting">Memproses...</span></button>
-                        <button type="button" @click="isForgotPassword = false; isLoginForm = true" class="w-full py-2.5 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">&larr; Kembali ke Sign In</button>
+                        <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50"><span x-show="!isSubmitting">{{ __('Lanjutkan') }}</span><span x-show="isSubmitting">{{ __('Memproses...') }}</span></button>
+                        <button type="button" @click="isForgotPassword = false; isLoginForm = true" class="w-full py-2.5 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">&larr; {{ __('Kembali ke Sign In') }}</button>
                     </form>
                 </div>
 
                 <!-- Register Form -->
                 <div x-show="!isLoginForm && !isForgotPassword" x-cloak>
                     <div class="text-center mb-8">
-                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">Create an Account</h2>
-                        <p class="text-gray-500 text-sm mt-2">Daftar sekarang dan nikmati pengalaman belanja tidur impian.</p>
+                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ __('Create an Account') }}</h2>
+                        <p class="text-gray-500 text-sm mt-2">{{ __('Daftar sekarang dan nikmati pengalaman belanja tidur impian.') }}</p>
                     </div>
                     <form action="/register" method="POST" class="space-y-4" id="registerModalForm">
                         @csrf
                         <div>
-                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">Email Address</label>
+                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">{{ __('Email Address') }}</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <svg class="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.5v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m3 7.5 9 6 9-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -221,7 +221,7 @@
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">Password</label>
+                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">{{ __('Password') }}</label>
                             <div class="relative">
                                 <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                     <svg class="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -229,8 +229,8 @@
                                 <input type="password" name="password" required placeholder="••••••••" class="w-full pl-11 pr-4 py-3 bg-brand-light border border-brand-muted rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-colors"/>
                             </div>
                         </div>
-                        <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 mt-4 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50"><span x-show="!isSubmitting">Create Account</span><span x-show="isSubmitting">Memproses...</span></button>
-                        <button type="button" @click="isLoginForm = true; isForgotPassword = false" class="w-full py-2.5 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">&larr; Kembali ke Sign In</button>
+                        <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 mt-4 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50"><span x-show="!isSubmitting">{{ __('Create Account') }}</span><span x-show="isSubmitting">{{ __('Memproses...') }}</span></button>
+                        <button type="button" @click="isLoginForm = true; isForgotPassword = false" class="w-full py-2.5 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">&larr; {{ __('Kembali ke Sign In') }}</button>
                     </form>
                 </div>
 

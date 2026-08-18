@@ -102,11 +102,11 @@
 
         <!-- Typography -->
         <h1 class="text-4xl md:text-5xl lg:text-6xl font-serif text-white mb-6 fade-in-up delay-1 leading-tight tracking-wide">
-            Meningkatkan <span class="gold-gradient font-medium italic">Kenyamanan</span> Anda
+            {{ __('Meningkatkan') }} <span class="gold-gradient font-medium italic">{{ __('Kenyamanan') }}</span> {{ __('Anda') }}
         </h1>
         
         <p class="text-slate-300/80 text-base md:text-lg lg:text-xl mb-12 fade-in-up delay-2 font-light tracking-wide max-w-xl mx-auto leading-relaxed">
-            Sistem kami sedang dalam peningkatan rutin untuk memberikan Anda pengalaman belanja perlengkapan tidur yang lebih eksklusif dan paripurna.
+            {{ __('Sistem kami sedang dalam peningkatan rutin untuk memberikan Anda pengalaman belanja perlengkapan tidur yang lebih eksklusif dan paripurna.') }}
         </p>
 
         <!-- Animated Badge -->
@@ -114,7 +114,7 @@
             <div class="inline-block relative group">
                 <div class="absolute inset-0 bg-[#D4AF37] blur-md opacity-20 rounded-full transition-opacity duration-1000 group-hover:opacity-40"></div>
                 <div class="relative px-8 py-3 bg-slate-900/80 border border-[#D4AF37]/40 text-[#FDE047] rounded-full text-xs md:text-sm font-medium tracking-[0.2em] uppercase backdrop-blur-md shadow-2xl">
-                    Sistem Sedang Diperbarui
+                    {{ __('Sistem Sedang Diperbarui') }}
                 </div>
             </div>
         </div>

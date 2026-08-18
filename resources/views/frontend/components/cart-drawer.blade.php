@@ -93,7 +93,7 @@
                 <div class="h-full flex flex-col bg-white shadow-2xl overflow-y-scroll">
                     <div class="flex items-center justify-between p-5 md:p-6 border-b border-brand-muted">
                         <h2 class="text-xl font-bold text-brand-dark flex items-center gap-2">
-                            Shopping Cart <span class="text-gray-400 font-normal text-base">({{ $cartItemCount }} items)</span>
+                            {{ __('Shopping Cart') }} <span class="text-gray-400 font-normal text-base">({{ $cartItemCount }} {{ __('items') }})</span>
                         </h2>
                         <button
                             @click="isCartOpen = false"

@@ -1,7 +1,7 @@
 @extends('frontend.layouts.app')
 
-@section('title', 'Pusat Bantuan - IMG')
-@section('meta_description', 'Pusat bantuan IMG untuk pertanyaan seputar garansi, pengiriman, pembayaran, tukar tambah kasur, dan kontak layanan pelanggan.')
+@section('title', __('Pusat Bantuan') . ' - IMG')
+@section('meta_description', __('Pusat bantuan IMG untuk pertanyaan seputar garansi, pengiriman, pembayaran, tukar tambah kasur, dan kontak layanan pelanggan.'))
 @section('canonical', route('help'))
 
 @section('content')
@@ -70,8 +70,8 @@
 
 <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh]">
     <div class="text-center mb-12">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark mb-4 font-serif">Pusat Bantuan</h1>
-        <p class="text-gray-500 max-w-2xl mx-auto">Kami siap membantu Anda. Temukan jawaban dari pertanyaan yang sering diajukan, atau hubungi tim customer service kami.</p>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark mb-4 font-serif">{{ __('Pusat Bantuan') }}</h1>
+        <p class="text-gray-500 max-w-2xl mx-auto">{{ __('Kami siap membantu Anda. Temukan jawaban dari pertanyaan yang sering diajukan, atau hubungi tim customer service kami.') }}</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
@@ -79,7 +79,7 @@
         <div>
             <h2 class="text-2xl font-bold text-brand-dark mb-6 flex items-center gap-2">
                 <svg class="w-6 h-6 text-brand-gold" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>
-                Hubungi Kami
+                {{ __('Hubungi Kami') }}
             </h2>
             <div class="space-y-4">
                 @foreach($contacts as $contact)
@@ -108,20 +108,20 @@
             <div class="mt-8 p-6 bg-brand-light/30 border border-brand-muted rounded-2xl">
                 <h3 class="text-lg font-bold text-brand-dark mb-4 flex items-center gap-2">
                     <i class="fa-regular fa-clock text-brand-gold"></i>
-                    Jam Operasional
+                    {{ __('Jam Operasional') }}
                 </h3>
                 <ul class="space-y-3 text-gray-600">
                     <li class="flex justify-between items-center border-b border-gray-100 pb-2">
-                        <span>Senin - Jumat</span> 
+                        <span>{{ __('Senin - Jumat') }}</span> 
                         <span class="font-bold text-brand-dark">08:00 - 17:00 WIB</span>
                     </li>
                     <li class="flex justify-between items-center border-b border-gray-100 pb-2">
-                        <span>Sabtu</span> 
+                        <span>{{ __('Sabtu') }}</span> 
                         <span class="font-bold text-brand-dark">08:00 - 14:00 WIB</span>
                     </li>
                     <li class="flex justify-between items-center">
-                        <span>Minggu & Hari Libur</span> 
-                        <span class="font-bold text-red-500">Tutup</span>
+                        <span>{{ __('Minggu & Hari Libur') }}</span> 
+                        <span class="font-bold text-red-500">{{ __('Tutup') }}</span>
                     </li>
                 </ul>
             </div>
@@ -131,7 +131,7 @@
         <div>
             <h2 class="text-2xl font-bold text-brand-dark mb-6 flex items-center gap-2">
                 <svg class="w-6 h-6 text-brand-gold" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2v6h6M9 15h6M9 11h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                Pertanyaan Populer
+                {{ __('Pertanyaan Populer') }}
             </h2>
             <div class="space-y-3">
                 @foreach($faqs as $faq)
@@ -149,7 +149,7 @@
                 @endforeach
 
                 <div class="mt-6 pt-4 text-center">
-                    <button type="button" class="text-brand-gold-dark font-bold hover:text-brand-dark transition-colors">Lihat Semua Pertanyaan &rarr;</button>
+                    <button type="button" class="text-brand-gold-dark font-bold hover:text-brand-dark transition-colors">{!! __('Lihat Semua Pertanyaan &rarr;') !!}</button>
                 </div>
             </div>
         </div>
