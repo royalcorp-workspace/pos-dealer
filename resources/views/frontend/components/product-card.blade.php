@@ -11,6 +11,7 @@
     $reviewProduct['originalMaxPrice'] = $reviewProduct['originalMaxPrice'] ?? $reviewProduct['originalPrice'];
     $reviewProduct['hasDiscount'] = isset($reviewProduct['originalPrice']) && ($reviewProduct['originalPrice'] != $reviewProduct['price'] || isset($reviewProduct['discountBadge']));
     $reviewProduct['discountLabel'] = $reviewProduct['discountLabel'] ?? ($reviewProduct['discountBadge'] ? trim(str_replace('Hot', '', $reviewProduct['discountBadge'])) : null);
+    $hasPriceRange = $isVariable && isset($product['minPrice']) && isset($product['maxPrice']) && $product['minPrice'] != $product['maxPrice'];
 @endphp
 
 <div 
@@ -90,19 +91,19 @@
 
         <!-- Pricing -->
         <div class="flex flex-col gap-0.5 mt-2">
-            @if($isVariable)
+            @if($isVariable && $hasPriceRange)
                 <span class="text-sm font-medium text-gray-500">Rentang Harga</span>
                 <span class="font-bold text-lg text-brand-dark tracking-tight">
                     Rp {{ number_format($product['minPrice'], 0, ',', '.') }} - Rp {{ number_format($product['maxPrice'], 0, ',', '.') }}
                 </span>
             @else
-                @if(isset($product['originalPrice']))
+                @if(isset($product['originalPrice']) && $product['originalPrice'] != ($product['price'] ?? $product['minPrice'] ?? 0))
                     <span class="text-sm text-gray-500 line-through decoration-gray-300">
                         Rp {{ number_format($product['originalPrice'], 0, ',', '.') }}
                     </span>
                 @endif
                 <span class="font-bold text-lg text-brand-dark tracking-tight">
-                    Rp {{ number_format($product['price'], 0, ',', '.') }}
+                    Rp {{ number_format($product['price'] ?? $product['minPrice'] ?? 0, 0, ',', '.') }}
                 </span>
             @endif
         </div>
