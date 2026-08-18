@@ -1,4 +1,4 @@
-<form action="{{ route('products.index') }}" method="GET" class="space-y-6">
+<form action="{{ route('products.index', [], false) }}" method="GET" class="space-y-6">
 
     <div>
         <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">{{ __('Kategori') }}</h3>
