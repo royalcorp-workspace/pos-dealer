@@ -41,12 +41,29 @@ class ProductCatalogController extends Controller
             }
         }
 
-        $minPrice = $request->query('min_price', 0);
+        $minPrice = $request->query('min_price');
         $maxPrice = $request->query('max_price');
         $inStock = $request->query('in_stock');
+        
         $selectedBrands = $request->query('brands', []);
+        if (!is_array($selectedBrands)) $selectedBrands = [$selectedBrands];
+        
         $selectedCategories = $request->query('categories', []);
+        if (!is_array($selectedCategories)) $selectedCategories = [$selectedCategories];
+        
         $selectedTags = $request->query('tags', []);
+        if (!is_array($selectedTags)) $selectedTags = [$selectedTags];
+
+        // Ensure current route filter is checked in the sidebar
+        if ($filterType === 'category' && $filterValue && !in_array($filterValue, $selectedCategories)) {
+            $selectedCategories[] = $filterValue;
+        }
+        if ($filterType === 'brand' && $filterValue && !in_array($filterValue, $selectedBrands)) {
+            $selectedBrands[] = $filterValue;
+        }
+        if ($filterType === 'tag' && $filterValue && !in_array($filterValue, $selectedTags)) {
+            $selectedTags[] = $filterValue;
+        }
 
         $categories = ProductCategory::where('deleted', false)
             ->whereNull('parent_id')
@@ -99,19 +116,9 @@ class ProductCatalogController extends Controller
             ')
             ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
 
-        // Apply existing type/value filters
+        // Apply existing type/value filters (only for search now, others are handled by selected arrays)
         if ($filterType && $filterValue) {
-            if ($filterType === 'brand') {
-                $query->whereHas('brand', fn($q) => $q->where('slug', $filterValue));
-            } elseif ($filterType === 'category') {
-                $category = ProductCategory::where('slug', $filterValue)->first();
-                if ($category) {
-                    $categoryIds = $this->getCategoryHierarchyIds($category);
-                    $query->whereIn('category_id', $categoryIds);
-                }
-            } elseif ($filterType === 'tag') {
-                $query->whereHas('tags', fn($q) => $q->where('slug', $filterValue));
-            } elseif ($filterType === 'search') {
+            if ($filterType === 'search') {
                 $query->where(function ($q) use ($filterValue) {
                     $terms = array_filter(explode(' ', strtolower(trim($filterValue))));
                     
@@ -176,7 +183,14 @@ class ProductCatalogController extends Controller
 
         // Filter by selected categories (array)
         if (!empty($selectedCategories)) {
-            $query->whereHas('category', fn($q) => $q->whereIn('slug', $selectedCategories));
+            $allCategoryIds = [];
+            $matchedCategories = ProductCategory::whereIn('slug', $selectedCategories)->get();
+            foreach ($matchedCategories as $cat) {
+                $allCategoryIds = array_merge($allCategoryIds, $this->getCategoryHierarchyIds($cat));
+            }
+            if (!empty($allCategoryIds)) {
+                $query->whereIn('category_id', array_unique($allCategoryIds));
+            }
         }
 
         // Filter by selected tags (array)
@@ -215,7 +229,11 @@ class ProductCatalogController extends Controller
             'tags' => $tags,
             'filterType' => $filterType,
             'filterValue' => $filterValue,
-            'filters' => $request->query(),
+            'filters' => array_merge($request->query(), [
+                'categories' => $selectedCategories,
+                'brands' => $selectedBrands,
+                'tags' => $selectedTags,
+            ]),
             'sort' => $sort,
         ]);
     }
