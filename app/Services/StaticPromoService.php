@@ -127,6 +127,14 @@ class StaticPromoService
 
     public static function calculateItemDiscounts(array $item, int $quantity, float $originalPrice): array
     {
+        if (!self::hasActiveEvent()) {
+            return [
+                'static_discount' => 0.0,
+                'volume_discount' => 0.0,
+                'promotional_price' => $originalPrice
+            ];
+        }
+
         $volumeSettings = PriceProductSetting::active()->where('type', 2)->with(['volumeTiers', 'products'])->get();
         
         $matchedTier = null;

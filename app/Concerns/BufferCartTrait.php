@@ -105,6 +105,7 @@ trait BufferCartTrait
     {
         $items = $buffer->items()
             ->with(['product.brand', 'variant'])
+            ->orderBy('created_at')
             ->get()
             ->map(function ($item) {
                 $isBundle = str_starts_with($item->name ?? '', 'BUNDLE_');

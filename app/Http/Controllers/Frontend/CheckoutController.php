@@ -77,6 +77,30 @@ class CheckoutController extends Controller
         $priceProductSettingDiscount = 0.0;
 
         foreach ($cart as $key => $item) {
+            $isBundle = ($item['type'] ?? null) === 'bundle';
+            $bundleData = $item['bundle_data'] ?? null;
+            $quantity = (int) $item['quantity'];
+
+            if ($isBundle && $bundleData) {
+                $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
+                $cart[$key]['original_price'] = $originalPrice;
+                $originalCartTotal += ($originalPrice * $quantity);
+                
+                $promotionalPrice = $originalPrice;
+                $staticDiscount = 0.0;
+                $bundleModel = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleData['bundle_id'] ?? '');
+                if ($bundleModel) {
+                    $ppsPromo = \App\Services\StaticPromoService::forBundling($bundleModel, $originalPrice);
+                    if ($ppsPromo) {
+                        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $ppsPromo);
+                        $staticDiscount = ($originalPrice - $promotionalPrice) * $quantity;
+                    }
+                }
+                $totalPercentDiscount += $staticDiscount;
+                $cart[$key]['price'] = $promotionalPrice;
+                continue;
+            }
+
             $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
             $originalPrice = 0.0;
             if ($variantId) {
@@ -96,7 +120,6 @@ class CheckoutController extends Controller
             }
             $cart[$key]['original_price'] = $originalPrice;
 
-            $quantity = (int) $item['quantity'];
             $itemSubtotal = $originalPrice * $quantity;
             $originalCartTotal += $itemSubtotal;
 
@@ -144,33 +167,60 @@ class CheckoutController extends Controller
         foreach ($cart as $key => $item) {
             $isBundle = ($item['type'] ?? null) === 'bundle';
             $bundleData = $item['bundle_data'] ?? null;
+            $quantity = (int) $item['quantity'];
 
             if ($isBundle && $bundleData) {
                 $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
                 $variantId = null;
                 $cart[$key]['bundle_data'] = $bundleData;
-            } else {
-                $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+                
+                $originalSubtotal = $originalPrice * $quantity;
+                $originalCartTotal += $originalSubtotal;
+                
+                $promotionalPrice = $originalPrice;
+                $itemStaticDiscount = 0.0;
+                $bundleModel = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleData['bundle_id'] ?? '');
+                if ($bundleModel) {
+                    $ppsPromo = \App\Services\StaticPromoService::forBundling($bundleModel, $originalPrice);
+                    if ($ppsPromo) {
+                        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $ppsPromo);
+                        $itemStaticDiscount = ($originalPrice - $promotionalPrice) * $quantity;
+                    }
+                }
+                
+                $totalStaticDiscount += $itemStaticDiscount;
+                $cart[$key]['price'] = $promotionalPrice;
 
-                $originalPrice = 0.0;
-                if ($variantId) {
-                    $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                    if ($variantModel) {
-                        $originalPrice = (float) $variantModel->price;
-                    }
-                }
-                if ($originalPrice <= 0.0) {
-                    $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                    if ($productModel) {
-                        $originalPrice = (float) $productModel->base_price;
-                    }
-                }
-                if ($originalPrice <= 0.0) {
-                    $originalPrice = (float) $item['price'];
-                }
+                $resolvedItems[] = [
+                    'item' => $item,
+                    'variant_id' => $variantId,
+                    'original_price' => $originalPrice,
+                    'original_subtotal' => $originalSubtotal,
+                    'static_promo_discount' => $itemStaticDiscount,
+                    'volume_promo_discount' => 0.0,
+                ];
+                continue;
             }
 
-            $quantity = (int) $item['quantity'];
+            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+
+            $originalPrice = 0.0;
+            if ($variantId) {
+                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                if ($variantModel) {
+                    $originalPrice = (float) $variantModel->price;
+                }
+            }
+            if ($originalPrice <= 0.0) {
+                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                if ($productModel) {
+                    $originalPrice = (float) $productModel->base_price;
+                }
+            }
+            if ($originalPrice <= 0.0) {
+                $originalPrice = (float) $item['price'];
+            }
+
             $originalSubtotal = $originalPrice * $quantity;
             $originalCartTotal += $originalSubtotal;
 
@@ -249,22 +299,27 @@ class CheckoutController extends Controller
             }
 
             $customer = Customer::updateOrCreate(
-                ['email' => $request->email],
+                ['user_id' => $userId],
                 [
-                    'user_id' => $userId,
+                    'email' => $request->email,
                     'name' => $request->name,
                     'phone' => $request->phone,
                 ]
             );
+
+            // Perbarui juga data session agar UI langsung menggunakan nama baru
+            $user['name'] = $request->name;
+            $user['phone'] = $request->phone;
+            // $user['email'] = $request->email; // opsional, tergantung jika ingin merubah email akun
+            session()->put('user', $user);
         } else {
-            $customer = Customer::where('email', $request->email)->first();
-            if (!$customer) {
-                $customer = Customer::create([
+            $customer = Customer::updateOrCreate(
+                ['email' => $request->email],
+                [
                     'name' => $request->name,
-                    'email' => $request->email,
                     'phone' => $request->phone,
-                ]);
-            }
+                ]
+            );
         }
 
         $shippingCostSubsidy = 0;
@@ -362,6 +417,9 @@ class CheckoutController extends Controller
             $itemNotesValue = $item['item_note'] ?? ($itemNotes[$item['id']] ?? '');
             if (($item['type'] ?? null) === 'bundle' && ($item['bundle_data'] ?? null)) {
                 $itemNotesValue = $item['bundle_data'];
+                $itemName = ($item['bundle_data']['bundle_name'] ?? 'Paket Bundling');
+            } else {
+                $itemName = $item['name'];
             }
 
             OrderItem::create([
@@ -369,7 +427,7 @@ class CheckoutController extends Controller
                 'order_id' => $order->id,
                 'product_id' => $item['product_id'],
                 'product_variant_id' => $variantId,
-                'name' => $item['name'],
+                'name' => $itemName,
                 'quantity' => $item['quantity'],
                 'unit_price' => $originalPrice,
                 'discount_nominal' => $productDiscountNominal,
@@ -377,6 +435,26 @@ class CheckoutController extends Controller
                 'total' => max(0, $originalSubtotal - $productDiscountNominal),
                 'item_notes' => is_array($itemNotesValue) ? json_encode($itemNotesValue) : $itemNotesValue,
             ]);
+
+            // Jika ini bundling, masukkan juga isi item-itemnya sebagai order_items anak dengan harga 0
+            if (($item['type'] ?? null) === 'bundle' && isset($item['bundle_data']['items'])) {
+                foreach ($item['bundle_data']['items'] as $bItem) {
+                    OrderItem::create([
+                        'id' => Str::uuid(),
+                        'order_id' => $order->id,
+                        'product_id' => $bItem['product_id'],
+                        'product_variant_id' => $bItem['variant_id'] ?? null,
+                        'name' => ' - ' . ($bItem['product_name'] ?? 'Produk'),
+                        'quantity' => ((int)$bItem['quantity']) * ((int)$item['quantity']),
+                        'unit_price' => 0,
+                        'discount_nominal' => 0,
+                        'discount_percent' => 0,
+                        'total' => 0,
+                        'item_notes' => 'Bagian dari paket: ' . ($item['bundle_data']['bundle_name'] ?? 'Bundling'),
+                        'meta' => json_encode(['is_bundle_item' => true, 'bundle_id' => $item['bundle_data']['bundle_id'] ?? null])
+                    ]);
+                }
+            }
         }
 
         foreach ($appliedVouchers as $appliedVoucher) {
@@ -571,6 +649,7 @@ class CheckoutController extends Controller
 
             session()->forget('order_data');
             session()->forget('selected_voucher_codes');
+            session()->forget('cart'); // CLEAR CART SESSION
             session()->put('thankyou_order_id', $order->id);
 
             $buffer = $this->getCurrentBuffer();
