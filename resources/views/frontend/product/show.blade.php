@@ -20,7 +20,7 @@
         $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
         $firstVariantName = $hasVariants ? $validVariants->first()->variant_name : '';
         $totalStock = 999;
-        $originalPrice = $hasVariants ? (float) $validVariants->first()->price : $basePrice;
+        $originalPrice = $hasVariants && $minPrice ? (float) $minPrice : $basePrice;
         $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalPrice;
         $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
         $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
