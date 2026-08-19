@@ -221,3 +221,30 @@
     });
 </script>
 @endpush
+
+@push('tracking_events')
+@if($order)
+<script>
+    window.dataLayer = window.dataLayer || [];
+    dataLayer.push({ ecommerce: null });
+    dataLayer.push({
+        event: "purchase",
+        ecommerce: {
+            transaction_id: "{{ $orderId }}",
+            value: {{ $total }},
+            currency: "IDR",
+            items: [
+                @foreach($items as $item)
+                {
+                    item_id: "{{ $item->product_id ?? '' }}",
+                    item_name: "{{ $item->name ?? '' }}",
+                    price: {{ $item->price ?? 0 }},
+                    quantity: {{ $item->quantity ?? 1 }}
+                }@if(!$loop->last),@endif
+                @endforeach
+            ]
+        }
+    });
+</script>
+@endif
+@endpush

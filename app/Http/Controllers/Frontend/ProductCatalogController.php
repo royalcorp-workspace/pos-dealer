@@ -242,7 +242,31 @@ class ProductCatalogController extends Controller
     {
         $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags', 'suggestedProducts.images']);
 
-        return view('frontend.product.show', compact('product'));
+        $attributeGroups = [];
+        foreach ($product->variants as $variant) {
+            $variantAttributes = [];
+            $rawAttributes = $variant->getRawOriginal('attributes');
+            if ($rawAttributes) {
+                $variantAttributes = is_string($rawAttributes) ? json_decode($rawAttributes, true) : $rawAttributes;
+            }
+            
+            if (!empty($variantAttributes) && is_array($variantAttributes)) {
+                $ignoredKeys = ['width', 'length', 'height', 'weight'];
+                foreach ($variantAttributes as $key => $value) {
+                    if (in_array(strtolower($key), $ignoredKeys)) {
+                        continue;
+                    }
+                    if (!isset($attributeGroups[$key])) {
+                        $attributeGroups[$key] = [];
+                    }
+                    if (!in_array($value, $attributeGroups[$key])) {
+                        $attributeGroups[$key][] = $value;
+                    }
+                }
+            }
+        }
+
+        return view('frontend.product.show', compact('product', 'attributeGroups'));
     }
 
     public function searchSuggestions(Request $request)

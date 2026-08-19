@@ -128,3 +128,4 @@ Route::get('/400', [PageController::class, 'error400'])->name('errors.400');
 Route::get('/403', [PageController::class, 'error403'])->name('errors.403');
 Route::get('/404', [PageController::class, 'error404'])->name('errors.404');
 Route::get('/500', [PageController::class, 'error500'])->name('errors.500');
+

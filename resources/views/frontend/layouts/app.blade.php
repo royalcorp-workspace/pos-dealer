@@ -466,6 +466,8 @@
     
     <!-- Motion One (used by React motion/react) - attempt to reproduce exact animations -->
     <script defer src="https://cdn.jsdelivr.net/npm/motion@10.15.3/dist/motion.global.min.js"></script>
+
+    @include('frontend.components.tracking')
 </head>
 @php
     $whatsappNumber = isset($about) && isset($about->social_media['whatsapp'])
@@ -529,6 +531,14 @@
     @cart-add-failed.window="addToast('error', $event.detail && $event.detail.message ? $event.detail.message : 'Gagal menambahkan produk ke keranjang')"
     @show-toast.window="addToast($event.detail.type, $event.detail.message, $event.detail.duration)"
 >
+    @if(env('GTM_ID'))
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ env('GTM_ID') }}"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+    @endif
+
+    <div class="fixed inset-0 bg-brand-light z-[-1] hidden md:block"></div>
      <!-- Header Component -->
     @include('frontend.components.header')
 

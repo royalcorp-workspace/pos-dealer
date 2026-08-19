@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var voucherDiscountValue = document.getElementById('voucher-discount-value');
     var totalCost = document.getElementById('total-cost');
     var subtotal = Number(document.getElementById('checkout-subtotal')?.dataset.value || 0);
+    var promoDiscount = Number(document.getElementById('checkout-promo-discount')?.dataset.value || 0);
     var currentShippingCost = Number(document.getElementById('checkout-shipping-cost')?.dataset.value || 0);
     var productDiscount = Number(document.getElementById('checkout-product-discount')?.dataset.value || 0);
     var selectedCouponDiscount = Number(document.getElementById('checkout-voucher-discount')?.dataset.value || 0);
@@ -23,9 +24,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function updateTotal() {
-        var total = Math.max(0, subtotal - productDiscount + currentShippingCost - selectedCouponDiscount);
+        var total = Math.max(0, subtotal - promoDiscount - productDiscount + currentShippingCost - selectedCouponDiscount);
         if (totalCost) totalCost.textContent = formatRupiah(total);
         if (voucherDiscount) voucherDiscount.textContent = '- ' + formatRupiah(selectedCouponDiscount);
+
+        var productDiscountRow = document.getElementById('product-discount-row');
+        if (productDiscountRow) {
+            if (productDiscount > 0) {
+                productDiscountRow.classList.remove('hidden');
+                var productDiscountSpan = document.getElementById('product-discount');
+                if (productDiscountSpan) {
+                    productDiscountSpan.textContent = '- ' + formatRupiah(productDiscount);
+                }
+            } else {
+                productDiscountRow.classList.add('hidden');
+            }
+        }
     }
 
     function restoreCartCoupon() {
@@ -155,6 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
             localStorage.setItem('selectedCartCoupon', JSON.stringify(couponData));
             localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCoupons.map(function (code) { return { code: code }; })));
             var totalDiscount = 0;
+            var bonusHtml = '';
             selectedCoupons.forEach(function (code) {
                 var button = document.querySelector('.coupon-card[data-code="' + code + '"]');
                 var couponData = null;
@@ -162,7 +177,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     couponData = {
                         discountType: button.dataset.discountType == '1' || button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType == '2' || button.dataset.discountType === 'fixed' ? 2 : (button.dataset.discountType == '3' || button.dataset.discountType === 'shipping' ? 3 : 4)),
                         discountValue: parseFloat(button.dataset.discountValue) || 0,
-                        maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : Infinity
+                        maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : Infinity,
+                        products: button.dataset.products ? JSON.parse(button.dataset.products) : []
                     };
                 } else if (manualCouponsData[code]) {
                     couponData = manualCouponsData[code];
@@ -174,15 +190,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 var discountValue = couponData.discountValue;
                 var maxDiscount = couponData.maxDiscount;
                 var discount = 0;
-                if (discountType === 1) { discount = Math.min((subtotal * discountValue) / 100, maxDiscount); }
-                else if (discountType === 2) { discount = Math.min(discountValue, subtotal); }
+                var discountableBase = Math.max(0, subtotal - promoDiscount - productDiscount);
+                if (discountType === 1) { discount = Math.min((discountableBase * discountValue) / 100, maxDiscount); }
+                else if (discountType === 2) { discount = Math.min(discountValue, discountableBase); }
                 else if (discountType === 3) { discount = Math.min(discountValue, currentShippingCost); }
                 else if (discountType === 4) { discount = 0; } // Bonus produk tidak mengurangi total
-                totalDiscount += Math.max(0, Math.min(discount, subtotal + currentShippingCost));
+                totalDiscount += Math.max(0, Math.min(discount, discountableBase + currentShippingCost));
+
+                // If Bonus Product, build HTML alert
+                if (discountType === 4 && couponData.products && couponData.products.length > 0) {
+                    var listItems = couponData.products.map(function(p) {
+                        return '<li>' + parseInt(discountValue) + 'x ' + p + '</li>';
+                    }).join('');
+                    bonusHtml += '<div class="mt-3 flex items-start gap-2.5 bg-green-50 text-green-800 p-3 rounded-xl border border-green-200 text-xs font-semibold">' +
+                        '<i class="fa-solid fa-circle-check text-sm text-green-600 mt-0.5"></i>' +
+                        '<div>' +
+                            '<p class="font-extrabold">Selamat! Anda mendapatkan Bonus Produk:</p>' +
+                            '<ul class="list-disc pl-4 mt-1 space-y-0.5">' + listItems + '</ul>' +
+                        '</div>' +
+                    '</div>';
+                }
             });
             selectedCouponDiscount = Math.max(0, Math.min(totalDiscount, subtotal + currentShippingCost));
             var selectedText = document.getElementById('selected-coupon-text');
             if (selectedText) selectedText.innerHTML = 'Kupon dipilih: <strong class="text-brand-dark">' + selectedCoupons.join(', ') + '</strong>';
+            
+            var bonusDisplay = document.getElementById('bonus-products-display');
+            if (bonusDisplay) bonusDisplay.innerHTML = bonusHtml;
+
             if (voucherRow) voucherRow.style.display = 'flex';
             if (voucherLabel) voucherLabel.textContent = 'Voucher (' + selectedCoupons.join(', ') + ')';
         }
@@ -255,7 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({
                 code: code,
-                cart_total: subtotal,
+                cart_total: Math.max(0, subtotal - promoDiscount - productDiscount),
                 product_ids: productIds,
                 category_ids: categoryIds
             })
@@ -270,7 +305,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 manualCouponsData[code] = {
                     discountType: discountType,
                     discountValue: discountVal,
-                    maxDiscount: maxDiscount
+                    maxDiscount: maxDiscount,
+                    products: data.voucher.products || []
                 };
 
                 var allowStacking = data.voucher.allow_stacking ? 1 : 0;
@@ -310,82 +346,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var formEl = document.getElementById('checkout-form');
     var isLoggedIn = formEl ? formEl.dataset.isLoggedIn === '1' : false;
 
-    if (!isLoggedIn) {
-        var emailInput = document.querySelector('input[name="email"]');
-        var phoneInput = document.querySelector('input[name="phone"]');
-
-        function checkUserRegistration(field, value) {
-            if (!value) return;
-            var payload = {};
-            payload[field] = value;
-
-            fetch('/checkout/check-user', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(function (response) { return response.json(); })
-            .then(function (data) {
-                if (data.registered) {
-                    if (data.customer) {
-                        var nameInput = document.querySelector('input[name="name"]');
-                        var phoneInput = document.querySelector('input[name="phone"]');
-                        var emailInputEl = document.querySelector('input[name="email"]');
-                        if (nameInput && data.customer.name) nameInput.value = data.customer.name;
-                        if (phoneInput && data.customer.phone) phoneInput.value = data.customer.phone;
-                        if (emailInputEl && data.customer.email) emailInputEl.value = data.customer.email;
-                    }
-
-                    if (data.address) {
-                        var addressInput = document.querySelector('textarea[name="address"]');
-                        var postalInput = document.querySelector('input[name="postal_code"]');
-                        var cityInput = document.getElementById('city-display') || document.querySelector('input[name="city"]');
-                        var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
-
-                        if (addressInput && data.address.address) addressInput.value = data.address.address;
-                        if (postalInput && data.address.postal_code) postalInput.value = data.address.postal_code;
-                        if (cityInput && data.address.city) cityInput.value = data.address.city;
-                        if (subDistrictSelect && data.address.sub_district_id) {
-                            subDistrictSelect.value = data.address.sub_district_id;
-                            subDistrictSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    }
-
-                    window.dispatchEvent(new CustomEvent('open-auth'));
-                    var noticeId = 'checkout-login-notice';
-                    var notice = document.getElementById(noticeId);
-                    if (!notice) {
-                        notice = document.createElement('div');
-                        notice.id = noticeId;
-                        notice.className = 'mt-2 text-sm text-brand-gold font-semibold';
-                        notice.textContent = 'Email / Nomor Telepon ini sudah terdaftar. Silakan login terlebih dahulu untuk melanjutkan.';
-                        if (emailInput && emailInput.parentNode) {
-                            emailInput.parentNode.appendChild(notice);
-                        }
-                    }
-                }
-            })
-            .catch(function () {});
-        }
-
-        if (emailInput) {
-            emailInput.addEventListener('blur', function () {
-                checkUserRegistration('email', this.value.trim());
-            });
-        }
-
-        if (phoneInput) {
-            phoneInput.addEventListener('blur', function () {
-                checkUserRegistration('phone', this.value.trim());
-            });
-        }
-    }
-
     restoreCartCoupon();
+    updateTotal();
 });
 
 document.addEventListener('DOMContentLoaded', function() {

@@ -1,4 +1,3 @@
-
 const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
@@ -40,6 +39,8 @@ document.addEventListener('hide-loading', () => {
 });
 
 document.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
+
     const target = e.target;
     if (target.matches('form[action*="cart/add"]')) {
         e.preventDefault();
@@ -179,34 +180,51 @@ window.openProductReview = function (event, productId) {
 
 window.toggleWishlist = function (el) {
     const productId = el.dataset.productId;
+    showLoading();
     const routeCartToggleWishlist = document.body.dataset.routeCartToggleWishlist;
+    fetch(routeCartToggleWishlist, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ product_id: productId })
+    })
+    .then((r) => {
+        return r.json().then(data => ({ status: r.status, ok: r.ok, data }));
+    })
+    .then(({ status, ok, data }) => {
+        hideLoading();
+        
+        if (status === 401 || data.require_login) {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: data.message || 'Silakan login terlebih dahulu.' } }));
+            window.dispatchEvent(new CustomEvent('open-auth'));
+            return;
+        }
 
-    if (routeCartToggleWishlist) {
-        fetch(routeCartToggleWishlist, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify({ product_id: productId })
-        })
-        .then((r) => r.json())
-        .then((data) => {
-            if (data.success) {
-                const icon = el.querySelector('i');
-                if (data.in_wishlist) {
-                    icon.classList.remove('fa-regular');
-                    icon.classList.add('fa-solid', 'text-brand-gold');
-                } else {
-                    icon.classList.remove('fa-solid', 'text-brand-gold');
-                    icon.classList.add('fa-regular');
-                }
-                window.updateWishlistBadge(data.in_wishlist ? 1 : -1);
+        if (!ok || !data.success) {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Terjadi kesalahan sistem.' } }));
+            return;
+        }
+
+        const icon = el.querySelector('i');
+        if (icon) {
+            if (data.in_wishlist) {
+                icon.classList.remove('fa-regular');
+                icon.classList.add('fa-solid', 'text-brand-gold');
+            } else {
+                icon.classList.remove('fa-solid', 'text-brand-gold');
+                icon.classList.add('fa-regular');
             }
-        })
-        .catch((err) => console.error('Wishlist error:', err));
-    }
+        }
+        updateWishlistBadge(data.in_wishlist ? 1 : -1);
+    })
+    .catch((err) => { 
+        hideLoading(); 
+        console.error('Wishlist error:', err); 
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Koneksi terputus atau terjadi kesalahan.' } }));
+    });
 };
 
 function initHeroMotion() {
@@ -364,12 +382,11 @@ document.addEventListener('click', function (e) {
             catalogBtn.style.display = 'none';
         }
     })
-    .catch(err => {
+    .catch((err) => {
         hideLoading();
         catalogBtn.disabled = false;
         catalogBtn.style.opacity = '1';
         console.error('Catalog load more error:', err);
-        alert(err.message || 'Gagal memuat produk');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: err.message || 'Gagal memuat produk' } }));
     });
 });
-

@@ -2,7 +2,7 @@
 
 @section('title', $product->name . ' - IMG')
 
-@section('meta_description', \Illuminate\Support\Str::limit($product->short_description ?: $product->description ?: $product->name, 160))
+@section('meta_description', \Illuminate\Support\Str::limit(strip_tags($product->short_description ?: $product->description ?: $product->name), 160))
 @section('canonical', route('products.show', $product->slug))
 @section('og_image', $product->thumbnail_url ?: 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800')
 @section('og_type', 'product')
@@ -49,7 +49,7 @@
             '@type' => 'Product',
             'name' => $product->name,
             'image' => $images,
-            'description' => $product->short_description ?: $product->description ?: $product->name,
+            'description' => strip_tags($product->short_description ?: $product->description ?: $product->name),
             'sku' => $product->sku ?? $product->id,
             'brand' => [
                 '@type' => 'Brand',
@@ -210,31 +210,50 @@
 
                     <!-- Options (Variants) -->
                     @if($hasVariants)
-                        <div class="mb-8">
-                            <h3 class="font-bold text-brand-dark mb-4">Pilih Ukuran</h3>
-                            <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                @foreach($variantsData as $i => $variant)
-                                    <button 
-                                        type="button"
-                                        data-variant-id="{{ $variant->id }}"
-                                        data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->price, $staticPromo) }}"
-                                        data-variant-original-price="{{ $variant->price }}"
-                                        onclick="selectVariant(this)"
-                                        class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 border-brand-muted bg-white text-gray-600"
-                                    >
-                                        {{ $variant->variant_name }}
-                                        @if(false)
-                                            <div class="text-xs text-gray-400 mt-1">Sold Out</div>
-                                        @endif
-                                    </button>
-                                @endforeach
+                        @if(!empty($attributeGroups))
+                            @foreach($attributeGroups as $groupName => $options)
+                                <div class="mb-6 attribute-group-container" data-group="{{ $groupName }}">
+                                    <h3 class="font-bold text-brand-dark mb-4">Pilih {{ $groupName }}</h3>
+                                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                                        @foreach($options as $option)
+                                            <button 
+                                                type="button"
+                                                data-attribute-group="{{ $groupName }}"
+                                                data-attribute-value="{{ $option }}"
+                                                onclick="selectAttribute(this)"
+                                                class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 border-brand-muted bg-white text-gray-600 attribute-btn"
+                                            >
+                                                {{ $option }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endforeach
+                        @else
+                            <!-- Legacy fallback for variants without attributes -->
+                            <div class="mb-8">
+                                <h3 class="font-bold text-brand-dark mb-4">Pilih Variasi</h3>
+                                <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                                    @foreach($variantsData as $i => $variant)
+                                        <button 
+                                            type="button"
+                                            data-variant-id="{{ $variant->id }}"
+                                            data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->price, $staticPromo) }}"
+                                            data-variant-original-price="{{ $variant->price }}"
+                                            onclick="selectVariant(this)"
+                                            class="py-3 px-4 rounded-xl font-semibold text-sm transition-all text-center focus:outline-none border-2 border-brand-muted bg-white text-gray-600 legacy-variant-btn"
+                                        >
+                                            {{ $variant->variant_name }}
+                                        </button>
+                                    @endforeach
+                                </div>
                             </div>
-                        </div>
+                        @endif
                         <input type="hidden" name="variant_id" id="variant-id-input" value="">
                     @endif
 
-                    <!-- Options (Colors) -->
-                    @if($hasColors)
+                    <!-- Options (Colors) - Temporarily hidden per user request -->
+                    <!-- @if($hasColors)
                         <div class="mb-8">
                             <h3 class="font-bold text-brand-dark mb-4">Pilih Warna</h3>
                             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -256,7 +275,7 @@
                             </div>
                         </div>
                         <input type="hidden" name="color_id" id="color-id-input" value="">
-                    @endif
+                    @endif -->
 
                     @php
                         $totalStock = 999;
@@ -265,12 +284,15 @@
                     <!-- Action Buttons -->
                     <div class="flex flex-col sm:flex-row gap-4 mb-8 pt-6 border-t border-brand-muted">
                         @if($totalStock > 0)
+                            @php
+                                $isDisabledByOptions = $hasVariants || $hasColors;
+                            @endphp
                             <div class="flex gap-2 w-full">
                                 <div class="w-1/5">
                                     <div class="flex items-center gap-1">
-                                        <button type="button" onclick="updateQty(-1)" class="w-full h-12 rounded-lg border border-brand-muted bg-white hover:bg-brand-light flex items-center justify-center text-lg font-bold text-brand-dark">-</button>
-                                        <input type="number" name="quantity" id="quantity-input" value="1" min="1" max="{{ $totalStock }}" class="w-full h-12 border border-brand-muted rounded-lg text-center font-bold text-brand-dark">
-                                        <button type="button" onclick="updateQty(1)" class="w-full h-12 rounded-lg border border-brand-muted bg-white hover:bg-brand-light flex items-center justify-center text-lg font-bold text-brand-dark">+</button>
+                                        <button type="button" onclick="updateQty(-1)" id="qty-minus-btn" class="w-full h-12 rounded-lg border border-brand-muted bg-white hover:bg-brand-light flex items-center justify-center text-lg font-bold text-brand-dark disabled:opacity-50 disabled:cursor-not-allowed" {{ $isDisabledByOptions ? 'disabled' : '' }}>-</button>
+                                        <input type="number" name="quantity" id="quantity-input" value="1" min="1" max="{{ $totalStock }}" class="w-full h-12 border border-brand-muted rounded-lg text-center font-bold text-brand-dark disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100" {{ $isDisabledByOptions ? 'disabled' : '' }}>
+                                        <button type="button" onclick="updateQty(1)" id="qty-plus-btn" class="w-full h-12 rounded-lg border border-brand-muted bg-white hover:bg-brand-light flex items-center justify-center text-lg font-bold text-brand-dark disabled:opacity-50 disabled:cursor-not-allowed" {{ $isDisabledByOptions ? 'disabled' : '' }}>+</button>
                                     </div>
                                 </div>
                                 <div class="w-4/5 flex gap-2">
@@ -278,6 +300,7 @@
                                         type="submit"
                                         id="add-to-cart-btn"
                                         class="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 bg-brand-dark text-brand-gold hover:bg-brand-darker shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                                        {{ $isDisabledByOptions ? 'disabled' : '' }}
                                     >
                                         <i class="fa-solid fa-cart-shopping w-4 h-4"></i>
                                         Tambah ke Keranjang
@@ -306,8 +329,9 @@
 
                 <!-- Features list -->
                 @php
-                    $hasWarranty = $product->category->has_warranty ?? false;
-                    $warrantyDuration = $product->warranty_duration ?? '15 Tahun';
+                    $warrantyDuration = $product->warranty_duration;
+                    $hasWarranty = !empty($warrantyDuration) || !empty($product->category->has_warranty);
+                    $warrantyText = $warrantyDuration ? $warrantyDuration : '15 Tahun';
                 @endphp
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                     <div class="flex items-center gap-3 p-4 bg-brand-light rounded-xl border border-brand-muted/50">
@@ -343,9 +367,7 @@
                 <div class="border-t border-brand-muted pt-8">
                     <h3 class="text-xl font-bold text-brand-dark mb-4">Deskripsi Produk</h3>
                     <div class="prose prose-sm text-gray-600 max-w-none leading-relaxed">
-                        <p class="mb-4">
-                            {{ $product->description }}
-                        </p>
+                        {!! $product->description !!}
                     </div>
                 </div>
 
@@ -365,13 +387,13 @@
                             <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Ketersediaan</dt>
                             <dd class="mt-1 font-semibold text-brand-dark">{{ $totalStock > 0 ? 'Tersedia untuk dipesan' : 'Stok sedang habis' }}</dd>
                         </div>
-                        <div class="bg-brand-light rounded-xl p-4">
+                        <!-- <div class="bg-brand-light rounded-xl p-4">
                             <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Layanan</dt>
-                            <dd class="mt-1 font-semibold text-brand-dark">Konsultasi gratis dan pengiriman Jabodetabek.</dd>
-                        </div>
+                            <dd class="mt-1 font-semibold text-brand-dark">Konsultasi Gratis.</dd>
+                        </div> -->
                         <div class="bg-brand-light rounded-xl p-4">
                             <dt class="text-xs font-bold uppercase tracking-wider text-gray-500">Garansi</dt>
-                            <dd class="mt-1 font-semibold text-brand-dark">{{ $hasWarranty ? "Resmi $warrantyDuration" : 'Tidak ada garansi' }}</dd>
+                            <dd class="mt-1 font-semibold text-brand-dark">{{ $hasWarranty ? "Resmi $warrantyText" : 'Tidak ada garansi' }}</dd>
                         </div>
                     </dl>
                 </div>
@@ -402,6 +424,98 @@
     @endpush
 @endsection
 
+@push('tracking_events')
+<script>
+    window.dataLayer = window.dataLayer || [];
+    
+    // 1. Trigger: view_item (Melihat Detail Produk)
+    dataLayer.push({ ecommerce: null }); // Clear the previous ecommerce object
+    dataLayer.push({
+        event: "view_item",
+        ecommerce: {
+            currency: "IDR",
+            value: {{ $price ?? 0 }},
+            items: [{
+                item_id: "{{ $product->code ?? $product->id }}",
+                item_name: "{{ $product->name }}",
+                item_category: "{{ $categoryName ?? '' }}",
+                item_brand: "{{ $brandName ?? '' }}",
+                price: {{ $price ?? 0 }}
+            }]
+        }
+    });
+
+    // 2. Trigger: add_to_cart (Tambah ke Keranjang)
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form[action*="cart"]');
+        if(form) {
+            form.addEventListener('submit', function(e) {
+                if (e.defaultPrevented) return;
+                
+                // Ensure validation from product-detail.js passes before firing
+                const variantInput = document.getElementById('variant-id-input');
+                const hasVariants = document.querySelector('[data-variant-id]') !== null;
+                const colorInput = document.getElementById('color-id-input');
+                const hasColors = document.querySelector('[data-color-id]') !== null;
+                
+                if (hasVariants && variantInput && !variantInput.value) return;
+                if (hasColors && colorInput && !colorInput.value) return;
+                
+                const qty = parseInt(document.getElementById('quantity-input')?.value || 1);
+                
+                let selectedVariantPrice = {{ $price ?? 0 }};
+                const activeVariant = document.querySelector('[data-variant-id].border-brand-gold');
+                if (activeVariant && activeVariant.dataset.variantPrice) {
+                    selectedVariantPrice = parseFloat(activeVariant.dataset.variantPrice) || selectedVariantPrice;
+                }
+                
+                dataLayer.push({ ecommerce: null });
+                dataLayer.push({
+                    event: "add_to_cart",
+                    ecommerce: {
+                        currency: "IDR",
+                        value: selectedVariantPrice * qty,
+                        items: [{
+                            item_id: "{{ $product->code ?? $product->id }}",
+                            item_name: "{{ $product->name }}",
+                            item_category: "{{ $categoryName ?? '' }}",
+                            item_brand: "{{ $brandName ?? '' }}",
+                            price: selectedVariantPrice,
+                            quantity: qty
+                        }]
+                    }
+                });
+            });
+        }
+    });
+</script>
+@endpush
+
 @push('scripts')
+@php
+    $mappedVariants = collect($variantsData ?? [])->map(function($v) {
+        $rawAttrs = $v->getRawOriginal('attributes');
+        $parsedAttrs = [];
+        if ($rawAttrs) {
+            $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
+            if (is_array($parsedAttrs)) {
+                $ignoredKeys = ['width', 'length', 'height', 'weight'];
+                foreach ($ignoredKeys as $ik) {
+                    unset($parsedAttrs[$ik]);
+                }
+            }
+        }
+        return [
+            'id' => $v->id,
+            'price' => $v->price,
+            'variant_name' => $v->variant_name,
+            'attributes' => $parsedAttrs
+        ];
+    })->values()->all();
+@endphp
+<script>
+    window.productVariants = @json($mappedVariants);
+    window.staticPromo = @json($staticPromo ?? null);
+</script>
 <script src="{{ asset('js/frontend/product-detail.js') }}?v={{ filemtime(public_path('js/frontend/product-detail.js')) }}"></script>
 @endpush

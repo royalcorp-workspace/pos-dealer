@@ -28,9 +28,23 @@ class CartController extends Controller
         $variantId = $request->input('variant_id');
         $quantity = (int) $request->input('quantity');
 
-        $product = Product::where('id', $productId)->first();
+        $product = Product::with('variants')->where('id', $productId)->first();
         if (!$product) {
             return response()->json(['error' => 'Product not found'], 404);
+        }
+
+        if ($product->variants->isNotEmpty() && empty($variantId)) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'Silakan pilih ukuran terlebih dahulu.'], 422);
+            }
+            return redirect()->back()->with('error', 'Silakan pilih ukuran terlebih dahulu.');
+        }
+
+        if ($product->colors()->exists() && empty($request->input('color_id'))) {
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'Silakan pilih warna terlebih dahulu.'], 422);
+            }
+            return redirect()->back()->with('error', 'Silakan pilih warna terlebih dahulu.');
         }
 
         $price = $product->base_price;

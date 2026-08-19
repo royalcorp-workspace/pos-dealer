@@ -477,3 +477,27 @@
         });
     </script>
 @endsection
+
+@push('tracking_events')
+<script>
+    window.dataLayer = window.dataLayer || [];
+    dataLayer.push({ ecommerce: null });
+    dataLayer.push({
+        event: "begin_checkout",
+        ecommerce: {
+            currency: "IDR",
+            value: {{ collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']) }},
+            items: [
+                @foreach($cart as $id => $item)
+                {
+                    item_id: "{{ $item['product_id'] ?? '' }}",
+                    item_name: "{{ $item['name'] ?? '' }}",
+                    price: {{ $item['price'] ?? 0 }},
+                    quantity: {{ $item['quantity'] ?? 1 }}
+                }@if(!$loop->last),@endif
+                @endforeach
+            ]
+        }
+    });
+</script>
+@endpush

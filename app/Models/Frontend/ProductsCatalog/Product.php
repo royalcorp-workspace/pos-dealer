@@ -59,6 +59,7 @@ class Product extends Model
         'alt_text',
         'short_description',
         'description',
+        'warranty_duration',
         'base_price',
         'best_seller',
         'is_new',
