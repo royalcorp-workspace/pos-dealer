@@ -59,6 +59,7 @@ class Product extends Model
         'alt_text',
         'short_description',
         'description',
+        'warranty_duration',
         'base_price',
         'best_seller',
         'is_new',
@@ -94,7 +95,20 @@ class Product extends Model
 
     public function getThumbnailUrlAttribute(): string
     {
-        return $this->thumbnail ? asset('storage/' . $this->thumbnail) : asset('images/dummy/header.jpg');
+        if (!$this->thumbnail) {
+            return asset('images/dummy/header.jpg');
+        }
+
+        if (filter_var($this->thumbnail, FILTER_VALIDATE_URL)) {
+            return $this->thumbnail;
+        }
+
+        $cmsUrl = env('CMS_URL', '');
+        if ($cmsUrl) {
+            return rtrim($cmsUrl, '/') . '/storage/' . ltrim($this->thumbnail, '/');
+        }
+
+        return asset('storage/' . ltrim($this->thumbnail, '/'));
     }
 
     public function brand(): BelongsTo

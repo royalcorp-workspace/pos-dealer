@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
             submitBtn.querySelector('span').textContent = 'Memproses...';
 
             if (!csrfToken) {
-                alert('CSRF token tidak ditemukan');
+                window.dispatchEvent(new CustomEvent('show-auth-toast', { detail: { type: 'error', message: 'CSRF token tidak ditemukan' } }));
                 submitBtn.disabled = false;
                 submitBtn.querySelector('span').textContent = 'Lanjutkan';
                 return;

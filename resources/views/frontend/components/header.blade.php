@@ -388,7 +388,7 @@
                                     href="{{ route('brands.show', $brand->slug) }}" 
                                     class="group flex justify-center items-center p-4 border border-brand-muted rounded-lg hover:border-brand-gold hover:bg-brand-light transition-all focus:outline-none w-full text-center"
                                 >
-                                    <span class="font-medium text-gray-700 text-sm group-hover:text-brand-dark">{{ $brand->name }}</span>
+                                    <span class="font-medium text-gray-700 text-sm group-hover:text-brand-dark">{{ html_entity_decode($brand->name) }}</span>
                                 </a>
                             @endforeach
                         </div>
@@ -422,7 +422,7 @@
                                         href="{{ route('category.show', $category->slug) }}" 
                                         class="font-bold text-gray-900 hover:text-brand-gold-dark flex items-center justify-between border-b border-gray-100 pb-2 w-full text-left"
                                     >
-                                        {{ $category->name }}
+                                        {{ html_entity_decode($category->name) }}
                                     </a>
                                     @if($category->children->isNotEmpty())
                                         <ul class="space-y-2 mt-2">
@@ -432,7 +432,7 @@
                                                         href="{{ route('category.show', $child->slug) }}" 
                                                         class="text-sm text-gray-500 hover:text-brand-gold transition-colors text-left"
                                                     >
-                                                        {{ $child->name }}
+                                                        {{ html_entity_decode($child->name) }}
                                                     </a>
                                                 </li>
                                             @endforeach

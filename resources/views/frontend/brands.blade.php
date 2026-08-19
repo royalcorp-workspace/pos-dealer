@@ -77,7 +77,7 @@
                             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 7h10l2 4c0 1.1-.9 2-2 2H9l-2 4V7z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </div>
                     @endif
-                    <h3 class="font-bold text-brand-dark text-center group-hover:text-brand-gold-dark transition-colors">{{ $brand->name }}</h3>
+                    <h3 class="font-bold text-brand-dark text-center group-hover:text-brand-gold-dark transition-colors">{{ html_entity_decode($brand->name) }}</h3>
                     <span class="text-xs text-gray-400 mt-2">{{ $brand->products_count }} Produk</span>
                 </a>
             @endforeach

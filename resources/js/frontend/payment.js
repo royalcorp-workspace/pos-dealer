@@ -1,7 +1,7 @@
 window.processPayment = function () {
     var selectedMethod = document.querySelector('input[name="payment_method"]:checked');
     if (!selectedMethod) {
-        alert('Pilih metode pembayaran terlebih dahulu');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Pilih metode pembayaran terlebih dahulu' } }));
         return;
     }
     
@@ -17,7 +17,7 @@ window.processPayment = function () {
     if (isManualTransfer) {
         var fileInput = document.getElementById('payment_proof');
         if (!fileInput || fileInput.files.length === 0) {
-            alert('Silakan upload bukti transfer terlebih dahulu.');
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Silakan upload bukti transfer terlebih dahulu.' } }));
             window.hideLoading();
             return;
         }
@@ -50,14 +50,17 @@ window.processPayment = function () {
     .then(function (data) {
         window.hideLoading();
         if (data.success) {
+            // Clear localStorage on successful payment
+            localStorage.removeItem('selectedCartCoupon');
+            localStorage.removeItem('selectedCartCoupons');
             window.location.href = data.redirect_url || thankYouUrl;
         } else {
-            alert(data.message || 'Gagal memproses pembayaran.');
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Gagal memproses pembayaran.' } }));
         }
     })
     .catch(function () {
         window.hideLoading();
-        alert('Gagal memproses pembayaran. Silakan coba lagi.');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Gagal memproses pembayaran. Silakan coba lagi.' } }));
     });
 };
 

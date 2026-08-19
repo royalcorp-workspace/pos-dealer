@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
             submitBtn.querySelector('span').textContent = 'Memproses...';
 
             if (!csrfToken) {
-                alert('CSRF token tidak ditemukan');
+                window.dispatchEvent(new CustomEvent('show-auth-toast', { detail: { type: 'error', message: 'CSRF token tidak ditemukan' } }));
                 submitBtn.disabled = false;
                 submitBtn.querySelector('span').textContent = 'Lanjutkan';
                 return;
@@ -246,13 +246,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (res.ok && (res.data.success || res.data.message)) {
                     window.location.href = window.location.origin + '/password-otp-sent?email=' + encodeURIComponent(email);
                 } else {
-                    window.dispatchEvent(new CustomEvent('auth-error-forgot', { detail: { message: res.data.message || 'Gagal mengirim kode OTP' }}));
+                    window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                        detail: { message: res.data.message || 'Gagal mengirim kode OTP', type: 'error' }
+                    }));
                 }
             })
             .catch(function () {
                 submitBtn.disabled = false;
                 submitBtn.querySelector('span').textContent = 'Lanjutkan';
-                window.dispatchEvent(new CustomEvent('auth-error-forgot', { detail: { message: 'Terjadi kesalahan jaringan' }}));
+                window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }
+                }));
             });
         });
     }
@@ -294,14 +298,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                         if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
                     }
-                    window.dispatchEvent(new CustomEvent('auth-error-register', {
-                        detail: { message: msg }
+                    window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                        detail: { message: msg, type: 'error' }
                     }));
                 }
             })
             .catch(function () {
-                window.dispatchEvent(new CustomEvent('auth-error-register', {
-                    detail: { message: 'Terjadi kesalahan jaringan' }
+                window.dispatchEvent(new CustomEvent('show-auth-toast', {
+                    detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }
                 }));
             })
             .finally(function () {

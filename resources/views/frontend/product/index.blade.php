@@ -11,6 +11,7 @@
     } elseif ($filterType === 'search' && $filterValue) {
         $title = __('Pencarian') . ': "' . $filterValue . '"';
     }
+    $title = html_entity_decode($title);
 @endphp
 
 @section('title', $title . ' - IMG')

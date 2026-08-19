@@ -552,7 +552,7 @@
                     </div>
                     
                     <h3 class="text-2xl lg:text-3xl font-bold leading-tight text-white">{{ $featured->name ?? 'No Product' }}</h3>
-                    <p class="text-brand-light/70">{{ $featured->short_description ?? $featured->description ?? '' }}</p>
+                    <p class="text-brand-light/70">{{ $featured->short_description ?? Str::limit(strip_tags($featured->description ?? ''), 150) }}</p>
                     
                     <div class="pt-4 flex items-center gap-6 border-t border-brand-gold/20">
                         <div class="flex flex-col">

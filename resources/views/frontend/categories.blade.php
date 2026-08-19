@@ -80,7 +80,7 @@
                         </div>
                         <h3 class="text-xl font-bold mb-2 group-hover:text-brand-gold">
                             <a href="{{ route('category.show', $category->slug) }}" class="block w-full transition-colors group-hover:text-brand-gold">
-                                {{ $category->name }}
+                                {{ html_entity_decode($category->name) }}
                             </a>
                         </h3>
                     </div>
@@ -88,7 +88,7 @@
                     @if($category->children->isNotEmpty())
                         <div class="relative z-10 flex flex-wrap gap-x-4 gap-y-1 mt-1 mb-3 text-xs text-gray-500">
                             @foreach($category->children->take(4) as $child)
-                                <a href="{{ route('category.show', $child->slug) }}" class="hover:text-brand-gold">{{ $child->name }}</a>
+                                <a href="{{ route('category.show', $child->slug) }}" class="hover:text-brand-gold">{{ html_entity_decode($child->name) }}</a>
                             @endforeach
                             @if($category->children->count() > 4)
                                 <span class="text-brand-gold">+{{ $category->children->count() - 4 }}</span>

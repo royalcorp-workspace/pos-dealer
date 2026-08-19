@@ -39,6 +39,8 @@ document.addEventListener('hide-loading', () => {
 });
 
 document.addEventListener('submit', function (e) {
+    if (e.defaultPrevented) return;
+
     const target = e.target;
     if (target.matches('form[action*="cart/add"]')) {
         e.preventDefault();
@@ -380,11 +382,11 @@ document.addEventListener('click', function (e) {
             catalogBtn.style.display = 'none';
         }
     })
-    .catch(err => {
+    .catch((err) => {
         hideLoading();
         catalogBtn.disabled = false;
         catalogBtn.style.opacity = '1';
         console.error('Catalog load more error:', err);
-        alert(err.message || 'Gagal memuat produk');
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: err.message || 'Gagal memuat produk' } }));
     });
 });

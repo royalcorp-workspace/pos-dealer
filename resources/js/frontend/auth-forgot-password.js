@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const email = formData.get('email');
         const csrfToken = document.querySelector('meta[name=csrf-token]');
         if (!csrfToken) {
-            alert('CSRF token tidak ditemukan');
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'CSRF token tidak ditemukan' } }));
             resetLoading();
             return;
         }
@@ -55,13 +55,14 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(({ ok, status, data }) => {
             if (ok && (data.success === true || data.message)) {
                 window.location.href = window.location.origin + '/password-otp-sent?email=' + encodeURIComponent(email);
-            } else {
-                alert(data.message || 'Gagal mengirim kode OTP (status: ' + status + ')');
-                resetLoading();
             }
-        })
-        .catch((err) => {
-            alert('Terjadi kesalahan: ' + err.message);
+            if (status !== 200) {
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Gagal mengirim kode OTP (status: ' + status + ')' } }));
+                resetLoading();
+                return;
+            }
+        }).catch(function (err) {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Terjadi kesalahan: ' + err.message } }));
             resetLoading();
         });
     });

@@ -187,26 +187,16 @@
             return response.json();
         })
         .then(function (data) {
-            if (!data.cart || !data.cart[cartId]) {
-                const itemRow = button.closest('[data-cart-item-id]');
-                if (itemRow) itemRow.remove();
-                if (!document.querySelector('[data-cart-item-id]')) {
-                    if (document.getElementById('cart-footer')) {
-                        document.getElementById('cart-footer').classList.add('hidden');
-                    }
-                    window.deselectCartCoupon();
-                }
-            } else {
-                quantityElement.textContent = data.cart[cartId].quantity;
+            const drawerBody = document.getElementById('cart-drawer-body');
+            if (drawerBody && data.cart_drawer_html) {
+                drawerBody.innerHTML = data.cart_drawer_html;
             }
 
             currentCartTotal = Number(data.cart_total || 0);
             window.currentCartTotal = currentCartTotal;
 
-            const drawerBody = document.getElementById('cart-drawer-body');
             const cartFooter = document.getElementById('cart-footer');
             const subtotalEl = document.getElementById('cart-drawer-subtotal');
-            if (drawerBody) drawerBody.setAttribute('data-cart-total', currentCartTotal);
             if (cartFooter) cartFooter.setAttribute('data-cart-total', currentCartTotal);
             if (subtotalEl) subtotalEl.textContent = formatRupiah(currentCartTotal);
 
@@ -216,8 +206,11 @@
             const headerTotal = document.getElementById('header-cart-total');
             if (countBadge) countBadge.textContent = data.cart_count || 0;
             if (headerTotal) headerTotal.textContent = formatRupiah(data.cart_total || 0);
+
+            document.dispatchEvent(new CustomEvent('cart-drawer-updated'));
         })
-        .catch(function () {
+        .catch(function (err) {
+            console.error('Failed to update cart quantity:', err);
             window.location.reload();
         });
     };
