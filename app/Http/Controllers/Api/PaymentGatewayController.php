@@ -20,7 +20,7 @@ class PaymentGatewayController extends Controller
         try {
             $espayUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
             $response = \Illuminate\Support\Facades\Http::asForm()->post($espayUrl, [
-                'key' => env('ESPAY_API_KEY', '')
+                'key' => config('espay.api_key', '')
             ]);
             
             if ($response->successful() && $response->json('error_code') === '0000') {
@@ -87,7 +87,7 @@ class PaymentGatewayController extends Controller
         try {
             $infoUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
             $infoResp = \Illuminate\Support\Facades\Http::asForm()->post($infoUrl, [
-                'key' => env('ESPAY_API_KEY', '')
+                'key' => config('espay.api_key', '')
             ]);
             if ($infoResp->successful() && $infoResp->json('error_code') === '0000') {
                 $espayData = $infoResp->json('data') ?? [];
