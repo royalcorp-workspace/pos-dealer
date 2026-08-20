@@ -663,30 +663,110 @@ class CheckoutController extends Controller
                 $meta['payment_proof'] = $proofPath;
             }
 
-            // ------------------- INTEGRASI ESPAY (Embed Kit / UI Snap) -------------------
+            // ------------------- INTEGRASI ESPAY -------------------
             if ($paymentMethod !== 'transfer_manual') {
                 $amount = number_format((float)($order->total + $charge), 2, '.', '');
+                $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
+                // Pakai endpoint sendinvoice
+                $espayUrl = str_replace('/rest/merchant', '/rest/merchantpg', $baseUrl) . '/sendinvoice';
                 
-                // Simpan update payment_method, status ke pending, dan hitung ulang total
-                $order->update([
-                    'payment_method' => $paymentMethod,
-                    'payment_status' => 1, // Menunggu pembayaran
-                    'transaction_fee' => $charge,
-                    'total' => $amount,
-                    'meta' => $meta
-                ]);
+                $signatureKey = config('espay.signature_key');
+                $commCode = config('espay.merchant_key');
+                $rqUuid = \Illuminate\Support\Str::uuid()->toString();
+                $rqDatetime = date('Y-m-d H:i:s');
+                $espayOrderId = $order->order_number; // Gunakan order_number sebagai pengganti UUID order_id
                 
-                // Karena menggunakan Espay Embed Kit (Snap UI), kita TIDAK perlu hit API sendinvoice di sini.
-                // Embed Kit akan muncul di frontend dan secara otomatis menembak ke URL webhook Inquiry kita.
-                
-                return response()->json([
-                    'success' => true,
-                    'open_iframe' => true,
-                    'bank_code' => $paymentMethod, // Mengirimkan kode bank/produk agar iframe tahu channel mana yg dipilih
-                ]);
+                // Formula Signature Espay untuk Send Invoice
+                $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
+                $signature = hash('sha256', strtoupper($dataToHash));
+
+                // Lookup bankCode asli dari Espay berdasarkan productCode yang dipilih
+                $espayBankCode = $paymentMethod;
+                try {
+                    $infoUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
+                    $infoResp = \Illuminate\Support\Facades\Http::asForm()->post($infoUrl, [
+                        'key' => config('espay.api_key', '')
+                    ]);
+                    if ($infoResp->successful() && $infoResp->json('error_code') === '0000') {
+                        $espayData = $infoResp->json('data') ?? [];
+                        $found = collect($espayData)->firstWhere('productCode', $paymentMethod);
+                        if ($found && !empty($found['bankCode'])) {
+                            $espayBankCode = $found['bankCode'];
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal lookup bankCode: ' . $e->getMessage());
+                }
+
+                $payload = [
+                    'rq_uuid' => $rqUuid,
+                    'rq_datetime' => $rqDatetime,
+                    'order_id' => $espayOrderId,
+                    'amount' => $amount,
+                    'ccy' => 'IDR',
+                    'comm_code' => $commCode,
+                    'remark1' => $order->customer->phone ?? '00000000000',
+                    'remark2' => $order->customer->name ?? 'Customer',
+                    'remark3' => $order->customer->email ?? '',
+                    'update' => 'N',
+                    'bank_code' => $espayBankCode,
+                    'va_expired' => 1440, // Expired VA dalam menit (1440 menit = 24 Jam)
+                    'signature' => $signature,
+                ];
+
+                try {
+                    $response = \Illuminate\Support\Facades\Http::asForm()->post($espayUrl, $payload);
+                    $paymentData = $response->json();
+
+                    if ($response->successful() && isset($paymentData['error_code']) && $paymentData['error_code'] === '0000') {
+                        $order->update([
+                            'payment_method' => $paymentMethod,
+                            'payment_status' => 1, // Menunggu pembayaran
+                            'transaction_fee' => $charge,
+                            'total' => $amount,
+                            'meta' => array_merge($meta, [
+                                'espay_reference' => $paymentData['reference'] ?? '',
+                                'va_number' => $paymentData['va_number'] ?? ''
+                            ])
+                        ]);
+                        
+                        $logMessage = "Espay Send Invoice Success\n";
+                        $logMessage .= "Order ID: {$orderId}\n";
+                        $logMessage .= "Payload: \n" . json_encode($payload, JSON_PRETTY_PRINT) . "\n";
+                        $logMessage .= "Response: \n" . json_encode($paymentData, JSON_PRETTY_PRINT);
+                        \Illuminate\Support\Facades\Log::channel('espay')->info($logMessage);
+
+                        session()->forget('order_data');
+                        session()->forget('selected_voucher_codes');
+                        session()->forget('cart');
+
+                        return response()->json([
+                            'success' => true,
+                            // Jika ada payment_url dari Espay (biasanya e-wallet), redirect ke sana. Jika VA, ke thankyou.
+                            'redirect_url' => $paymentData['payment_url'] ?? route('thankyou', ['order_id' => $order->id])
+                        ]);
+                    } else {
+                        $logMessage = "Espay Send Invoice Failed\n";
+                        $logMessage .= "Error Code: " . ($paymentData['error_code'] ?? 'Unknown') . "\n";
+                        $logMessage .= "Error Message: " . ($paymentData['error_message'] ?? 'Unknown') . "\n";
+                        $logMessage .= "Payload: \n" . json_encode($payload, JSON_PRETTY_PRINT) . "\n";
+                        $logMessage .= "Response: \n" . json_encode($paymentData, JSON_PRETTY_PRINT);
+                        
+                        \Illuminate\Support\Facades\Log::channel('espay')->error($logMessage);
+                        
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Gagal mendapatkan data pembayaran dari Espay: ' . ($paymentData['error_message'] ?? 'Unknown error')
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Exception: " . $e->getMessage() . "\nTrace: " . $e->getTraceAsString());
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Terjadi kesalahan sistem saat menghubungi payment gateway.'
+                    ]);
+                }
             }
-
-
             // -------------------------------------------------------
 
             $order->update([
