@@ -65,7 +65,7 @@ class PaymentGatewayController extends Controller
             'items' => 'required|array',
         ]);
 
-        $orderId = $request->order_id;
+        $orderId = str_replace('-', '', (string)$request->order_id);
         $amount = number_format((float)$request->amount, 2, '.', '');
         $paymentMethodCode = $request->payment_method;
 

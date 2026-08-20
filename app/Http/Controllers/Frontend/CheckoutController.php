@@ -674,7 +674,7 @@ class CheckoutController extends Controller
                 $commCode = config('espay.merchant_key');
                 $rqUuid = \Illuminate\Support\Str::uuid()->toString();
                 $rqDatetime = date('Y-m-d H:i:s');
-                $espayOrderId = $order->order_number; // Gunakan order_number sebagai pengganti UUID order_id
+                $espayOrderId = str_replace('-', '', $order->order_number); // Gunakan order_number tanpa tanda strip
                 
                 // Formula Signature Espay untuk Send Invoice
                 $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
