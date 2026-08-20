@@ -11,64 +11,93 @@ class SnapBiController extends Controller
 {
     public function inquiry(Request $request)
     {
-        Log::channel('espay')->info('SNAP BI Inquiry Received', $request->all());
+        $logMessage = "SNAP BI Inquiry Received\n";
+        $logMessage .= "Payload: \n" . json_encode($request->all(), JSON_PRETTY_PRINT);
+        Log::channel('espay')->info($logMessage);
 
         // virtualAccountNo dari Espay akan berisi order_number (contoh: ORDER0001)
         $virtualAccountNo = $request->input('virtualAccountNo');
         
-        $order = Order::with('customer')->where('order_number', $virtualAccountNo)->first();
+        // Karena tanda strip (-) dihilangkan saat sendinvoice, kita cocokkan order_number tanpa strip
+        $order = Order::with('customer')
+            ->whereRaw("REPLACE(order_number, '-', '') = ?", [$virtualAccountNo])
+            ->first();
 
         if (!$order) {
-            return response()->json([
+            $errResponse = [
                 'responseCode' => '4042300',
                 'responseMessage' => 'Order Not Found',
                 'virtualAccountData' => new \stdClass()
-            ], 404);
+            ];
+            $logMessage .= "\nResponse (Error): \n" . json_encode($errResponse, JSON_PRETTY_PRINT);
+            Log::channel('espay')->error($logMessage);
+            return response()->json($errResponse, 404);
         }
 
         $amount = number_format((float)$order->total, 2, '.', '');
 
-        return response()->json([
+        $responseData = [
             'responseCode' => '2002400',
-            'responseMessage' => 'Successful',
+            'responseMessage' => 'Success',
             'virtualAccountData' => [
                 'partnerServiceId' => $request->input('partnerServiceId', ''),
                 'customerNo' => $request->input('customerNo', ''),
                 'virtualAccountNo' => $virtualAccountNo,
                 'virtualAccountName' => $order->customer->name ?? 'Customer',
-                'inquiryStatus' => '00',
-                'inquiryReason' => [
-                    'english' => 'Success',
-                    'indonesia' => 'Sukses'
+                'virtualAccountEmail' => $order->customer->email ?? 'no-email@domain.com',
+                'virtualAccountPhone' => $order->customer->phone ?? '0000000000',
+                'inquiryRequestId' => $request->input('inquiryRequestId', \Illuminate\Support\Str::uuid()->toString()),
+                'totalAmount' => [
+                    'value' => $amount,
+                    'currency' => 'IDR'
                 ],
                 'billDetails' => [
                     [
-                        'billCode' => '01',
-                        'billName' => 'Payment for Order #' . $order->order_number,
-                        'billAmount' => [
-                            'value' => $amount,
-                            'currency' => 'IDR'
+                        'billDescription' => [
+                            'english' => 'Invoice No ' . $order->order_number,
+                            'indonesia' => 'Tagihan No ' . $order->order_number
                         ]
+                    ]
+                ],
+                'additionalInfo' => [
+                    'shippingAddress' => [
+                        'firstName' => $order->customer->name ?? 'Customer',
+                        'lastName' => '',
+                        'address' => $order->customer->address ?? 'Alamat',
+                        'city' => '-',
+                        'postalCode' => '-',
+                        'phoneNumber' => $order->customer->phone ?? '0000000',
+                        'countryCode' => 'IDN'
                     ]
                 ]
             ]
-        ], 200);
+        ];
+
+        $logMessage .= "\nResponse: \n" . json_encode($responseData, JSON_PRETTY_PRINT);
+        Log::channel('espay')->info($logMessage);
+
+        return response()->json($responseData, 200);
     }
 
     public function payment(Request $request)
     {
-        Log::channel('espay')->info('SNAP BI Payment Received', $request->all());
+        $logMessage = "SNAP BI Payment Received\n";
+        $logMessage .= "Payload: \n" . json_encode($request->all(), JSON_PRETTY_PRINT);
 
         $virtualAccountNo = $request->input('virtualAccountNo');
         
-        $order = Order::where('order_number', $virtualAccountNo)->first();
+        // Karena tanda strip (-) dihilangkan saat sendinvoice, kita cocokkan order_number tanpa strip
+        $order = Order::whereRaw("REPLACE(order_number, '-', '') = ?", [$virtualAccountNo])->first();
 
         if (!$order) {
-            return response()->json([
+            $errResponse = [
                 'responseCode' => '4042700',
                 'responseMessage' => 'Order Not Found',
                 'virtualAccountData' => new \stdClass()
-            ], 404);
+            ];
+            $logMessage .= "\nResponse (Error): \n" . json_encode($errResponse, JSON_PRETTY_PRINT);
+            Log::channel('espay')->error($logMessage);
+            return response()->json($errResponse, 404);
         }
 
         if ($order->payment_status !== 2) {
@@ -77,7 +106,7 @@ class SnapBiController extends Controller
             $order->save();
         }
 
-        return response()->json([
+        $responseData = [
             'responseCode' => '2002700',
             'responseMessage' => 'Successful',
             'virtualAccountData' => [
@@ -90,6 +119,11 @@ class SnapBiController extends Controller
                     'indonesia' => 'Sukses'
                 ]
             ]
-        ], 200);
+        ];
+
+        $logMessage .= "\nResponse: \n" . json_encode($responseData, JSON_PRETTY_PRINT);
+        Log::channel('espay')->info($logMessage);
+
+        return response()->json($responseData, 200);
     }
 }
