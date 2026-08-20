@@ -183,13 +183,20 @@
             
             <div class="lg:col-span-1">
                 <div class="bg-white border border-brand-muted rounded-2xl p-6 sticky top-6">
-                    <button 
-                        type="button"
-                        onclick="processPayment()"
-                        class="w-full py-4 bg-brand-dark text-brand-gold rounded-xl font-bold text-lg hover:bg-brand-darker transition-colors mb-4"
-                    >
-                        Bayar Sekarang
-                    </button>
+                    <div id="payment-button-container">
+                        <button 
+                            type="button"
+                            onclick="processPayment()"
+                            class="w-full py-4 bg-brand-dark text-brand-gold rounded-xl font-bold text-lg hover:bg-brand-darker transition-colors mb-4"
+                        >
+                            Bayar Sekarang
+                        </button>
+                    </div>
+                    
+                    <!-- Espay Embed Kit iframe placeholder -->
+                    <div id="espay-iframe-container" class="hidden w-full h-[500px] border border-brand-muted rounded-xl overflow-hidden mt-4">
+                        <iframe id="sgoplus-iframe" src="" scrolling="yes" frameborder="0" class="w-full h-full"></iframe>
+                    </div>
                     
                     @php $orderId = $orderData['id'] ?? null; @endphp
                     @if($orderId)
@@ -203,5 +210,15 @@
             </div>
         </div>
     </div>
+
+    <!-- Pass Espay config to JS -->
+    <script>
+        window.espayConfig = {
+            key: "{{ config('espay.merchant_key') }}",
+            paymentId: "{{ $orderData['id'] ?? '' }}",
+            backUrl: "{{ route('thankyou') }}"
+        };
+    </script>
+    <script type="text/javascript" src="{{ config('espay.js_url') }}"></script>
     <script src="{{ asset('js/frontend/payment.js') }}?v={{ filemtime(public_path('js/frontend/payment.js')) }}"></script>
 @endsection

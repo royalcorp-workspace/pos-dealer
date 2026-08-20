@@ -27,6 +27,7 @@ Route::prefix('auth')->group(function () {
     Route::prefix('payment')->group(function () {
         Route::get('methods', [PaymentGatewayController::class, 'methods'])->name('payment.methods');
         Route::post('create', [PaymentGatewayController::class, 'create'])->name('payment.create');
+        Route::post('inquiry', [PaymentGatewayController::class, 'inquiry'])->name('payment.inquiry');
         Route::post('callback', [PaymentGatewayController::class, 'callback'])->name('payment.callback');
         Route::get('status/{reference}', [PaymentGatewayController::class, 'status'])->name('payment.status');
     });

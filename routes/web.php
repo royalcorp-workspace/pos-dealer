@@ -129,3 +129,8 @@ Route::get('/403', [PageController::class, 'error403'])->name('errors.403');
 Route::get('/404', [PageController::class, 'error404'])->name('errors.404');
 Route::get('/500', [PageController::class, 'error500'])->name('errors.500');
 
+
+// ESPAY BI-SNAP Webhooks
+Route::post('/v1.0/transfer-va/inquiry', [\App\Http\Controllers\Api\SnapBiController::class, 'inquiry']);
+Route::post('/v1.0/transfer-va/payment', [\App\Http\Controllers\Api\SnapBiController::class, 'payment']);
+
