@@ -111,7 +111,7 @@ class PaymentGatewayController extends Controller
             'remark2' => $request->customer['name'] ?? 'Customer',
             'remark3' => $request->customer['email'] ?? '',
             'update' => 'N',
-            'bankCode' => $espayBankCode,
+            'bank_code' => $espayBankCode,
             'va_expired' => 1440, // 24 Hours
             'signature' => $signature,
         ];
