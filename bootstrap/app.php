@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\SetLocalization::class,
         ]);
+        
+        $middleware->validateCsrfTokens(except: [
+            'v1.0/transfer-va/*',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

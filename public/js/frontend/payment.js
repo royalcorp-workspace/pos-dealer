@@ -4,24 +4,23 @@ window.processPayment = function () {
         window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Pilih metode pembayaran terlebih dahulu' } }));
         return;
     }
-    
+
+    var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
+
     var container = document.getElementById('payment-container');
     var processUrl = container ? container.dataset.routePaymentProcess : '/payment/process';
     var thankYouUrl = container ? container.dataset.routeThankyou : '/thankyou';
 
-    window.showLoading();
-
-    var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
     var body, headers;
 
     if (isManualTransfer) {
         var fileInput = document.getElementById('payment_proof');
         if (!fileInput || fileInput.files.length === 0) {
             window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Silakan upload bukti transfer terlebih dahulu.' } }));
-            window.hideLoading();
             return;
         }
 
+        window.showLoading();
         body = new FormData();
         body.append('payment_method', selectedMethod.value);
         body.append('payment_proof', fileInput.files[0]);
@@ -31,6 +30,7 @@ window.processPayment = function () {
             'Accept': 'application/json'
         };
     } else {
+        window.showLoading();
         body = JSON.stringify({
             payment_method: selectedMethod.value
         });
@@ -41,26 +41,50 @@ window.processPayment = function () {
         };
     }
 
-    fetch(processUrl, {
-        method: 'POST',
-        headers: headers,
-        body: body
-    })
+    fetch(processUrl, { method: 'POST', headers: headers, body: body })
     .then(function (response) { return response.json(); })
     .then(function (data) {
         window.hideLoading();
         if (data.success) {
-            // Clear localStorage on successful payment
             localStorage.removeItem('selectedCartCoupon');
             localStorage.removeItem('selectedCartCoupons');
-            window.location.href = data.redirect_url || thankYouUrl;
+            
+            if (data.open_iframe && typeof SGOSignature !== 'undefined') {
+                // Konfigurasi data iframe Espay
+                var iframeData = {
+                    key: window.espayConfig.key,
+                    paymentId: window.espayConfig.paymentId,
+                    backUrl: window.espayConfig.backUrl,
+                    bankCode: data.bank_code
+                };
+
+                // Tampilkan iframe
+                var buttonContainer = document.getElementById('payment-button-container');
+                var iframeContainer = document.getElementById('espay-iframe-container');
+                var sgoPlusIframe = document.getElementById("sgoplus-iframe");
+                
+                if (buttonContainer) buttonContainer.classList.add('hidden');
+                iframeContainer.classList.remove('hidden');
+                
+                try {
+                    sgoPlusIframe.src = SGOSignature.getIframeURL(iframeData);
+                    SGOSignature.receiveForm();
+                    iframeContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } catch (err) {
+                    console.error('Error saat inisialisasi Espay:', err);
+                    window.location.href = data.redirect_url || thankYouUrl;
+                }
+            } else {
+                // Fallback / Redirect biasa
+                window.location.href = data.redirect_url || thankYouUrl;
+            }
         } else {
             window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Gagal memproses pembayaran.' } }));
         }
     })
     .catch(function () {
         window.hideLoading();
-        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Gagal memproses pembayaran. Silakan coba lagi.' } }));
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Gagal memproses pembayaran.' } }));
     });
 };
 
