@@ -243,6 +243,8 @@ class ProductCatalogController extends Controller
         $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags', 'suggestedProducts.images']);
 
         $attributeGroups = [];
+        $hasAnyNonIgnoredAttr = false;
+        
         foreach ($product->variants as $variant) {
             $variantAttributes = [];
             $rawAttributes = $variant->getRawOriginal('attributes');
@@ -252,6 +254,7 @@ class ProductCatalogController extends Controller
             
             if (!empty($variantAttributes) && is_array($variantAttributes)) {
                 $ignoredKeys = ['width', 'length', 'height', 'weight', 'status'];
+                $addedSomething = false;
                 foreach ($variantAttributes as $key => $value) {
                     if (in_array(strtolower($key), $ignoredKeys)) {
                         continue;
@@ -261,6 +264,19 @@ class ProductCatalogController extends Controller
                     }
                     if (!in_array($value, $attributeGroups[$key])) {
                         $attributeGroups[$key][] = $value;
+                    }
+                    $addedSomething = true;
+                    $hasAnyNonIgnoredAttr = true;
+                }
+                
+                // If there are no normal attributes but we have width and length, generate "Ukuran"
+                if (!$addedSomething && isset($variantAttributes['width']) && isset($variantAttributes['length'])) {
+                    $ukuran = $variantAttributes['width'] . ' x ' . $variantAttributes['length'];
+                    if (!isset($attributeGroups['Ukuran'])) {
+                        $attributeGroups['Ukuran'] = [];
+                    }
+                    if (!in_array($ukuran, $attributeGroups['Ukuran'])) {
+                        $attributeGroups['Ukuran'][] = $ukuran;
                     }
                 }
             }
