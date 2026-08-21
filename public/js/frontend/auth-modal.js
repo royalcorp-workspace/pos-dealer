@@ -63,7 +63,7 @@ window.handleGoogleSignInFromModal = function(e) {
                     if (isCheckout) {
                         var checkoutForm = document.getElementById('checkout-form');
                         if (checkoutForm) {
-                            document.querySelector('body').__x.$data.isAuthOpen = false;
+                            try { window.Alpine.$data(document.querySelector('body')).isAuthOpen = false; } catch(e) {}
                             setTimeout(function() { checkoutForm.submit(); }, 1000);
                         } else {
                             window.location.href = '/dashboard';
@@ -170,11 +170,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: formData
             })
-            .then(function (response) { return response.json().then(function (data) { return { ok: response.ok, data: data }; }); })
+            .then(function (response) { 
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return new Promise(function() {});
+                }
+                var contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+                } else if (response.ok) {
+                    return { ok: true, data: { success: true } };
+                } else {
+                    throw new Error("Invalid response format");
+                }
+            })
             .then(function (result) {
                 if (result.ok && result.data.success) {
                     var isCheckout = window.location.pathname.includes('checkout');
-                    document.querySelector('body').__x.$data.isAuthOpen = false;
+                    try { window.Alpine.$data(document.querySelector('body')).isAuthOpen = false; } catch(e) {}
                     setTimeout(function () {
                         if (isCheckout) {
                             var checkoutForm = document.getElementById('checkout-form');

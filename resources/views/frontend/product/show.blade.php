@@ -500,6 +500,20 @@
             $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
             if (is_array($parsedAttrs)) {
                 $ignoredKeys = ['width', 'length', 'height', 'weight', 'status'];
+                
+                // Cek apakah ada atribut selain yang diabaikan
+                $hasOther = false;
+                foreach ($parsedAttrs as $key => $val) {
+                    if (!in_array(strtolower($key), $ignoredKeys)) {
+                        $hasOther = true;
+                        break;
+                    }
+                }
+                
+                if (!$hasOther && isset($parsedAttrs['width']) && isset($parsedAttrs['length'])) {
+                    $parsedAttrs['Ukuran'] = $parsedAttrs['width'] . ' x ' . $parsedAttrs['length'];
+                }
+                
                 foreach ($ignoredKeys as $ik) {
                     unset($parsedAttrs[$ik]);
                 }
