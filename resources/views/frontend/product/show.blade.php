@@ -499,7 +499,7 @@
         if ($rawAttrs) {
             $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
             if (is_array($parsedAttrs)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status'];
                 foreach ($ignoredKeys as $ik) {
                     unset($parsedAttrs[$ik]);
                 }

@@ -251,7 +251,7 @@ class ProductCatalogController extends Controller
             }
             
             if (!empty($variantAttributes) && is_array($variantAttributes)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status'];
                 foreach ($variantAttributes as $key => $value) {
                     if (in_array(strtolower($key), $ignoredKeys)) {
                         continue;
