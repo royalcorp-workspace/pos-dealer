@@ -28,12 +28,12 @@
                 @endphp
                 @if($listDiscountedPrice !== null)
                     <div class="flex items-center gap-2">
-                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format($listDiscountedPrice, 0, ',', '.') }}</span>
-                        <span class="text-gray-400 text-sm line-through">Rp {{ number_format($product->price, 0, ',', '.') }}</span>
+                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format((float) $listDiscountedPrice, 0, ',', '.') }}</span>
+                        <span class="text-gray-400 text-sm line-through">Rp {{ number_format((float) ($product->price ?? 0), 0, ',', '.') }}</span>
                         <span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">{{ $listPctBadge }}</span>
                     </div>
                 @else
-                    <span class="font-bold text-brand-dark text-lg">Rp {{ number_format($product->price, 0, ',', '.') }}</span>
+                    <span class="font-bold text-brand-dark text-lg">Rp {{ number_format((float) ($product->price ?? 0), 0, ',', '.') }}</span>
                 @endif
             </div>
         </div>

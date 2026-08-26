@@ -129,187 +129,423 @@
 
     <!-- Hero Section / Dynamic Banner Slider -->
     @if($sliderImages->isNotEmpty())
-        <section class="w-full relative bg-brand-light overflow-hidden font-sans group" x-data="{ activeSlide: 0, slidesCount: {{ count($sliderImages) }} }" x-init="setInterval(() => activeSlide = (activeSlide + 1) % slidesCount, 6000)">
-            <div class="relative w-full">
-                <!-- Invisible placeholders to set the container height to match the first image's exact ratio -->
-                @if(!$sliderImages[0]['is_embed'])
-                    <img src="{{ cms_asset($sliderImages[0]['mobile']) }}" alt="" aria-hidden="true" class="w-full h-auto invisible block md:hidden">
-                    <img src="{{ cms_asset($sliderImages[0]['web']) }}" alt="" aria-hidden="true" class="w-full h-auto invisible hidden md:block">
-                @else
-                    <!-- Fallback ratio if first slide is embed -->
-                    <div class="w-full aspect-[4/3] md:aspect-[3/1]"></div>
-                @endif
+        <section class="w-full pt-4 sm:pt-6 pb-2 font-sans">
+            <div class="container mx-auto px-4 sm:px-6">
+                <div class="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg group" x-data="{ activeSlide: 0, slidesCount: {{ count($sliderImages) }} }" x-init="setInterval(() => activeSlide = (activeSlide + 1) % slidesCount, 6000)">
+                    <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] md:aspect-[24/9]">
+                        @foreach($sliderImages as $index => $img)
+                            <div x-show="activeSlide === {{ $index }}" 
+                                 x-transition:enter="transition ease-out duration-700" 
+                                 x-transition:enter-start="opacity-0" 
+                                 x-transition:enter-end="opacity-100" 
+                                 x-transition:leave="transition ease-in duration-500" 
+                                 x-transition:leave-start="opacity-100" 
+                                 x-transition:leave-end="opacity-0"
+                                 class="absolute inset-0 w-full h-full">
+                                @if($img['link'])
+                                    <a href="{{ $img['link'] }}" class="block w-full h-full">
+                                @endif
+                                
+                                @if($img['is_embed'])
+                                    <div class="w-full h-full hidden md:block">
+                                        {!! $img['web'] !!}
+                                    </div>
+                                    <div class="w-full h-full block md:hidden">
+                                        {!! $img['mobile'] !!}
+                                    </div>
+                                @else
+                                    <div class="w-full h-full hidden md:block">
+                                        <img src="{{ cms_asset($img['web']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover object-center">
+                                    </div>
+                                    <div class="w-full h-full block md:hidden">
+                                        <img src="{{ cms_asset($img['mobile']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover object-center">
+                                    </div>
+                                @endif
 
-                @foreach($sliderImages as $index => $img)
-                    <div x-show="activeSlide === {{ $index }}" 
-                         x-transition:enter="transition ease-out duration-700" 
-                         x-transition:enter-start="opacity-0" 
-                         x-transition:enter-end="opacity-100" 
-                         x-transition:leave="transition ease-in duration-500" 
-                         x-transition:leave-start="opacity-100" 
-                         x-transition:leave-end="opacity-0"
-                         class="absolute inset-0 w-full h-full">
-                        @if($img['link'])
-                            <a href="{{ $img['link'] }}" class="block w-full h-full">
-                        @endif
-                        
-                        @if($img['is_embed'])
-                            <!-- Embed Code / Custom URL Link -->
-                            <div class="w-full h-full hidden md:block">
-                                {!! $img['web'] !!}
+                                @if($img['link'])
+                                    </a>
+                                @endif
                             </div>
-                            <div class="w-full h-full block md:hidden">
-                                {!! $img['mobile'] !!}
-                            </div>
-                        @else
-                            <!-- Uploaded Image -->
-                            <div class="w-full h-full hidden md:block">
-                                <img src="{{ cms_asset($img['web']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover md:object-center">
-                            </div>
-                            <div class="w-full h-full block md:hidden">
-                                <img src="{{ cms_asset($img['mobile']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover object-center">
-                            </div>
-                        @endif
-
-                        @if($img['link'])
-                            </a>
-                        @endif
+                        @endforeach
                     </div>
-                @endforeach
-            </div>
-            
-            <!-- Slide Indicators -->
-            @if(count($sliderImages) > 1)
-                <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 z-20">
-                    @foreach($sliderImages as $index => $img)
-                        <button aria-label="Slide {{ $index + 1 }}" @click="activeSlide = {{ $index }}" class="w-3 h-3 rounded-full transition-all duration-500" :class="activeSlide === {{ $index }} ? 'bg-brand-gold w-8' : 'bg-white/60 hover:bg-white'"></button>
-                    @endforeach
+                    
+                    <!-- Prev / Next Navigation Arrows -->
+                    @if(count($sliderImages) > 1)
+                        <button 
+                            type="button"
+                            aria-label="Previous Slide" 
+                            @click="activeSlide = (activeSlide - 1 + slidesCount) % slidesCount" 
+                            class="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-brand-dark/40 hover:bg-brand-dark/80 text-white backdrop-blur-xs border border-white/20 flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 focus:opacity-100 z-20 shadow-md hover:scale-105"
+                        >
+                            <svg class="w-4 h-4 sm:w-5 sm:h-5 -translate-x-0.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                        <button 
+                            type="button"
+                            aria-label="Next Slide" 
+                            @click="activeSlide = (activeSlide + 1) % slidesCount" 
+                            class="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-brand-dark/40 hover:bg-brand-dark/80 text-white backdrop-blur-xs border border-white/20 flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 focus:opacity-100 z-20 shadow-md hover:scale-105"
+                        >
+                            <svg class="w-4 h-4 sm:w-5 sm:h-5 translate-x-0.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </button>
+                    @endif
+
+                    <!-- Slide Indicators -->
+                    @if(count($sliderImages) > 1)
+                        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+                            @foreach($sliderImages as $index => $img)
+                                <button aria-label="Slide {{ $index + 1 }}" @click="activeSlide = {{ $index }}" class="h-2 rounded-full transition-all duration-300" :class="activeSlide === {{ $index }} ? 'bg-brand-gold w-6' : 'bg-white/60 w-2 hover:bg-white'"></button>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
-            @endif
+            </div>
         </section>
     @else
-        <!-- Fallback Static Hero Section -->
-        <section class="w-full relative bg-brand-light overflow-hidden font-sans">
-            <div class="container mx-auto px-4 sm:px-6 py-8 sm:py-12 lg:py-20 flex flex-col lg:flex-row items-center gap-8 lg:gap-12 relative z-10">
-                <!-- Text Content -->
-                <div class="w-full lg:w-1/2 space-y-6 text-center lg:text-left pt-8 lg:pt-0">
-                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-muted text-brand-dark text-xs font-bold uppercase tracking-wider mb-2 border border-brand-gold/20 hero-badge">
-                        <span class="w-2 h-2 rounded-full bg-brand-gold animate-pulse"></span>
-                        EXTRA DISCOUNT UP TO 40%
-                    </div>
-                    
-                    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-brand-dark tracking-tight leading-tight font-serif hero-title">
-                        {{ __('Tingkatkan') }} <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-gold to-brand-gold-dark">{{ __('Kualitas Tidur Anda') }}</span> {{ __('Hari Ini.') }}
-                    </h1>
-                    
-                    <p class="text-lg text-brand-dark/80 max-w-xl mx-auto lg:mx-0 font-medium hero-copy">
-                        {{ __('Temukan koleksi kasur premium dan perlengkapan tidur terbaik dari brand pilihan untuk istirahat yang lebih maksimal.') }}
-                    </p>
-                    
-                    <div class="flex flex-col sm:flex-row items-center gap-4 pt-4 justify-center lg:justify-start hero-cta">
-                        <a href="{{ route('categories') }}" class="w-full sm:w-auto px-8 py-4 bg-brand-dark hover:bg-brand-darker text-white font-bold rounded-full transition-all shadow-lg shadow-brand-dark/20 flex justify-center items-center gap-2 group">
-                            {{ __('Belanja Sekarang') }}
-                            <svg class="w-5 h-5 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </a>
-                        <a href="{{ route('promos') }}" class="w-full sm:w-auto px-8 py-4 bg-white hover:bg-brand-light text-brand-dark font-bold rounded-full transition-all shadow-sm border border-brand-gold/30 hover:border-brand-gold text-center">
-                            {{ __('Lihat Promo') }}
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Image Grid / Banner -->
-                <div class="w-full lg:w-1/2 relative h-[350px] sm:h-[500px] lg:h-[650px] rounded-3xl overflow-hidden shadow-2xl hero-image">
-                    <!-- Main Image -->
-                    <div class="absolute inset-0 bg-brand-muted">
+        <!-- Fallback Compact Hero Banner Carousel -->
+        <section class="w-full pt-4 sm:pt-6 pb-2 font-sans">
+            <div class="container mx-auto px-4 sm:px-6">
+                <div class="relative w-full aspect-[16/9] sm:aspect-[21/9] md:aspect-[24/9] rounded-2xl sm:rounded-3xl overflow-hidden shadow-lg bg-brand-dark group" x-data="{ activeSlide: 0 }" x-init="setInterval(() => activeSlide = (activeSlide + 1) % 2, 5000)">
+                    <!-- Slide 1 -->
+                    <div 
+                        x-show="activeSlide === 0" 
+                        x-transition:enter="transition ease-out duration-700" 
+                        x-transition:enter-start="opacity-0" 
+                        x-transition:enter-end="opacity-100" 
+                        x-transition:leave="transition ease-in duration-500" 
+                        x-transition:leave-start="opacity-100" 
+                        x-transition:leave-end="opacity-0"
+                        class="absolute inset-0 w-full h-full"
+                    >
                         <img 
-                            src="https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800" 
-                            alt="Premium Mattress" 
-                            class="w-full h-full object-cover"
+                            src="https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1600&h=600" 
+                            alt="International Mattress Gallery - Luxury Bedding" 
+                            class="w-full h-full object-cover object-center"
                         >
+                        <div class="absolute inset-0 bg-gradient-to-r from-brand-darker/90 via-brand-dark/40 to-transparent"></div>
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="container mx-auto px-6 sm:px-12 max-w-xl space-y-3">
+                                <span class="inline-block px-2.5 py-0.5 rounded-full bg-brand-gold text-brand-dark text-[11px] font-bold uppercase tracking-wider">
+                                    Official Gallery
+                                </span>
+                                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white font-serif leading-tight">
+                                    {{ __('Koleksi Kasur & Perlengkapan Tidur') }}
+                                </h2>
+                                <p class="text-brand-light/90 text-xs sm:text-sm font-medium line-clamp-2">
+                                    {{ __('Dapatkan pengalaman tidur hotel bintang lima dengan pilihan kasur dan aksesori terlengkap.') }}
+                                </p>
+                                <div>
+                                    <a href="{{ route('categories') }}" class="inline-flex items-center gap-1.5 px-5 py-2.5 bg-brand-gold hover:bg-brand-gold-dark text-brand-dark font-bold text-xs sm:text-sm rounded-full transition-all shadow-md">
+                                        <span>{{ __('Jelajahi Koleksi') }}</span>
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Slide 2 -->
+                    <div 
+                        x-show="activeSlide === 1" 
+                        x-transition:enter="transition ease-out duration-700" 
+                        x-transition:enter-start="opacity-0" 
+                        x-transition:enter-end="opacity-100" 
+                        x-transition:leave="transition ease-in duration-500" 
+                        x-transition:leave-start="opacity-100" 
+                        x-transition:leave-end="opacity-0"
+                        style="display: none;"
+                        class="absolute inset-0 w-full h-full"
+                    >
+                        <img 
+                            src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&q=80&w=1600&h=600" 
+                            alt="Royal Foam Premium Series" 
+                            class="w-full h-full object-cover object-center"
+                        >
+                        <div class="absolute inset-0 bg-gradient-to-r from-brand-darker/90 via-brand-dark/40 to-transparent"></div>
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="container mx-auto px-6 sm:px-12 max-w-xl space-y-3">
+                                <span class="inline-block px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wider">
+                                    Special Offer
+                                </span>
+                                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white font-serif leading-tight">
+                                    {{ __('Penawaran Promo & Bundling') }}
+                                </h2>
+                                <p class="text-brand-light/90 text-xs sm:text-sm font-medium line-clamp-2">
+                                    {{ __('Kombinasi set kasur lengkap dengan bonus bantal dan perlengkapan tidur pilihan.') }}
+                                </p>
+                                <div>
+                                    <a href="{{ route('promos') }}" class="inline-flex items-center gap-1.5 px-5 py-2.5 bg-brand-gold hover:bg-brand-gold-dark text-brand-dark font-bold text-xs sm:text-sm rounded-full transition-all shadow-md">
+                                        <span>{{ __('Lihat Promo') }}</span>
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prev / Next Navigation Arrows -->
+                    <button 
+                        type="button"
+                        aria-label="Previous Slide" 
+                        @click="activeSlide = (activeSlide - 1 + 2) % 2" 
+                        class="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-brand-dark/40 hover:bg-brand-dark/80 text-white backdrop-blur-xs border border-white/20 flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 focus:opacity-100 z-20 shadow-md hover:scale-105"
+                    >
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5 -translate-x-0.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button 
+                        type="button"
+                        aria-label="Next Slide" 
+                        @click="activeSlide = (activeSlide + 1) % 2" 
+                        class="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-brand-dark/40 hover:bg-brand-dark/80 text-white backdrop-blur-xs border border-white/20 flex items-center justify-center transition-all duration-300 opacity-0 group-hover:opacity-100 focus:opacity-100 z-20 shadow-md hover:scale-105"
+                    >
+                        <svg class="w-4 h-4 sm:w-5 sm:h-5 translate-x-0.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+
+                    <!-- Slider Controls -->
+                    <div class="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+                        <button aria-label="Slide 1" @click="activeSlide = 0" class="h-1.5 rounded-full transition-all duration-300" :class="activeSlide === 0 ? 'bg-brand-gold w-6' : 'bg-white/50 w-1.5 hover:bg-white'"></button>
+                        <button aria-label="Slide 2" @click="activeSlide = 1" class="h-1.5 rounded-full transition-all duration-300" :class="activeSlide === 1 ? 'bg-brand-gold w-6' : 'bg-white/50 w-1.5 hover:bg-white'"></button>
                     </div>
                 </div>
             </div>
         </section>
     @endif
 
-    <!-- Running Banner removed as requested -->
+    <!-- Trust Section (Aligned with Hero Banner Width, Warm Cashmere & Gold) -->
+    <section class="py-3 sm:py-4 font-sans">
+        <div class="container mx-auto px-4 sm:px-6">
+            <div class="w-full rounded-2xl sm:rounded-3xl bg-[#FAF8F5] border border-[#EFEBE4] px-5 py-4 sm:px-8 sm:py-5 lg:px-10 lg:py-5 shadow-2xs">
+                <!-- Desktop: Full width flex with equal justify-between distribution & elegant hairlines -->
+                <div class="hidden lg:flex items-center justify-between gap-4">
+                    <!-- Card 1: Garansi Pabrik -->
+                    <div class="flex items-center gap-3.5 bg-transparent group">
+                        <div class="w-9 h-9 flex items-center justify-center shrink-0 text-brand-gold-dark group-hover:text-brand-dark group-hover:scale-110 transition-all duration-300">
+                            <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-sm leading-snug group-hover:text-brand-gold-dark transition-colors">{{ __('Garansi Pabrik') }}</h4>
+                            <p class="text-xs text-stone-500 font-normal mt-0.5">{{ __('Proteksi s/d 15-20 Thn') }}</p>
+                        </div>
+                    </div>
 
+                    <div class="w-px h-8 bg-[#E5DFC9]/60"></div>
 
-    <!-- Feature Highlights -->
-    <section class="bg-white border-b border-gray-100 py-8 lg:py-12">
-        <div class="container mx-auto px-6">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center divide-x divide-gray-100">
-                <div class="flex flex-col items-center gap-3 px-4">
-                    <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" aria-hidden="true">
-                                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none" />
-                                <path d="M8.5 12.5l1.8 1.8L15.5 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                    <!-- Card 2: Pengiriman Aman -->
+                    <div class="flex items-center gap-3.5 bg-transparent group">
+                        <div class="w-9 h-9 flex items-center justify-center shrink-0 text-brand-gold-dark group-hover:text-brand-dark group-hover:scale-110 transition-all duration-300">
+                            <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="1" y="3" width="15" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                                <path d="M16 8h4l3 3v5h-7V8z" stroke="currentColor" stroke-width="1.8"/>
+                                <circle cx="5.5" cy="18.5" r="2.5" stroke="currentColor" stroke-width="1.8"/>
+                                <circle cx="18.5" cy="18.5" r="2.5" stroke="currentColor" stroke-width="1.8"/>
                             </svg>
                         </div>
-                    <h4 class="font-bold text-brand-dark">{{ __('Garansi Resmi') }}</h4>
-                    <p class="text-sm text-gray-500">{{ __('Hingga 15 Tahun') }}</p>
-                </div>
-                <div class="flex flex-col items-center gap-3 px-4">
-                    <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
-                            <i class="fa-solid fa-award w-6 h-6"></i>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-sm leading-snug group-hover:text-brand-gold-dark transition-colors">{{ __('Pengiriman Aman') }}</h4>
+                            <p class="text-xs text-stone-500 font-normal mt-0.5">{{ __('Handling profesional') }}</p>
                         </div>
-                    <h4 class="font-bold text-brand-dark">{{ __('Produk Original') }}</h4>
-                    <p class="text-sm text-gray-500">{{ __('100% Produk Asli') }}</p>
-                </div>
-                <div class="flex flex-col items-center gap-3 px-4">
-                    <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" aria-hidden="true">
-                                <rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.6" fill="none" />
-                                <rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="1.6" fill="none" />
-                                <rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.6" fill="none" />
-                                <rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="1.6" fill="none" />
+                    </div>
+
+                    <div class="w-px h-8 bg-[#E5DFC9]/60"></div>
+
+                    <!-- Card 3: Cicilan 0% -->
+                    <div class="flex items-center gap-3.5 bg-transparent group">
+                        <div class="w-9 h-9 flex items-center justify-center shrink-0 text-brand-gold-dark group-hover:text-brand-dark group-hover:scale-110 transition-all duration-300">
+                            <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                                <line x1="2" y1="10" x2="22" y2="10" stroke="currentColor" stroke-width="1.8"/>
+                                <path d="M7 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                             </svg>
                         </div>
-                    <h4 class="font-bold text-brand-dark">{{ __('Cicilan 0%') }}</h4>
-                    <p class="text-sm text-gray-500">{{ __('Tanpa Kartu Kredit') }}</p>
-                </div>
-                <div class="flex flex-col items-center gap-3 px-4">
-                    <div class="w-12 h-12 bg-brand-light rounded-full flex items-center justify-center text-brand-gold-dark mb-1">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" aria-hidden="true">
-                                <rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" stroke-width="1.6" fill="none" />
-                                <circle cx="12" cy="18" r="0.8" fill="currentColor" />
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-sm leading-snug group-hover:text-brand-gold-dark transition-colors">{{ __('Cicilan 0%') }}</h4>
+                            <p class="text-xs text-stone-500 font-normal mt-0.5">{{ __('Banyak pilihan bayar') }}</p>
+                        </div>
+                    </div>
+
+                    <div class="w-px h-8 bg-[#E5DFC9]/60"></div>
+
+                    <!-- Card 4: Pilihan Lengkap -->
+                    <div class="flex items-center gap-3.5 bg-transparent group">
+                        <div class="w-9 h-9 flex items-center justify-center shrink-0 text-brand-gold-dark group-hover:text-brand-dark group-hover:scale-110 transition-all duration-300">
+                            <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                                <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
                             </svg>
                         </div>
-                    <h4 class="font-bold text-brand-dark">{{ __('Gratis Konsultasi') }}</h4>
-                    <p class="text-sm text-gray-500">{{ __('Pilih Sesuai Kebutuhan') }}</p>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-sm leading-snug group-hover:text-brand-gold-dark transition-colors">{{ __('Pilihan Lengkap') }}</h4>
+                            <p class="text-xs text-stone-500 font-normal mt-0.5">{{ __('Brand kasur terbaik') }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mobile / Tablet: Balanced 2-Column Grid -->
+                <div class="grid grid-cols-2 gap-4 sm:gap-6 lg:hidden">
+                    <!-- Card 1: Garansi Pabrik -->
+                    <div class="flex items-center gap-2.5 sm:gap-3 bg-transparent group">
+                        <div class="w-7 h-7 flex items-center justify-center shrink-0 text-brand-gold-dark">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-xs sm:text-sm leading-snug">{{ __('Garansi Pabrik') }}</h4>
+                            <p class="text-[11px] sm:text-xs text-stone-500 font-normal mt-0.5 truncate">{{ __('Proteksi s/d 15-20 Thn') }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Pengiriman Aman -->
+                    <div class="flex items-center gap-2.5 sm:gap-3 bg-transparent group">
+                        <div class="w-7 h-7 flex items-center justify-center shrink-0 text-brand-gold-dark">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="1" y="3" width="15" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                                <path d="M16 8h4l3 3v5h-7V8z" stroke="currentColor" stroke-width="1.8"/>
+                                <circle cx="5.5" cy="18.5" r="2.5" stroke="currentColor" stroke-width="1.8"/>
+                                <circle cx="18.5" cy="18.5" r="2.5" stroke="currentColor" stroke-width="1.8"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-xs sm:text-sm leading-snug">{{ __('Pengiriman Aman') }}</h4>
+                            <p class="text-[11px] sm:text-xs text-stone-500 font-normal mt-0.5 truncate">{{ __('Handling profesional') }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Cicilan 0% -->
+                    <div class="flex items-center gap-2.5 sm:gap-3 bg-transparent group">
+                        <div class="w-7 h-7 flex items-center justify-center shrink-0 text-brand-gold-dark">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                                <line x1="2" y1="10" x2="22" y2="10" stroke="currentColor" stroke-width="1.8"/>
+                                <path d="M7 15h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-xs sm:text-sm leading-snug">{{ __('Cicilan 0%') }}</h4>
+                            <p class="text-[11px] sm:text-xs text-stone-500 font-normal mt-0.5 truncate">{{ __('Banyak pilihan bayar') }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Pilihan Lengkap -->
+                    <div class="flex items-center gap-2.5 sm:gap-3 bg-transparent group">
+                        <div class="w-7 h-7 flex items-center justify-center shrink-0 text-brand-gold-dark">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                                <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                                <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                                <rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-brand-dark text-xs sm:text-sm leading-snug">{{ __('Pilihan Lengkap') }}</h4>
+                            <p class="text-[11px] sm:text-xs text-stone-500 font-normal mt-0.5 truncate">{{ __('Brand kasur terbaik') }}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    @php $htmlBlocks = []; ob_start(); @endphp
-    <!-- Categories / Quick Filter -->
-    <section class="py-16">
-        <div class="container mx-auto px-6">
-            <div class="flex flex-col md:flex-row items-end justify-between mb-8 gap-4">
-                <div>
-                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Kategori Pilihan Untuk Kamu') }}</h2>
-                    <p class="text-gray-500 mt-1">{{ __('Jelajahi koleksi terlengkap dari brand terkemuka.') }}</p>
+    <!-- Categories / Casper-Style "Shop by Sleep Needs" -->
+    @php ob_start(); @endphp
+    <section class="pt-6 pb-9 lg:pt-8 lg:pb-12 bg-[#fcfaf6] border-b border-brand-muted/40 font-sans">
+        <div class="container mx-auto px-4 sm:px-6">
+            <!-- Pure Minimalist Editorial Heading -->
+            <div class="mb-6 lg:mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-brand-muted/40 pb-5">
+                <div class="space-y-1.5">
+                    <div class="inline-flex items-center gap-2">
+                        <span class="w-5 h-px bg-brand-gold-dark/60"></span>
+                        <span class="text-xs uppercase tracking-[0.25em] text-brand-gold-dark font-bold">{{ __('Koleksi Terlengkap') }}</span>
+                    </div>
+                    <h2 class="text-2xl sm:text-3xl lg:text-[36px] font-extrabold text-brand-dark tracking-tight font-serif leading-tight">
+                        {{ __('Pilih Sesuai Kebutuhan Istirahat') }}
+                    </h2>
                 </div>
-                <a href="{{ route('categories') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
-                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
-                </a>
+                <div class="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest pb-1 shrink-0">
+                    <span class="w-1.5 h-1.5 rounded-full bg-brand-gold"></span>
+                    <span>{{ count($categories ?? []) }} {{ __('Kategori Pilihan') }}</span>
+                </div>
             </div>
             
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 @php
                     $quickCategories = $categories ?? collect();
+                    $categoryVisuals = [
+                        'kasur-spring-bed' => [
+                            'image' => 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=600&h=400',
+                            'tagline' => 'Penopang Tubuh Presisi',
+                            'chips' => ['Pocket Spring', 'Orthopedic', 'Pillow Top'],
+                        ],
+                        'kasur-busa-foam' => [
+                            'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&q=80&w=600&h=400',
+                            'tagline' => 'Kepadatan Tinggi & Awet',
+                            'chips' => ['High Density', 'Anti-Kempes', 'Sanitized'],
+                        ],
+                        'bantal-guling' => [
+                            'image' => 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&q=80&w=600&h=400',
+                            'tagline' => 'Kenyamanan Kepala & Leher',
+                            'chips' => ['Microfiber', 'Memory Foam', 'Silikon'],
+                        ],
+                        'aksesoris-tidur' => [
+                            'image' => 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600&h=400',
+                            'tagline' => 'Sprei, Topper & Pelindung',
+                            'chips' => ['Matras Topper', 'Sprei Katun', 'Pelindung Kasur'],
+                        ],
+                    ];
                 @endphp
                 @foreach($quickCategories as $index => $cat)
+                    @php
+                        $visual = $categoryVisuals[$cat->slug] ?? [
+                            'image' => 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&q=80&w=600&h=400',
+                            'tagline' => 'Kenyamanan Tidur Terbaik',
+                            'chips' => ['Koleksi Pilihan'],
+                        ];
+                    @endphp
                     <a 
                         href="{{ route('category.show', $cat->slug) }}" 
-                        class="flex flex-col items-center justify-center p-6 bg-white border border-brand-muted rounded-2xl hover:border-brand-gold hover:shadow-lg hover:-translate-y-1 transition-all group focus:outline-none"
+                        class="group flex flex-col bg-white rounded-2xl sm:rounded-3xl border border-brand-muted/80 overflow-hidden shadow-xs hover:border-brand-gold hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 focus:outline-hidden"
                     >
-                        <div class="w-16 h-16 bg-brand-light rounded-full mb-4 flex items-center justify-center text-brand-gold-dark group-hover:bg-brand-dark group-hover:scale-110 transition-all duration-300">
-                            <svg aria-hidden="true" class="w-8 h-8" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/></svg>
+                        <!-- Visual Image Container -->
+                        <div class="relative w-full aspect-[4/3] bg-brand-muted overflow-hidden">
+                            <img 
+                                src="{{ $visual['image'] }}" 
+                                alt="{{ $cat->name }}" 
+                                class="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700 ease-out"
+                                loading="lazy"
+                            >
+                            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/50 via-brand-dark/10 to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
+                            
+                            <!-- Tabular Micro Badge Count -->
+                            <span class="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md text-brand-dark text-[10px] sm:text-[11px] font-bold border border-brand-gold/30 shadow-xs tabular-nums tracking-wide">
+                                {{ $cat->getProductsCountWithChildren() }} {{ __('Produk') }}
+                            </span>
                         </div>
-                        <span class="font-bold text-brand-dark text-center text-sm group-hover:text-brand-gold-dark">{{ $cat->name }}</span>
-                        <span class="text-xs text-gray-500 mt-1">{{ $cat->getProductsCountWithChildren() }} Products</span>
+
+                        <!-- Card Info & Typeset Details -->
+                        <div class="p-4 sm:p-5 flex flex-col justify-between flex-1 gap-2.5">
+                            <div>
+                                <span class="text-[10px] sm:text-[11px] font-bold text-brand-gold-dark uppercase tracking-[0.15em] block">
+                                    {{ $visual['tagline'] }}
+                                </span>
+                                <h3 class="font-bold text-brand-dark text-base sm:text-lg group-hover:text-brand-gold-dark transition-colors mt-0.5 leading-snug font-serif">
+                                    {{ $cat->name }}
+                                </h3>
+                            </div>
+
+                            <!-- Subcategory Chips (Visual Clue) -->
+                            <div class="flex flex-wrap gap-1 pt-1 border-t border-gray-100/80">
+                                @foreach($visual['chips'] as $chip)
+                                    <span class="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md bg-brand-light/50 text-brand-dark/70 font-medium group-hover:bg-brand-gold/10 group-hover:text-brand-gold-dark transition-colors">
+                                        {{ $chip }}
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
                     </a>
                 @endforeach
             </div>
@@ -317,60 +553,147 @@
     </section>
 
     @php $htmlBlocks['kategori'] = ob_get_clean(); ob_start(); @endphp
-    <!-- Pilihan Brand -->
-    @if(isset($brands) && $brands->isNotEmpty())
-    <section class="py-16 bg-white border-t border-brand-muted/50">
-        <div class="container mx-auto px-6">
-            <div class="flex flex-col md:flex-row items-end justify-between mb-10 gap-4">
-                <div>
-                    <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Pilihan Brand') }}</h2>
-                    <p class="text-gray-500 mt-2 text-lg">{{ __('Merek kasur dan perlengkapan tidur pilihan terbaik untuk istirahat Anda.') }}</p>
+    <!-- Best Seller Showcase (10 Items Horizontal Slide Carousel) -->
+    @if(isset($bestsellers) && $bestsellers->isNotEmpty())
+    <section class="py-9 lg:py-12 bg-white border-b border-brand-muted/40 font-sans overflow-hidden" x-data="{
+        scrollLeft() {
+            $refs.bestSellerSlider.scrollBy({ left: -300, behavior: 'smooth' });
+        },
+        scrollRight() {
+            $refs.bestSellerSlider.scrollBy({ left: 300, behavior: 'smooth' });
+        }
+    }">
+        <div class="container mx-auto px-4 sm:px-6">
+            <!-- Section Header with Title & Navigation Arrows -->
+            <div class="mb-6 lg:mb-8 flex items-end justify-between gap-4 border-b border-brand-muted/40 pb-5">
+                <div class="space-y-1.5">
+                    <div class="inline-flex items-center gap-2">
+                        <span class="w-5 h-px bg-brand-gold-dark/60"></span>
+                        <span class="text-xs uppercase tracking-[0.25em] text-brand-gold-dark font-bold">{{ __('Koleksi Terpopuler') }}</span>
+                    </div>
+                    <h2 class="text-2xl sm:text-3xl lg:text-[36px] font-extrabold text-brand-dark tracking-tight font-serif leading-tight">
+                        {{ __('Produk Terlaris') }}
+                    </h2>
                 </div>
-                <a href="{{ route('brands') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
-                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
-                </a>
+
+                <!-- Prev / Next Slider Arrows -->
+                <div class="flex items-center gap-2">
+                    <button 
+                        type="button"
+                        @click="scrollLeft()"
+                        aria-label="Previous Products"
+                        class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-brand-dark text-brand-dark hover:text-brand-gold border border-gray-200 hover:border-brand-dark flex items-center justify-center transition-all duration-300 shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                    >
+                        <i class="fa-solid fa-chevron-left text-xs"></i>
+                    </button>
+                    <button 
+                        type="button"
+                        @click="scrollRight()"
+                        aria-label="Next Products"
+                        class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-brand-dark text-brand-dark hover:text-brand-gold border border-gray-200 hover:border-brand-dark flex items-center justify-center transition-all duration-300 shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                    >
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
             </div>
-            
-            @php
-                $pbSection = \Illuminate\Support\Facades\DB::table('homepage_sections')
-                    ->where('section_key', 'pilihan_brand')
-                    ->orWhere('title', 'like', '%Pilihan Brand%')
-                    ->first();
-                $pbMeta = ($pbSection && isset($pbSection->meta)) ? (is_string($pbSection->meta) ? json_decode($pbSection->meta, true) : (array)$pbSection->meta) : [];
-            @endphp
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                @foreach($brands as $brand)
-                    @php
-                        $safeName = \Illuminate\Support\Str::slug($brand->name);
-                        $customLogo = $pbMeta['brands'][$safeName]['logo'] ?? null;
-                        $customBanner = $pbMeta['brands'][$safeName]['banner'] ?? null;
-                        
-                        $logoUrl = $customLogo ?: ($brand->logo ? cms_asset($brand->logo) : null);
-                        $bannerUrl = $customBanner ?: ($brand->banner_web ? cms_asset($brand->banner_web) : ($brand->banner ? cms_asset($brand->banner) : null));
-                        if (!$bannerUrl && $logoUrl) {
-                            $bannerUrl = $logoUrl;
-                        }
-                    @endphp
-                    <a href="{{ route('brands.show', $brand->slug) }}" class="group relative block w-full h-[220px] md:h-[280px] rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 bg-white">
-                        <!-- Banner Image -->
-                        @if($bannerUrl)
-                        <img src="{{ $bannerUrl }}" alt="{{ $brand->name }}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000">
-                        @endif
-                        
-                        <!-- Overlay Gradient -->
-                        <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand-dark/20 to-transparent"></div>
-                        
-                        <!-- Logo & Text Overlay -->
-                        <div class="absolute bottom-0 left-0 right-0 p-6 flex flex-col items-start transform group-hover:-translate-y-2 transition-transform duration-500">
-                            <div class="flex items-center gap-2 text-white/90 text-sm font-semibold group-hover:text-brand-gold transition-colors">
-                                Lihat Produk <i class="fa-solid fa-arrow-right"></i>
-                            </div>
-                        </div>
-                    </a>
+
+            <!-- Horizontal Slider (10 Items Snap Slider + End Card) -->
+            <div 
+                x-ref="bestSellerSlider"
+                class="flex gap-4 sm:gap-5 overflow-x-auto scrollbar-none snap-x snap-mandatory scroll-smooth pb-3 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0"
+            >
+                @foreach($bestsellers as $product)
+                    <div class="snap-start shrink-0 w-[230px] sm:w-[260px] lg:w-[280px] flex flex-col h-full">
+                        @include('frontend.components.product-card-dynamic', ['product' => $product])
+                    </div>
                 @endforeach
+
+                <!-- Explore All Card (Next to the last product) -->
+                <div class="snap-start shrink-0 w-[200px] sm:w-[230px] lg:w-[250px] flex flex-col self-stretch">
+                    <a 
+                        href="{{ route('products.index', ['sort' => 'best_seller']) }}" 
+                        class="w-full h-full min-h-[320px] rounded-2xl bg-[#FAF8F5] border border-dashed border-brand-gold/40 hover:border-brand-gold hover:bg-brand-gold/10 transition-all duration-300 p-6 flex flex-col items-center justify-center text-center group shadow-2xs hover:shadow-md"
+                    >
+                        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white text-brand-dark group-hover:bg-brand-dark group-hover:text-brand-gold border border-brand-gold/30 flex items-center justify-center mb-4 transition-all duration-300 shadow-2xs group-hover:scale-110">
+                            <i class="fa-solid fa-arrow-right text-sm transition-transform duration-300 group-hover:translate-x-1"></i>
+                        </div>
+                        <span class="font-serif font-bold text-brand-dark text-base sm:text-lg group-hover:text-brand-darker transition-colors">{{ __('Lihat Semua') }}</span>
+                        <span class="text-xs text-stone-500 font-normal mt-1">{{ __('Koleksi Terlaris') }}</span>
+                        <span class="mt-4 text-xs font-bold text-brand-gold-dark inline-flex items-center gap-1 group-hover:gap-1.5 transition-all">
+                            <span>{{ __('Jelajahi') }}</span>
+                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                        </span>
+                    </a>
+                </div>
             </div>
         </div>
     </section>
+    @endif
+
+    @php $htmlBlocks['best_seller'] = ob_get_clean(); ob_start(); @endphp
+    <!-- Pilihan Brand (Official Brand Logo Strip / Trust Bar) -->
+    @if(isset($brands) && $brands->isNotEmpty())
+    <section class="py-6 sm:py-8 bg-white border-y border-brand-muted/40 font-sans">
+        <div class="container mx-auto px-4 sm:px-6">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5 lg:gap-8">
+                <!-- Trust Label Left -->
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <span class="w-2.5 h-2.5 rounded-full bg-brand-gold shadow-xs animate-pulse"></span>
+                    <span class="text-xs uppercase tracking-[0.22em] font-extrabold text-brand-dark">{{ __('Official Brand Partners') }}</span>
+                    <span class="hidden sm:inline-block text-gray-300">|</span>
+                    <span class="hidden sm:inline-block text-xs text-gray-500 font-medium">{{ __('Distributor Resmi Garansi Pabrik') }}</span>
+                </div>
+
+                <!-- Brand Vector Logos Strip (Dense & Balanced) -->
+                <div class="flex items-center gap-3 sm:gap-4 overflow-x-auto scrollbar-hide py-1 snap-x snap-mandatory flex-1 justify-start lg:justify-end">
+                    @foreach($brands as $brand)
+                        <a 
+                            href="{{ route('brands.show', $brand->slug) }}" 
+                            class="snap-start shrink-0 px-4 py-2.5 rounded-2xl bg-white hover:bg-white border border-gray-200 hover:border-brand-gold/50 shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-center min-w-[105px] sm:min-w-[125px] h-[46px] group hover:scale-105"
+                            title="{{ $brand->name }}"
+                        >
+                            @if($brand->slug === 'royal-foam')
+                                <div class="flex items-center gap-1.5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
+                                    <span class="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-black">R</span>
+                                    <div class="flex flex-col -space-y-1">
+                                        <span class="font-extrabold text-xs tracking-tight text-gray-800 group-hover:text-red-600 uppercase font-sans">ROYAL</span>
+                                        <span class="text-[8px] font-bold text-gray-500 tracking-widest uppercase">FOAM</span>
+                                    </div>
+                                </div>
+                            @elseif($brand->slug === 'elite')
+                                <div class="flex items-center gap-1 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
+                                    <span class="font-serif font-black text-sm sm:text-base tracking-wider text-gray-800 group-hover:text-brand-gold-dark italic">Elite</span>
+                                    <span class="text-[8px] font-sans font-bold text-amber-600">★</span>
+                                </div>
+                            @elseif($brand->slug === 'lady-americana')
+                                <div class="flex flex-col items-center -space-y-0.5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
+                                    <span class="font-serif font-bold text-[11px] sm:text-xs tracking-widest text-gray-800 group-hover:text-blue-900 uppercase">LADY</span>
+                                    <span class="text-[8px] font-sans font-semibold tracking-[0.2em] text-gray-500 uppercase">AMERICANA</span>
+                                </div>
+                            @elseif($brand->slug === 'tote')
+                                <div class="flex items-center gap-1 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
+                                    <span class="px-1.5 py-0.5 rounded bg-gray-800 text-white font-mono text-[9px] font-black group-hover:bg-brand-dark">T</span>
+                                    <span class="font-sans font-black text-xs sm:text-sm tracking-tight text-gray-800 group-hover:text-brand-dark">tote.</span>
+                                </div>
+                            @elseif($brand->slug === 'moro')
+                                <div class="flex items-center gap-1 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
+                                    <span class="font-serif font-extrabold text-xs sm:text-sm tracking-[0.15em] text-gray-800 group-hover:text-emerald-800 uppercase">MORO</span>
+                                </div>
+                            @elseif($brand->slug === 'serenity')
+                                <div class="flex items-center gap-1.5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
+                                    <span class="text-xs font-serif italic text-gray-800 group-hover:text-purple-900 font-bold">Serenity</span>
+                                    <span class="text-[8px] font-sans font-semibold text-gray-400">BED</span>
+                                </div>
+                            @else
+                                <span class="font-serif font-bold text-xs text-gray-700 group-hover:text-brand-dark transition-colors">{{ $brand->name }}</span>
+                            @endif
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    </section>
+    @endif
 
     @php $htmlBlocks['pilihan_brand'] = ob_get_clean(); ob_start(); @endphp
     <!-- Promo Brand (Tabbed UI) -->
@@ -381,71 +704,105 @@
             ->first();
         $promoMeta = ($promoSection && isset($promoSection->meta)) ? (is_string($promoSection->meta) ? json_decode($promoSection->meta, true) : (array)$promoSection->meta) : [];
     @endphp
-    <section class="py-16 bg-gray-50/50 border-t border-gray-100 overflow-hidden">
+    @if(isset($brands) && $brands->isNotEmpty())
+    <section class="py-9 lg:py-12 bg-[#f8f8fa] border-t border-gray-100 overflow-hidden font-sans">
         <div class="container mx-auto px-4 md:px-6" x-data="{ activePromoTab: '{{ $brands->first()->id ?? '' }}' }">
-            <div class="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
-                <div class="text-center md:text-left">
-                    <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif flex items-center justify-center md:justify-start gap-2">
-                        {{ __('Promo Brand Spesial') }} <i class="fa-solid fa-tags text-brand-gold text-2xl"></i>
+            <!-- Pure Minimalist Section Header -->
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 border-b border-brand-muted/40 pb-5">
+                <div class="space-y-1.5">
+                    <div class="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] font-bold text-brand-gold-dark">
+                        <span class="w-5 h-px bg-brand-gold-dark/60"></span>
+                        <span>{{ __('Penawaran Spesial') }}</span>
+                    </div>
+                    <h2 class="text-3xl sm:text-4xl lg:text-[40px] font-extrabold text-brand-dark tracking-tight font-serif leading-[1.15]">
+                        {{ __('Promo Brand Pilihan') }}
                     </h2>
-                    <p class="text-gray-500 mt-2 text-base md:text-lg">{{ __('Penawaran eksklusif dan diskon besar dari merek favorit Anda.') }}</p>
+                </div>
+
+                <!-- Tab Headers (Scrollable on Mobile, Luxury Pills on Desktop) -->
+                <div class="flex overflow-x-auto scrollbar-hide gap-2 pb-1 snap-x snap-mandatory">
+                    @foreach($brands as $brand)
+                    <button 
+                        type="button"
+                        @click="activePromoTab = '{{ $brand->id }}'"
+                        class="snap-start shrink-0 px-5 py-2 sm:px-6 sm:py-2.5 rounded-full font-bold text-xs sm:text-sm border transition-all duration-300 cursor-pointer focus:outline-none"
+                        :class="activePromoTab === '{{ $brand->id }}' ? 'bg-brand-dark border-brand-dark text-white shadow-md scale-102' : 'bg-white border-gray-200 text-gray-600 hover:bg-brand-light hover:text-brand-dark hover:border-brand-gold/40'"
+                    >
+                        {{ $brand->name }}
+                    </button>
+                    @endforeach
                 </div>
             </div>
 
-            <!-- Tab Headers (Scrollable on Mobile) -->
-            <div class="flex overflow-x-auto scrollbar-hide gap-3 pb-2 mb-8 snap-x snap-mandatory">
-                @foreach($brands as $brand)
-                <button 
-                    @click="activePromoTab = '{{ $brand->id }}'"
-                    class="snap-start shrink-0 px-6 py-2.5 md:py-3 rounded-full font-bold text-sm border-2 transition-all duration-300 focus:outline-none"
-                    :class="activePromoTab === '{{ $brand->id }}' ? 'bg-brand-dark border-brand-dark text-white shadow-lg scale-105' : 'bg-white border-transparent text-gray-500 hover:bg-brand-light hover:text-brand-dark'"
-                >
-                    {{ $brand->name }}
-                </button>
-                @endforeach
-            </div>
-
             <!-- Tab Contents -->
-            <div class="relative w-full bg-white rounded-[2rem] shadow-xl border border-gray-100 overflow-hidden">
+            <div class="relative w-full bg-white rounded-3xl sm:rounded-[2rem] shadow-xl border border-gray-100/80 overflow-hidden">
                 @foreach($brands as $brand)
                 <div 
                     x-show="activePromoTab === '{{ $brand->id }}'"
-                    x-transition:enter="transition ease-out duration-700"
-                    x-transition:enter-start="opacity-0 translate-y-8 md:translate-y-0 md:translate-x-8"
+                    x-transition:enter="transition ease-out duration-500"
+                    x-transition:enter-start="opacity-0 translate-y-4 md:translate-y-0 md:translate-x-4"
                     x-transition:enter-end="opacity-100 translate-y-0 md:translate-x-0"
                     style="display: none;"
                     class="w-full"
                 >
-                    <div class="flex flex-col md:flex-row w-full h-full p-4 md:p-6 lg:p-8 gap-6 md:gap-8 bg-brand-light/20">
+                    <div class="flex flex-col md:flex-row w-full h-full p-4 sm:p-6 lg:p-8 gap-6 md:gap-8 bg-[#f8f8fa]">
                         
                         <!-- 3 Promo Products (Right) -->
                         <div class="w-full md:w-2/3 order-2 md:order-2 overflow-hidden">
-                            <div class="flex items-center justify-between mb-5">
-                                <h3 class="font-bold text-brand-dark text-lg md:text-2xl font-serif">{{ __('Koleksi Promo') }} {{ $brand->name }}</h3>
+                            <div class="mb-4">
+                                <span class="text-[10px] sm:text-[11px] font-bold text-brand-gold-dark uppercase tracking-widest block">{{ __('Katalog Diskon') }}</span>
+                                <h3 class="font-bold text-brand-dark text-lg sm:text-2xl font-serif mt-0.5">{{ $brand->name }} {{ __('Edition') }}</h3>
                             </div>
                             
                             @if(isset($brand->top_promo_products) && $brand->top_promo_products->isNotEmpty())
-                                <div class="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-3 md:gap-4 pb-4 -mx-4 px-4 md:mx-0 md:px-0">
+                                <div class="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-3 md:gap-4 pb-3 -mx-4 px-4 md:mx-0 md:px-0">
                                     @foreach($brand->top_promo_products as $product)
-                                        <div class="snap-start shrink-0 w-[42vw] sm:w-[220px] md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.75rem)]">
+                                        <div class="snap-start shrink-0 w-[68vw] sm:w-[220px] md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.75rem)] flex flex-col">
                                             @include('frontend.components.product-card-dynamic', ['product' => $product])
                                         </div>
                                     @endforeach
                                     
                                     <!-- Button Lihat Semua at the end -->
-                                    <div class="snap-start shrink-0 w-[30vw] sm:w-[150px] flex items-center justify-center">
-                                        <a href="{{ route('brands.show', $brand->slug) }}" class="flex flex-col items-center justify-center gap-3 text-brand-gold-dark hover:text-brand-dark transition-colors group h-full w-full bg-white/50 rounded-2xl border border-dashed border-brand-gold/30 hover:border-brand-dark hover:bg-white">
-                                            <div class="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
-                                                <i class="fa-solid fa-arrow-right"></i>
+                                    <div class="snap-start shrink-0 w-[180px] sm:w-[200px] flex flex-col self-stretch">
+                                        <a href="{{ route('brands.show', $brand->slug) }}" class="flex flex-col items-center justify-center text-center group h-full w-full min-h-[240px] bg-white rounded-2xl border border-dashed border-brand-gold/40 hover:border-brand-gold hover:bg-brand-gold/10 transition-all duration-300 shadow-2xs hover:shadow-md p-5">
+                                            <div class="w-12 h-12 rounded-full bg-brand-light/80 text-brand-dark group-hover:bg-brand-dark group-hover:text-brand-gold border border-brand-gold/30 flex items-center justify-center mb-3.5 transition-all duration-300 shadow-2xs group-hover:scale-110">
+                                                <i class="fa-solid fa-arrow-right text-sm transition-transform duration-300 group-hover:translate-x-1"></i>
                                             </div>
-                                            <span class="font-bold text-sm text-center">{!! __('Lihat<br>Semua') !!}</span>
+                                            <span class="font-serif font-bold text-brand-dark text-base group-hover:text-brand-darker transition-colors">{{ __('Lihat Semua') }}</span>
+                                            <span class="text-xs text-stone-500 font-normal mt-1">{{ __('Koleksi :brand', ['brand' => $brand->name]) }}</span>
+                                            <span class="mt-4 text-xs font-bold text-brand-gold-dark inline-flex items-center gap-1 group-hover:gap-1.5 transition-all">
+                                                <span>{{ __('Jelajahi') }}</span>
+                                                <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                            </span>
+                                        </a>
+                                    </div>
+                                </div>
+                            @elseif($brand->products->isNotEmpty())
+                                <div class="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-3 md:gap-4 pb-3 -mx-4 px-4 md:mx-0 md:px-0">
+                                    @foreach($brand->products->take(3) as $product)
+                                        <div class="snap-start shrink-0 w-[68vw] sm:w-[220px] md:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.75rem)] flex flex-col">
+                                            @include('frontend.components.product-card-dynamic', ['product' => $product])
+                                        </div>
+                                    @endforeach
+                                    
+                                    <div class="snap-start shrink-0 w-[180px] sm:w-[200px] flex flex-col self-stretch">
+                                        <a href="{{ route('brands.show', $brand->slug) }}" class="flex flex-col items-center justify-center text-center group h-full w-full min-h-[240px] bg-white rounded-2xl border border-dashed border-brand-gold/40 hover:border-brand-gold hover:bg-brand-gold/10 transition-all duration-300 shadow-2xs hover:shadow-md p-5">
+                                            <div class="w-12 h-12 rounded-full bg-brand-light/80 text-brand-dark group-hover:bg-brand-dark group-hover:text-brand-gold border border-brand-gold/30 flex items-center justify-center mb-3.5 transition-all duration-300 shadow-2xs group-hover:scale-110">
+                                                <i class="fa-solid fa-arrow-right text-sm transition-transform duration-300 group-hover:translate-x-1"></i>
+                                            </div>
+                                            <span class="font-serif font-bold text-brand-dark text-base group-hover:text-brand-darker transition-colors">{{ __('Lihat Semua') }}</span>
+                                            <span class="text-xs text-stone-500 font-normal mt-1">{{ __('Koleksi :brand', ['brand' => $brand->name]) }}</span>
+                                            <span class="mt-4 text-xs font-bold text-brand-gold-dark inline-flex items-center gap-1 group-hover:gap-1.5 transition-all">
+                                                <span>{{ __('Jelajahi') }}</span>
+                                                <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                            </span>
                                         </a>
                                     </div>
                                 </div>
                             @else
-                                <div class="w-full h-full min-h-[250px] flex flex-col items-center justify-center text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200 shadow-sm">
-                                    <i class="fa-solid fa-box-open text-4xl mb-3 text-gray-300"></i>
-                                    <p class="text-sm font-medium">{{ __('Belum ada produk promo.') }}</p>
+                                <div class="w-full h-full min-h-[220px] flex flex-col items-center justify-center text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200 shadow-2xs">
+                                    <i class="fa-solid fa-box-open text-4xl mb-2 text-gray-300"></i>
+                                    <p class="text-sm font-medium">{{ __('Belum ada produk promo untuk brand ini.') }}</p>
                                 </div>
                             @endif
                         </div>
@@ -462,23 +819,24 @@
                                 $bannerUrl = $logoUrl;
                             }
                         @endphp
-                        <div class="w-full md:w-1/3 relative h-[200px] sm:h-[300px] md:h-auto min-h-[300px] md:min-h-[400px] order-1 md:order-1 rounded-3xl overflow-hidden group shadow-lg flex-shrink-0 bg-brand-dark">
+                        <div class="w-full md:w-1/3 relative h-[220px] sm:h-[300px] md:h-auto min-h-[280px] md:min-h-[360px] order-1 md:order-1 rounded-2xl sm:rounded-3xl overflow-hidden group shadow-lg flex-shrink-0 bg-brand-dark">
                             <!-- Banner Image -->
                             @if($bannerUrl)
-                                <img src="{{ $bannerUrl }}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt="Promo {{ $brand->name }}">
+                                <img src="{{ $bannerUrl }}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-108" alt="Promo {{ $brand->name }}">
                             @endif
                             
                             <!-- Overlay Gradient -->
-                            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/95 via-brand-dark/40 to-transparent"></div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/95 via-brand-dark/45 to-transparent"></div>
                             
-                            <!-- Banner Text & Logo -->
-                            <div class="absolute inset-0 p-6 flex flex-col justify-end text-center items-center">
-                                <h3 class="text-white font-extrabold text-2xl md:text-3xl font-serif leading-tight drop-shadow-md">
-                                    {!! __('Diskon Ekstra<br>Terbatas') !!}
+                            <!-- Banner Text & CTA -->
+                            <div class="absolute inset-0 p-6 sm:p-7 flex flex-col justify-end text-center items-center">
+                                <span class="text-xs uppercase tracking-[0.2em] text-brand-gold font-bold mb-1">{{ __('Penawaran Eksklusif') }}</span>
+                                <h3 class="text-white font-extrabold text-2xl sm:text-3xl font-serif leading-tight drop-shadow-md">
+                                    {{ $brand->name }}
                                 </h3>
-                                <p class="text-white/80 text-sm mt-3 font-medium">{{ __('Dapatkan kualitas tidur premium dengan harga terbaik bulan ini.') }}</p>
-                                <a href="{{ route('brands.show', $brand->slug) }}" class="mt-5 w-fit px-6 py-2.5 bg-brand-gold text-white rounded-full font-bold text-sm hover:bg-brand-gold-dark transition-colors shadow-lg">
-                                    {{ __('Beli Sekarang') }}
+                                <p class="text-white/80 text-xs sm:text-sm mt-2 font-normal max-w-xs">{{ __('Dapatkan kualitas tidur premium dengan harga terbaik bulan ini.') }}</p>
+                                <a href="{{ route('brands.show', $brand->slug) }}" class="mt-4 px-6 py-2.5 bg-brand-gold text-brand-dark hover:bg-white rounded-full font-bold text-xs sm:text-sm transition-all shadow-md active:scale-95">
+                                    {{ __('Jelajahi Brand') }} &rarr;
                                 </a>
                             </div>
                         </div>
@@ -491,176 +849,7 @@
         </div>
     </section>
     @endif
-
     @php $htmlBlocks['promo_brand'] = ob_get_clean(); ob_start(); @endphp
-    <!-- Best Seller -->
-    <section class="py-16 bg-brand-light/20 border-t border-brand-muted/50">
-        <div class="container mx-auto px-6">
-            <div class="flex flex-col md:flex-row items-end justify-between mb-10 gap-4">
-                <div>
-                    <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight flex items-center gap-2 font-serif">
-                        {{ __('Product Best Seller') }} <i class="fa-solid fa-award"></i>
-                    </h2>
-                    <p class="text-gray-500 mt-2 text-lg">{{ __('Produk paling laris dengan rating tertinggi minggu ini.') }}</p>
-                </div>
-                <a href="{{ route('categories') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
-                    {{ __('Lihat Semua') }} <i class="fa-solid fa-chevron-right w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
-                </a>
-            </div>
-            
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-                @foreach($bestsellers as $product)
-                    @include('frontend.components.product-card-dynamic', ['product' => $product])
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    @php $htmlBlocks['best_seller'] = ob_get_clean(); ob_start(); @endphp
-    @if($featured && $featured->slug)
-    <!-- Special Spotlight (Featured Product) -->
-    <section class="py-20 bg-brand-dark text-white relative overflow-hidden">
-        <div class="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-darker rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 opacity-50"></div>
-        
-        <div class="container mx-auto px-6 relative z-10">
-            <div class="text-center max-w-2xl mx-auto mb-12">
-                <h2 class="text-3xl lg:text-4xl font-extrabold tracking-tight mb-4 font-serif text-brand-gold">{{ __('Spesial Buat Kamu Hari Ini') }}</h2>
-                <p class="text-brand-light/90 text-lg">{{ __('Rekomendasi khusus berdasarkan preferensi dan tren pencarian terbaik untuk kenyamanan tidur Anda.') }}</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-5xl mx-auto bg-white/5 backdrop-blur border border-brand-gold/20 rounded-3xl p-6 lg:p-10 shadow-2xl">
-                <div class="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl relative group border border-brand-gold/20">
-                    <img 
-                        src="{{ $featured->thumbnail_url ?: asset('images/Precise.jpg') }}" 
-                        alt="Special Product" 
-                        decoding="async"
-                        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-                    />
-                    <div class="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent"></div>
-                    <div class="absolute bottom-6 left-6 flex gap-2">
-                        <span class="bg-brand-gold text-brand-dark text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider">{{ __('Top Pick') }}</span>
-                    </div>
-                </div>
-                
-                <div class="space-y-6">
-                    <div class="flex items-center gap-1.5 text-brand-gold">
-                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                        <span class="text-brand-light/80 ml-2 text-sm">{{ __('(128 Ulasan)') }}</span>
-                    </div>
-                    
-                    <h3 class="text-2xl lg:text-3xl font-bold leading-tight text-white">{{ $featured->name ?? 'No Product' }}</h3>
-                    <p class="text-brand-light/70">{{ $featured->short_description ?? Str::limit(strip_tags($featured->description ?? ''), 150) }}</p>
-                    
-                    <div class="pt-4 flex items-center gap-6 border-t border-brand-gold/20">
-                        <div class="flex flex-col">
-                            @if($featuredPromo)
-                                <span class="text-sm text-brand-light/70 line-through">
-                                    Rp {{ number_format($featuredOriginalPrice, 0, ',', '.') }}
-                                    @if($featuredHasPriceRange) - Rp {{ number_format($featuredOriginalMaxPrice, 0, ',', '.') }} @endif
-                                </span>
-                                <span class="text-sm font-bold text-red-300">{{ __('Hemat') }} {{ $featuredPromo['label'] }}</span>
-                            @endif
-                            <span class="text-2xl font-extrabold text-brand-gold">Rp {{ number_format($featuredPrice, 0, ',', '.') }}@if($featuredHasPriceRange) - Rp {{ number_format($featuredPriceMax, 0, ',', '.') }}@endif</span>
-                        </div>
-                        <a 
-                            href="{{ route('products.show', $featured->slug) }}"
-                            class="bg-brand-gold text-brand-dark hover:bg-brand-light font-bold px-6 py-3 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-2"
-                        >
-                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 7h12l-1 12H7L6 7Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                            {{ __('Pilih Opsi') }}
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-    @endif
-
-    @php $htmlBlocks['spesial'] = ob_get_clean(); ob_start(); @endphp
-    <!-- Promo Brand (Tabbed Products Showcase) -->
-    @if(isset($brands) && $brands->isNotEmpty())
-    <section class="py-16 bg-white border-t border-brand-muted/50">
-        <div class="container mx-auto px-6">
-            <div class="text-center mb-10">
-                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Promo Brand') }}</h2>
-                <p class="text-gray-500 mt-2 text-lg">{{ __('Temukan produk diskon dan promo menarik dari brand-brand andalan.') }}</p>
-            </div>
-
-            <!-- Tabs -->
-            <div class="flex justify-center mb-10 overflow-x-auto pb-2">
-                <div class="inline-flex bg-brand-light/50 p-1.5 rounded-full border border-brand-gold/10">
-                    @php $firstTab = true; @endphp
-                    @foreach($brands as $brand)
-                        @if($brand->products->isNotEmpty())
-                            <button 
-                                type="button"
-                                onclick="switchBrandTab('{{ $brand->slug }}')"
-                                id="tab-btn-{{ $brand->slug }}"
-                                class="brand-tab-btn px-6 py-2.5 rounded-full font-bold text-sm transition-all duration-300 {{ $firstTab ? 'bg-brand-dark text-white shadow-md' : 'text-brand-dark/70 hover:text-brand-dark hover:bg-white/50' }}"
-                            >
-                                {{ $brand->name }}
-                            </button>
-                            @php $firstTab = false; @endphp
-                        @endif
-                    @endforeach
-                </div>
-            </div>
-
-            <!-- Tab Content Grid -->
-            <div class="brand-tab-contents">
-                @php $firstContent = true; @endphp
-                @foreach($brands as $brand)
-                    @if($brand->products->isNotEmpty())
-                        <div 
-                            id="tab-content-{{ $brand->slug }}" 
-                            class="brand-tab-content-panel {{ $firstContent ? '' : 'hidden' }} transition-opacity duration-300"
-                        >
-                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-                                @foreach($brand->products as $product)
-                                    @include('frontend.components.product-card-dynamic', ['product' => $product])
-                                @endforeach
-                            </div>
-                        </div>
-                        @php $firstContent = false; @endphp
-                    @endif
-                @endforeach
-            </div>
-        </div>
-    </section>
-
-    <script>
-        function switchBrandTab(slug) {
-            // Hide all tab content panels
-            document.querySelectorAll('.brand-tab-content-panel').forEach(panel => {
-                panel.classList.add('hidden');
-            });
-            
-            // Show selected panel
-            const targetPanel = document.getElementById('tab-content-' + slug);
-            if (targetPanel) {
-                targetPanel.classList.remove('hidden');
-            }
-            
-            // Reset all tab button styles
-            document.querySelectorAll('.brand-tab-btn').forEach(btn => {
-                btn.classList.remove('bg-brand-dark', 'text-white', 'shadow-md');
-                btn.classList.add('text-brand-dark/70', 'hover:text-brand-dark', 'hover:bg-white/50');
-            });
-            
-            // Apply active styles to clicked tab
-            const activeBtn = document.getElementById('tab-btn-' + slug);
-            if (activeBtn) {
-                activeBtn.classList.add('bg-brand-dark', 'text-white', 'shadow-md');
-                activeBtn.classList.remove('text-brand-dark/70', 'hover:text-brand-dark', 'hover:bg-white/50');
-            }
-        }
-    </script>
-    @endif
-
-    @php $htmlBlocks['promo_brand'] .= ob_get_clean(); ob_start(); @endphp
     <!-- Bundle Section -->
     @if(isset($bundles) && $bundles->isNotEmpty())
     <section class="py-16 bg-white border-t border-brand-muted/50">
@@ -717,29 +906,44 @@
     @endif
 
     @php $htmlBlocks['bundling'] = ob_get_clean(); ob_start(); @endphp
-    <!-- Product Recommendations -->
-    <section class="py-16 bg-brand-light/30 border-t border-brand-muted/50">
-        <div class="container mx-auto px-6">
-            <div class="text-center mb-12">
-                <h2 class="text-3xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Rekomendasi Lainnya') }}</h2>
-                <p class="text-gray-500 mt-2 text-lg">{{ __('Pilihan aksesori dan kasur populer untuk melengkapi kamar Anda.') }}</p>
+    <!-- Product Recommendations (5-Grid Curated Catalog) -->
+    <section class="py-9 lg:py-12 bg-[#faf9f6] border-t border-brand-muted/50 font-sans">
+        <div class="container mx-auto px-4 sm:px-6">
+            <!-- Pure Minimalist Section Header -->
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 border-b border-brand-muted/40 pb-5">
+                <div class="space-y-1.5">
+                    <div class="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] font-bold text-brand-gold-dark">
+                        <span class="w-5 h-px bg-brand-gold-dark/60"></span>
+                        <span>{{ __('Katalog Pilihan') }}</span>
+                    </div>
+                    <h2 class="text-3xl sm:text-4xl lg:text-[40px] font-extrabold text-brand-dark tracking-tight font-serif leading-[1.15]">
+                        {{ __('Rekomendasi Lainnya') }}
+                    </h2>
+                </div>
+                <div class="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest pb-1 shrink-0">
+                    <span class="w-1.5 h-1.5 rounded-full bg-brand-gold"></span>
+                    <span>{{ __('Koleksi Unggulan Lengkap') }}</span>
+                </div>
             </div>
             
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 recommended-products-grid">
+            <!-- 5 Columns Product Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5 recommended-products-grid">
                 @foreach($recommended as $product)
-                    @include('frontend.components.product-card-dynamic', ['product' => $product])
+                    <div class="flex flex-col h-full">
+                        @include('frontend.components.product-card-dynamic', ['product' => $product])
+                    </div>
                 @endforeach
             </div>
             
-            @if($recommendedTotal > 8)
-            <div class="mt-12 text-center">
+            @if($recommendedTotal > 10)
+            <div class="mt-10 text-center">
                 <button 
                     type="button"
-                    class="load-more-btn group px-8 py-3.5 rounded-full font-bold text-brand-darker bg-white border-2 border-brand-dark shadow-sm transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-xl focus:outline-none"
+                    class="load-more-btn group px-8 py-3 rounded-full font-bold text-sm text-brand-dark bg-white border border-brand-dark/30 shadow-xs transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-lg focus:outline-none cursor-pointer active:scale-95"
                     data-route="{{ route('home.load-more') }}"
-                    data-offset="8"
+                    data-offset="10"
                 >
-                    {!! __('Muat Lebih Banyak') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
+                    {!! __('Muat Lebih Banyak Produk') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
                 </button>
             </div>
             @endif
@@ -750,7 +954,7 @@
     <!-- Dynamic Section Renderer -->
     @php
         $orderedKeys = isset($homepageSections) ? $homepageSections->pluck('section_key')->toArray() : [];
-        $defaultKeys = ['kategori', 'pilihan_brand', 'promo_brand', 'best_seller', 'spesial', 'bundling', 'rekomendasi'];
+        $defaultKeys = ['kategori', 'best_seller', 'pilihan_brand', 'promo_brand', 'spesial', 'bundling', 'rekomendasi'];
         $finalKeys = array_unique(array_merge($orderedKeys, $defaultKeys));
     @endphp
 
@@ -778,6 +982,11 @@
             {!! $htmlBlocks['rekomendasi'] !!}
             @php unset($htmlBlocks['rekomendasi']); @endphp
         @endif
+    @endforeach
+
+    {{-- Render any remaining blocks --}}
+    @foreach($htmlBlocks as $remainingHtml)
+        {!! $remainingHtml !!}
     @endforeach
 
     <!-- Event Popup Modal -->
