@@ -22,12 +22,12 @@ class HomeController extends Controller
         $bestsellers = Product::where('deleted', false)
             ->where('best_seller', true)
             ->with(['brand', 'category', 'images', 'variants', 'tags'])
-            ->take(8)
+            ->take(10)
             ->get();
 
         $recommended = Product::where('deleted', false)
             ->with(['brand', 'category', 'images', 'variants', 'tags'])
-            ->take(8)
+            ->take(10)
             ->get();
 
         $recommendedTotal = Product::where('deleted', false)->count();
@@ -165,8 +165,8 @@ class HomeController extends Controller
 
     public function loadMore(Request $request)
     {
-        $offset = $request->query('offset', 8);
-        $limit = $request->query('limit', 4);
+        $offset = $request->query('offset', 10);
+        $limit = $request->query('limit', 10);
 
         $query = Product::where('deleted', false);
 
