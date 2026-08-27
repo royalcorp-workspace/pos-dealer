@@ -67,13 +67,13 @@
                                 <div class="min-w-0 flex-1">
                                     <p class="font-bold text-brand-dark truncate">{{ $item['name'] ?? 'Produk' }}</p>
                                     <p class="text-sm text-gray-500 mt-1">{{ $item['brand'] ? $item['brand'] . ' · ' : '' }}Qty {{ $item['quantity'] ?? 1 }}</p>
-                                    <p class="text-sm text-gray-500 mt-1">{{ $formatRupiah($item['price'] ?? 0) }} / pcs</p>
+                                    <p class="text-sm text-gray-500 mt-1">{{ $formatRupiah($item['sell_price'] ?? 0) }} / pcs</p>
                                     @if(!empty($item['item_note']))
                                         <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $item['item_note'] }}</p>
                                     @endif
                                 </div>
                                 <div class="text-right flex-shrink-0">
-                                    <p class="font-bold text-brand-dark">{{ $formatRupiah(($item['price'] ?? 0) * ($item['quantity'] ?? 1)) }}</p>
+                                    <p class="font-bold text-brand-dark">{{ $formatRupiah(($item['sell_price'] ?? 0) * ($item['quantity'] ?? 1)) }}</p>
                                 </div>
                             </div>
                         @empty

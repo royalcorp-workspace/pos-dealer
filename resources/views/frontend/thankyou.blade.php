@@ -13,36 +13,47 @@
 @endphp
 
 @section('content')
-    <!-- Top Premium Background -->
-    <div class="relative w-full bg-brand-dark pt-20 pb-40 overflow-hidden">
-        <!-- Glow effects -->
-        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-gold/20 rounded-full blur-[100px] pointer-events-none"></div>
-        <div class="absolute top-10 right-0 w-[400px] h-[400px] bg-blue-900/30 rounded-full blur-[100px] pointer-events-none"></div>
-        
-        <div class="container mx-auto px-4 relative z-10 text-center">
-            <div class="inline-flex items-center justify-center w-24 h-24 bg-white/10 backdrop-blur-md rounded-full border border-white/20 mb-6 shadow-2xl shadow-brand-gold/20">
-                <div class="w-20 h-20 bg-gradient-to-tr from-brand-gold-dark to-brand-gold rounded-full flex items-center justify-center">
-                    <i class="fa-solid fa-check text-4xl text-brand-dark"></i>
-                </div>
-            </div>
-            
-            <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-4 font-serif drop-shadow-lg">Pesanan Berhasil!</h1>
-            <p class="text-brand-light/80 text-lg max-w-xl mx-auto">
-                Terima kasih atas kepercayaan Anda. Kami telah menerima pesanan Anda dan akan segera memprosesnya dengan penuh kehati-hatian.
-            </p>
-        </div>
-    </div>
-
-    <!-- Content Overlapping the Background -->
-    <div class="container mx-auto px-4 relative z-20 -mt-24 pb-24">
+    <div class="container mx-auto px-4 pt-12 pb-24">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto">
             
             <!-- Left Column: Receipt / Order Details -->
             <div class="lg:col-span-7 space-y-6">
                 <!-- Receipt Card -->
                 <div class="bg-white rounded-3xl shadow-xl shadow-brand-dark/5 overflow-hidden border border-gray-100">
+                    
+                    <!-- Success Message Centered -->
+                    <div class="text-center pt-10 pb-6 px-8">
+                        <div class="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-5">
+                            <div class="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center text-white">
+                                <i class="fa-solid fa-check text-2xl"></i>
+                            </div>
+                        </div>
+                        <h1 class="text-3xl font-extrabold text-brand-dark mb-3 font-serif">Pesanan Berhasil!</h1>
+                        <p class="text-gray-500 text-sm max-w-md mx-auto">
+                            Terima kasih atas kepercayaan Anda. Kami telah menerima pesanan Anda dan akan segera memprosesnya dengan penuh kehati-hatian.
+                        </p>
+                    </div>
+
+                    @if($status == 1)
+                    <div class="bg-amber-50 border-y border-amber-100 p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <p class="text-brand-dark font-bold">Selesaikan pembayaran sebelum batas waktu berakhir</p>
+                            <p class="text-sm text-gray-600 mt-1">Pesanan akan otomatis dibatalkan (void) jika melewati batas waktu.</p>
+                        </div>
+                        <div class="text-2xl font-bold text-red-600 font-mono tracking-widest bg-white px-4 py-2 rounded-xl shadow-sm border border-red-100" id="thankyou-countdown" data-created="{{ $order->meta['payment_started_at'] ?? ($order->created_at ? $order->created_at->toIso8601String() : now()->toIso8601String()) }}">
+                            --:--:--
+                        </div>
+                    </div>
+                    @endif
+                        </div>
+                        <h1 class="text-3xl font-extrabold text-brand-dark mb-3 font-serif">Pesanan Berhasil!</h1>
+                        <p class="text-gray-500 text-sm max-w-md mx-auto">
+                            Terima kasih atas kepercayaan Anda. Kami telah menerima pesanan Anda dan akan segera memprosesnya dengan penuh kehati-hatian.
+                        </p>
+                    </div>
+
                     <!-- Receipt Header -->
-                    <div class="bg-gray-50 px-8 py-6 border-b border-dashed border-gray-300 flex justify-between items-center">
+                    <div class="bg-gray-50 px-8 py-6 border-y border-dashed border-gray-300 flex justify-between items-center">
                         <div>
                             <p class="text-xs text-gray-500 uppercase tracking-wider font-bold mb-1">ID Pesanan</p>
                             <p class="text-xl font-mono font-extrabold text-brand-dark">{{ $orderId }}</p>
@@ -87,11 +98,83 @@
                                         <span class="text-gray-600 font-medium">Metode Pembayaran</span>
                                         <span class="font-bold text-brand-dark text-right">{{ ucwords(str_replace(['_', '-'], ' ', $paymentMethod)) }}</span>
                                     </div>
+                                    
+                                    <div class="space-y-2 mt-4 pt-4 border-t border-brand-muted/50 text-sm">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-500">Subtotal Produk</span>
+                                            <span class="font-semibold text-gray-700">Rp {{ number_format($order->subtotal ?? 0, 0, ',', '.') }}</span>
+                                        </div>
+                                        
+                                        @if(($order->shipping_cost ?? 0) > 0)
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-gray-500">Ongkos Kirim</span>
+                                                <span class="font-semibold text-gray-700">Rp {{ number_format($order->shipping_cost, 0, ',', '.') }}</span>
+                                            </div>
+                                        @endif
+                                        
+                                        @if(($order->transaction_fee ?? 0) > 0)
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-gray-500">Biaya Layanan</span>
+                                                <span class="font-semibold text-gray-700">Rp {{ number_format($order->transaction_fee, 0, ',', '.') }}</span>
+                                            </div>
+                                        @endif
+                                        
+                                        @if(($order->discount ?? 0) > 0)
+                                            <div class="flex justify-between items-center text-red-600">
+                                                <span class="font-medium">Diskon</span>
+                                                <span class="font-semibold">- Rp {{ number_format($order->discount, 0, ',', '.') }}</span>
+                                            </div>
+                                        @endif
+                                    </div>
+
                                     <div class="flex justify-between items-center pt-4 border-t border-brand-muted/50 mt-4">
                                         <span class="text-gray-800 font-bold">Total Pembayaran</span>
                                         <span class="text-2xl font-extrabold text-brand-gold-dark">Rp {{ number_format($total, 0, ',', '.') }}</span>
                                     </div>
                                 </div>
+                                
+                                @php
+                                    $vaNumber = $order->meta['va_number'] ?? null;
+                                    $espayRef = $order->meta['espay_reference'] ?? null;
+                                @endphp
+
+                                @if($vaNumber)
+                                    <div class="bg-blue-50 rounded-2xl p-6 border border-blue-200 mt-4">
+                                        <h4 class="font-bold text-brand-dark mb-4 flex items-center gap-2">
+                                            <i class="fa-solid fa-building-columns text-blue-500"></i> Informasi Virtual Account
+                                        </h4>
+                                        <div class="space-y-3 text-sm">
+                                            <div class="flex flex-col bg-white p-4 rounded-xl border border-blue-100 items-center justify-center text-center">
+                                                <span class="text-gray-500 mb-1">Nomor Virtual Account</span>
+                                                <span class="font-mono font-extrabold text-blue-700 text-3xl tracking-widest select-all">{{ $vaNumber }}</span>
+                                            </div>
+                                        </div>
+
+                                        @php
+                                            $instructions = $order->meta['payment_instructions'] ?? [];
+                                        @endphp
+                                        
+                                        @if(is_array($instructions) && count($instructions) > 0)
+                                            <div class="mt-6 pt-5 border-t border-blue-200">
+                                                <h4 class="font-bold text-brand-dark mb-3 text-sm">Tata Cara Pembayaran:</h4>
+                                                <div class="space-y-3">
+                                                    @foreach($instructions as $inst)
+                                                        <details class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                                                            <summary class="font-medium p-3 cursor-pointer bg-gray-50">{{ $inst['title'] ?? 'Langkah Pembayaran' }}</summary>
+                                                            <div class="p-3 text-sm text-gray-600 border-t border-gray-100">
+                                                                <ol class="list-decimal ml-4 space-y-1">
+                                                                    @foreach($inst['steps'] ?? [] as $step)
+                                                                        <li>{!! str_replace('Virtual Account', 'VA <b>'.$vaNumber.'</b>', $step) !!}</li>
+                                                                    @endforeach
+                                                                </ol>
+                                                            </div>
+                                                        </details>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
                                 
                                 @if($paymentMethod === 'transfer_manual')
                                     <div class="bg-amber-50 rounded-2xl p-6 border border-brand-gold/30">
@@ -219,6 +302,44 @@
         // Hapus data form checkout agar pesanan berikutnya tidak terisi data lama secara tidak sengaja
         sessionStorage.removeItem('checkout_form_data');
     });
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var countdownEl = document.getElementById('thankyou-countdown');
+        if (!countdownEl) return;
+        
+        var createdStr = countdownEl.getAttribute('data-created');
+        if (!createdStr) return;
+        
+        // Set expiration to 24 hours after creation
+        var createdAt = new Date(createdStr).getTime();
+        var expireAt = createdAt + (24 * 60 * 60 * 1000);
+        
+        function updateTimer() {
+            var now = new Date().getTime();
+            var distance = expireAt - now;
+            
+            if (distance < 0) {
+                countdownEl.innerHTML = "00:00:00";
+                countdownEl.classList.add('text-gray-400');
+                countdownEl.classList.remove('text-red-600');
+                return;
+            }
+            
+            var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            
+            hours = hours < 10 ? "0" + hours : hours;
+            minutes = minutes < 10 ? "0" + minutes : minutes;
+            seconds = seconds < 10 ? "0" + seconds : seconds;
+            
+            countdownEl.innerHTML = hours + ":" + minutes + ":" + seconds;
+        }
+        
+        updateTimer();
+        setInterval(updateTimer, 1000);
+    });
 </script>
 @endpush
 
@@ -238,7 +359,7 @@
                 {
                     item_id: "{{ $item->product_id ?? '' }}",
                     item_name: "{{ $item->name ?? '' }}",
-                    price: {{ $item->price ?? 0 }},
+                    price: {{ $item->unit_price ?? 0 }},
                     quantity: {{ $item->quantity ?? 1 }}
                 }@if(!$loop->last),@endif
                 @endforeach

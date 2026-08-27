@@ -7,20 +7,30 @@ function checkSelection() {
     const colorInput = document.getElementById('color-id-input');
     
     let isComplete = true;
+    let missingPrompt = '';
+    
     if ((hasLegacyVariants || hasAttributeGroups) && (!variantInput || !variantInput.value)) {
         isComplete = false;
-    }
-    if (hasColors && (!colorInput || !colorInput.value)) {
+        missingPrompt = 'Pilih Ukuran Terlebih Dahulu';
+    } else if (hasColors && (!colorInput || !colorInput.value)) {
         isComplete = false;
+        missingPrompt = 'Pilih Warna Terlebih Dahulu';
     }
     
     const addToCartBtn = document.getElementById('add-to-cart-btn');
+    const addToCartText = document.getElementById('add-to-cart-text');
     const qtyInput = document.getElementById('quantity-input');
     const qtyMinusBtn = document.getElementById('qty-minus-btn');
     const qtyPlusBtn = document.getElementById('qty-plus-btn');
     
     if (isComplete) {
-        if (addToCartBtn) addToCartBtn.disabled = false;
+        if (addToCartBtn) {
+            addToCartBtn.disabled = false;
+            addToCartBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+        if (addToCartText) {
+            addToCartText.textContent = 'Tambah ke Keranjang';
+        }
         if (qtyInput) qtyInput.disabled = false;
         if (qtyMinusBtn) qtyMinusBtn.disabled = false;
         if (qtyPlusBtn) qtyPlusBtn.disabled = false;
@@ -29,7 +39,13 @@ function checkSelection() {
             if (addToCartBtn) addToCartBtn.disabled = true;
         }
     } else {
-        if (addToCartBtn) addToCartBtn.disabled = true;
+        if (addToCartBtn) {
+            addToCartBtn.disabled = true;
+            addToCartBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+        if (addToCartText) {
+            addToCartText.textContent = missingPrompt || 'Pilih Ukuran Terlebih Dahulu';
+        }
         if (qtyInput) qtyInput.disabled = true;
         if (qtyMinusBtn) qtyMinusBtn.disabled = true;
         if (qtyPlusBtn) qtyPlusBtn.disabled = true;
@@ -44,11 +60,11 @@ function selectAttribute(el) {
     
     const container = el.closest('.attribute-group-container');
     container.querySelectorAll('.attribute-btn').forEach(btn => {
-        btn.classList.remove('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
-        btn.classList.add('border-brand-muted', 'bg-white', 'text-gray-600');
+        btn.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
     });
-    el.classList.remove('border-brand-muted', 'bg-white', 'text-gray-600');
-    el.classList.add('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+    el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
+    el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
     selectedAttributes[groupName] = value;
     findMatchingVariant();
@@ -78,17 +94,70 @@ function findMatchingVariant() {
             const priceLabel = document.getElementById('price-label');
             
             let finalPrice = parseFloat(matchedVariant.price) || 0;
+            let basePrice = parseFloat(matchedVariant.base_price) || finalPrice;
+            if (basePrice <= 0) basePrice = finalPrice;
+            
+            let originalPrice = finalPrice;
+            let defaultBadge = null;
+            let ppsBadge = null;
+            let strikePrice = null;
+            
+            if (basePrice > finalPrice) {
+                let pct = Math.round(((basePrice - finalPrice) / basePrice) * 100);
+                defaultBadge = pct + '% OFF';
+            }
+            
             if (window.staticPromo) {
                 const promo = window.staticPromo;
-                if (promo.discount_type == 1) {
+                strikePrice = (basePrice > finalPrice) ? basePrice : finalPrice;
+                
+                if (promo.discount_type === 'fixed') {
                     finalPrice = Math.max(0, finalPrice - parseFloat(promo.discount_value));
-                } else if (promo.discount_type == 2) {
+                } else if (promo.discount_type === 'percentage') {
                     finalPrice = Math.max(0, finalPrice - (finalPrice * parseFloat(promo.discount_value) / 100));
                 }
+                
+                if (strikePrice > 0) {
+                    let totalPct = Math.round(((strikePrice - finalPrice) / strikePrice) * 100);
+                    if (basePrice > originalPrice) {
+                        let ppsPct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
+                        ppsBadge = 'EXTRA ' + ppsPct + '% OFF';
+                    } else {
+                        defaultBadge = totalPct + '% OFF';
+                    }
+                }
+            } else if (basePrice > finalPrice) {
+                strikePrice = basePrice;
             }
             
             if (priceEl) {
                 priceEl.textContent = 'Rp ' + Number(finalPrice).toLocaleString('id-ID');
+                
+                if (defaultBadge || ppsBadge) {
+                    priceEl.classList.remove('text-brand-dark');
+                    priceEl.classList.add('text-red-600');
+                    document.getElementById('product-discount-container').style.display = 'flex';
+                    
+                    const strikeEl = document.getElementById('product-strike-price');
+                    if (strikeEl && strikePrice) strikeEl.textContent = 'Rp ' + Number(strikePrice).toLocaleString('id-ID');
+                    
+                    const dbEl = document.getElementById('product-default-badge');
+                    if (dbEl) {
+                        dbEl.textContent = defaultBadge || '';
+                        dbEl.style.display = defaultBadge ? 'inline' : 'none';
+                    }
+                    
+                    const ppsEl = document.getElementById('product-pps-badge');
+                    if (ppsEl) {
+                        ppsEl.textContent = ppsBadge || '';
+                        ppsEl.style.display = ppsBadge ? 'inline' : 'none';
+                    }
+                } else {
+                    priceEl.classList.remove('text-red-600');
+                    priceEl.classList.add('text-brand-dark');
+                    const dc = document.getElementById('product-discount-container');
+                    if (dc) dc.style.display = 'none';
+                }
             }
             
             if (priceLabel) {
@@ -108,11 +177,11 @@ function findMatchingVariant() {
 
 function selectVariant(el) {
     document.querySelectorAll('.legacy-variant-btn').forEach(btn => {
-        btn.classList.remove('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
-        btn.classList.add('border-brand-muted', 'bg-white', 'text-gray-600');
+        btn.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
     });
-    el.classList.remove('border-brand-muted', 'bg-white', 'text-gray-600');
-    el.classList.add('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+    el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
+    el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
     const priceEl = document.getElementById('product-price');
     const priceLabel = document.getElementById('price-label');
@@ -228,4 +297,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Run check immediately on load
+    checkSelection();
 });

@@ -80,6 +80,9 @@ Route::get('/payment', [CheckoutController::class, 'payment'])->name('payment');
 Route::post('/payment/process', [CheckoutController::class, 'processPayment'])->name('payment.process');
 
 Route::get('/thankyou', [CheckoutController::class, 'thankYou'])->name('thankyou');
+Route::get('/track-order', [CheckoutController::class, 'trackOrder'])->name('track-order');
+Route::post('/track-order', [CheckoutController::class, 'processTrackOrder'])->name('track-order.process');
+Route::get('/track-order/{order_id}', [CheckoutController::class, 'trackOrderDetail'])->name('track-order.detail');
 
 Route::get('/register-success', [CheckoutController::class, 'registerSuccess'])->name('register.success');
 
@@ -133,4 +136,3 @@ Route::get('/500', [PageController::class, 'error500'])->name('errors.500');
 // ESPAY BI-SNAP Webhooks
 Route::post('/v1.0/transfer-va/inquiry', [\App\Http\Controllers\Api\SnapBiController::class, 'inquiry']);
 Route::post('/v1.0/transfer-va/payment', [\App\Http\Controllers\Api\SnapBiController::class, 'payment']);
-

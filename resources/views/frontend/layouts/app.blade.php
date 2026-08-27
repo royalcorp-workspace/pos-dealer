@@ -458,14 +458,12 @@
     <script defer src="{{ asset('js/frontend/auth-modal.js') }}?v={{ filemtime(public_path('js/frontend/auth-modal.js')) }}"></script>
 
     <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.14.8/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" media="print" onload="this.media='all'">
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"></noscript>
-    
-    <!-- Motion One (used by React motion/react) - attempt to reproduce exact animations -->
-    <script defer src="https://cdn.jsdelivr.net/npm/motion@10.15.3/dist/motion.global.min.js"></script>
 
     @include('frontend.components.tracking')
 </head>

@@ -121,7 +121,7 @@ trait BufferCartTrait
                     'name' => $item->name,
                     'brand' => $item->product->brand->name ?? '',
                     'image' => $item->product->thumbnail_url ?? '',
-                    'price' => (float) $item->unit_price,
+                    'sell_price' => (float) $item->unit_price,
                     'quantity' => (int) $item->quantity,
                     'item_note' => $item->item_notes ?? '',
                     'type' => $isBundle ? 'bundle' : 'product',
@@ -148,7 +148,7 @@ trait BufferCartTrait
     {
         $total = 0.0;
         foreach ($cart as $item) {
-            $total += $item['price'] * $item['quantity'];
+            $total += $item['sell_price'] * $item['quantity'];
         }
         return $total;
     }

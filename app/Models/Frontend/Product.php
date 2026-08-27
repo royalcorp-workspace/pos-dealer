@@ -29,14 +29,11 @@ class Product extends Model
         'creator',
         'editor',
         'deleted',
-        'base_price',
     ];
 
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
-            'cost_price' => 'decimal:2',
             'images' => 'array',
             'specifications' => 'array',
             'is_active' => 'boolean',

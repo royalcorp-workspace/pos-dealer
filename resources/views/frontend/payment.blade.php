@@ -4,8 +4,8 @@
 @section('robots', 'noindex,nofollow')
 
 @section('content')
-    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh] font-sans" id="payment-container" data-route-thankyou="{{ route('thankyou') }}" data-route-payment-process="{{ route('payment.process') }}">
-        <h1 class="text-3xl font-extrabold text-brand-dark mb-8 font-serif">Pemilihan Pembayaran</h1>
+    <div class="container mx-auto px-4 md:px-6 py-12 min-h-[60vh] font-sans" id="payment-container" data-order-id="{{ $orderData['id'] ?? '' }}" data-route-thankyou="{{ route('thankyou') }}" data-route-payment-process="{{ route('payment.process') }}">
+        <h1 class="text-3xl font-extrabold text-brand-dark mb-4 font-serif">Pemilihan Pembayaran</h1>
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2">
@@ -27,53 +27,61 @@
                     <h2 class="font-bold text-brand-dark mb-4">Metode Pembayaran</h2>
                     
                     <div class="space-y-6">
-                        <div>
-                            <h3 class="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">Transfer Bank</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                @foreach(array_filter($paymentMethods, fn($m) => $m['type'] === 'transfer') as $method)
-                                    <label class="flex items-center gap-3 p-4 border border-brand-muted rounded-xl cursor-pointer hover:border-brand-gold transition-colors">
-                                        <input type="radio" name="payment_method" value="{{ $method['code'] }}" 
-                                               data-is-manual="{{ $method['code'] === 'transfer_manual' ? '1' : '0' }}"
-                                               data-banks='@json($method["bank_info"] ?? [])'
-                                               class="w-4 h-4 text-brand-gold">
-                                        <div class="flex items-center gap-2">
-                                            <i class="fa-solid fa-building w-5 h-5 text-brand-dark"></i>
-                                            <span class="font-medium">{{ $method['name'] }}</span>
-                                        </div>
-                                    </label>
-                                @endforeach
-                            </div>
-                            
-                            <div id="transfer-manual-details" data-order-total="{{ $orderData['total'] }}" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/30 rounded-2xl hidden transition-all">
-                                <h4 class="font-bold text-brand-dark mb-3">Instruksi Transfer Bank Manual:</h4>
-                                <div class="text-sm text-gray-700 space-y-4 mb-4">
-                                    <p>Silakan melakukan pembayaran ke salah satu rekening berikut:</p>
-                                    <div id="instructions-banks-container" class="space-y-4">
-                                        <!-- Dynamic bank cards will be inserted here -->
-                                    </div>
-                                    <p class="text-xs text-red-500 italic mt-2">*Harap pastikan nominal transfer sama persis dengan Total Transfer di atas agar proses verifikasi berjalan lancar.</p>
+                        @php
+                            $groupedMethods = collect($paymentMethods)->groupBy('type');
+                        @endphp
+                        
+                        @foreach($groupedMethods as $type => $methods)
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">{{ $type }}</h3>
+                                <div class="grid grid-cols-2 gap-3">
+                                    @foreach($methods as $method)
+                                        <label class="relative flex items-center gap-3 p-4 border border-brand-muted rounded-xl cursor-pointer hover:border-brand-gold transition-all duration-200 payment-method-label has-[:checked]:border-brand-gold has-[:checked]:bg-brand-gold/5">
+                                            <input type="radio" name="payment_method" value="{{ $method['code'] }}" 
+                                                data-is-manual="{{ $method['code'] === 'transfer_manual' ? '1' : '0' }}"
+                                                data-banks='@json($method["bank_info"] ?? [])'
+                                                data-has-charge="{{ ($method['has_charge'] ?? false) ? '1' : '0' }}"
+                                                data-charge-type="{{ $method['charge_type'] ?? 2 }}"
+                                                data-charge-value="{{ $method['charge_value'] ?? 0 }}"
+                                                class="peer sr-only">
+                                            
+                                            <!-- Custom SVG Checkmark -->
+                                            <div class="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center peer-checked:border-brand-gold peer-checked:bg-brand-gold transition-colors shadow-sm">
+                                                <svg class="w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                                </svg>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                @if(!empty($method['image']))
+                                                    <img src="{{ cms_asset($method['image']) }}" alt="{{ $method['name'] }}" class="h-6 w-auto object-contain">
+                                                @else
+                                                    @if(str_contains(strtolower($type), 'wallet') || str_contains(strtolower($type), 'qris'))
+                                                        <i class="fa-solid fa-wallet w-5 h-5 text-brand-dark flex items-center justify-center"></i>
+                                                    @elseif(str_contains(strtolower($type), 'card'))
+                                                        <i class="fa-solid fa-credit-card w-5 h-5 text-brand-dark flex items-center justify-center"></i>
+                                                    @else
+                                                        <i class="fa-solid fa-building w-5 h-5 text-brand-dark flex items-center justify-center"></i>
+                                                    @endif
+                                                @endif
+                                                <span class="font-medium">{{ $method['name'] }}</span>
+                                            </div>
+                                        </label>
+                                    @endforeach
                                 </div>
-                                
-                                <div class="space-y-2">
-                                    <label class="block text-sm font-bold text-brand-dark">Upload Bukti Transfer <span class="text-red-500">*</span></label>
-                                    <input type="file" id="payment_proof" name="payment_proof" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-brand-dark file:text-brand-gold hover:file:bg-brand-darker cursor-pointer border border-brand-muted rounded-xl p-2 bg-white">
-                                    <p class="text-xs text-gray-400">Format yang diterima: JPG, JPEG, PNG. Ukuran maksimal: 5MB.</p>
-                                </div>
                             </div>
-                        </div>
-
-                        <div>
-                            <h3 class="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">E-Wallet</h3>
-                            <div class="grid grid-cols-2 gap-3">
-                                @foreach(array_filter($paymentMethods, fn($m) => $m['type'] === 'ewallet') as $method)
-                                    <label class="flex items-center gap-3 p-4 border border-brand-muted rounded-xl cursor-pointer hover:border-brand-gold transition-colors">
-                                        <input type="radio" name="payment_method" value="{{ $method['code'] }}" class="w-4 h-4 text-brand-gold">
-                                        <div class="flex items-center gap-2">
-                                            <i class="fa-solid fa-wallet w-5 h-5 text-brand-dark"></i>
-                                            <span class="font-medium">{{ $method['name'] }}</span>
-                                        </div>
-                                    </label>
-                                @endforeach
+                        @endforeach
+                        
+                        <div id="transfer-manual-details" data-order-total="{{ $orderData['total'] }}" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/30 rounded-2xl hidden transition-all">
+                            <h4 class="font-bold text-brand-dark mb-3">Instruksi Transfer Bank Manual:</h4>
+                            <div class="text-sm text-gray-700 space-y-4 mb-4">
+                                <p>Silakan melakukan pembayaran ke salah satu rekening berikut:</p>
+                                <div id="instructions-banks-container" class="space-y-4">
+                                    <!-- Dynamic bank cards will be inserted here -->
+                                </div>
+                                <div class="mt-4 p-4 bg-white rounded-xl border border-gray-200">
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Upload Bukti Transfer</label>
+                                    <input type="file" id="payment_proof" name="payment_proof" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-brand-gold/10 file:text-brand-dark hover:file:bg-brand-gold/20">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -89,7 +97,7 @@
                                         <p class="font-medium text-gray-700">{{ $item['name'] }}</p>
                                         <p class="text-xs text-gray-500">Qty: {{ $item['quantity'] }}</p>
                                     </div>
-                                    <span class="font-semibold ml-4">Rp {{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }}</span>
+                                    <span class="font-semibold ml-4">Rp {{ number_format($item['sell_price'] * $item['quantity'], 0, ',', '.') }}</span>
                                 </div>
                             @endforeach
                         </div>
@@ -100,7 +108,7 @@
                     <h2 class="font-bold text-brand-dark mb-4">Detail Pesanan</h2>
                     @php
                         $items = $orderData['items'] ?? [];
-                        $originalSubtotal = collect($items)->sum(fn($i) => ($i['price'] ?? 0) * ($i['quantity'] ?? 0));
+                        $originalSubtotal = collect($items)->sum(fn($i) => ($i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
                         
                         $totalPercentDiscount = 0.0;
                         $totalNominalDiscount = 0.0;
@@ -158,24 +166,14 @@
                             </div>
                         @endif
                         
-                        @php
-                            $selectedMethod = collect($paymentMethods)->firstWhere('code', $orderData['payment_method'] ?? null);
-                            $charge = 0;
-                            if ($selectedMethod && !empty($selectedMethod['has_charge'])) {
-                                $totalBeforeCharge = $orderData['total'] ?? 0;
-                                $charge = $selectedMethod['charge_type'] ?? 1 == 1 ? ($totalBeforeCharge * $selectedMethod['charge_value'] / 100) : $selectedMethod['charge_value'];
-                            }
-                        @endphp
-                        @if($charge > 0)
-                            <div class="flex justify-between items-center py-2 border-b">
-                                <span class="text-gray-700">Biaya Tambahan</span>
-                                <span class="font-semibold">Rp {{ number_format($charge, 0, ',', '.') }}</span>
-                            </div>
-                        @endif
+                        <div id="charge-row" class="flex justify-between items-center py-2 border-b hidden">
+                            <span class="text-gray-700">Biaya Tambahan</span>
+                            <span id="charge-amount" class="font-semibold">Rp 0</span>
+                        </div>
                         
                         <div class="flex justify-between pt-4">
                             <span class="font-bold text-lg">Total</span>
-                            <span class="font-bold text-xl text-brand-dark">Rp {{ number_format($orderData['total'] + $charge, 0, ',', '.') }}</span>
+                            <span id="final-total" class="font-bold text-xl text-brand-dark" data-base-total="{{ $orderData['total'] ?? 0 }}">Rp {{ number_format($orderData['total'] ?? 0, 0, ',', '.') }}</span>
                         </div>
                     </div>
                 </div>
@@ -193,10 +191,7 @@
                         </button>
                     </div>
                     
-                    <!-- Espay Embed Kit iframe placeholder -->
-                    <div id="espay-iframe-container" class="hidden w-full h-[500px] border border-brand-muted rounded-xl overflow-hidden mt-4">
-                        <iframe id="sgoplus-iframe" src="" scrolling="yes" frameborder="0" class="w-full h-full"></iframe>
-                    </div>
+                    <!-- Placeholder untuk instruksi lain jika diperlukan -->
                     
                     @php $orderId = $orderData['id'] ?? null; @endphp
                     @if($orderId)
@@ -211,14 +206,5 @@
         </div>
     </div>
 
-    <!-- Pass Espay config to JS -->
-    <script>
-        window.espayConfig = {
-            key: "{{ config('espay.merchant_key') }}",
-            paymentId: "{{ $orderData['id'] ?? '' }}",
-            backUrl: "{{ route('thankyou') }}"
-        };
-    </script>
-    <script type="text/javascript" src="{{ config('espay.js_url') }}"></script>
     <script src="{{ asset('js/frontend/payment.js') }}?v={{ filemtime(public_path('js/frontend/payment.js')) }}"></script>
 @endsection

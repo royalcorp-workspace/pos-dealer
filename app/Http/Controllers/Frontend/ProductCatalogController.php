@@ -16,28 +16,37 @@ class ProductCatalogController extends Controller
         $filterType = $request->query('type');
         $filterValue = $request->query('value');
 
-        // Handle direct root slug (catch-all route)
-        $urlSlug = $request->route()->parameter('tagSlug') ?? $request->route()->parameter('categorySlug') ?? $request->route()->parameter('brandSlug');
-        
-        if ($urlSlug && !$filterType) {
-            // Check if it's a Category
-            if (ProductCategory::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+        if (!$filterType) {
+            $catSlug = $request->route()->parameter('categorySlug');
+            $brandSlug = $request->route()->parameter('brandSlug');
+            $tagSlug = $request->route()->parameter('tagSlug');
+            $genericSlug = $request->route()->parameter('slug');
+
+            if ($catSlug) {
                 $filterType = 'category';
-                $filterValue = $urlSlug;
-            } 
-            // Check if it's a Brand
-            elseif (Brand::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterValue = $catSlug;
+                if (!\App\Models\Frontend\ProductsCatalog\ProductCategory::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
+            } elseif ($brandSlug) {
                 $filterType = 'brand';
-                $filterValue = $urlSlug;
-            }
-            // Check if it's a Tag
-            elseif (ProductTag::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterValue = $brandSlug;
+                if (!\App\Models\Frontend\ProductsCatalog\Brand::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
+            } elseif ($tagSlug) {
                 $filterType = 'tag';
-                $filterValue = $urlSlug;
-            }
-            // If it doesn't match any entity, it's an invalid URL, so 404
-            else {
-                abort(404);
+                $filterValue = $tagSlug;
+                if (!\App\Models\Frontend\ProductsCatalog\ProductTag::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
+            } elseif ($genericSlug) {
+                if (\App\Models\Frontend\ProductsCatalog\ProductCategory::where('slug', $genericSlug)->where('deleted', false)->exists()) {
+                    $filterType = 'category';
+                    $filterValue = $genericSlug;
+                } elseif (\App\Models\Frontend\ProductsCatalog\Brand::where('slug', $genericSlug)->where('deleted', false)->exists()) {
+                    $filterType = 'brand';
+                    $filterValue = $genericSlug;
+                } elseif (\App\Models\Frontend\ProductsCatalog\ProductTag::where('slug', $genericSlug)->where('deleted', false)->exists()) {
+                    $filterType = 'tag';
+                    $filterValue = $genericSlug;
+                } else {
+                    abort(404);
+                }
             }
         }
 
@@ -79,14 +88,14 @@ class ProductCatalogController extends Controller
             ->orderBy('sort_order')
             ->get();
 
-        $query = Product::where('deleted', false)
+        $query = Product::where('products.deleted', false)
             ->select('products.*')
             ->selectRaw('
                 COALESCE(
                     (SELECT 
                         CASE 
-                            WHEN ppsi.discount_type = 1 THEN CAST(products.base_price AS numeric) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
-                            ELSE CAST(products.base_price AS numeric) - CAST(ppsi.discount_value AS numeric)
+                            WHEN ppsi.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) - CAST(ppsi.discount_value AS numeric)
                         END
                      FROM price_product_setting_items ppsi
                      JOIN price_product_settings pps ON pps.id = ppsi.price_product_setting_id
@@ -100,8 +109,8 @@ class ProductCatalogController extends Controller
                     ),
                     (SELECT
                         CASE 
-                            WHEN pps.discount_type = 1 THEN CAST(products.base_price AS numeric) * (1 - CAST(pps.discount_value AS numeric) / 100)
-                            ELSE CAST(products.base_price AS numeric) - CAST(pps.discount_value AS numeric)
+                            WHEN pps.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) * (1 - CAST(pps.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) - CAST(pps.discount_value AS numeric)
                         END
                      FROM price_product_settings pps
                      WHERE pps.scope = 1
@@ -111,7 +120,7 @@ class ProductCatalogController extends Controller
                        AND (pps.end_date IS NULL OR pps.end_date >= NOW())
                      LIMIT 1
                     ),
-                    CAST(products.base_price AS numeric)
+                    (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false)
                 ) as promo_price
             ')
             ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
@@ -130,7 +139,6 @@ class ProductCatalogController extends Controller
 
                     // 1. Exact phrase match
                     $q->where('name', 'ilike', '%' . $filterValue . '%')
-                      ->orWhere('code', 'ilike', '%' . $filterValue . '%')
                       ->orWhere('slug', 'ilike', '%' . $filterValue . '%');
 
                     // 2. Multi-word match (e.g., "Kasur 200 100" requires ALL words to match somewhere)
@@ -139,7 +147,7 @@ class ProductCatalogController extends Controller
                             foreach ($terms as $term) {
                                 $q2->where(function ($q3) use ($term) {
                                     $q3->where('name', 'ilike', '%' . $term . '%')
-                                       ->orWhere('code', 'ilike', '%' . $term . '%')
+                                       ->orWhere('slug', 'ilike', '%' . $term . '%')
                                        ->orWhereHas('category', function ($qCat) use ($term) {
                                            $qCat->where('name', 'ilike', '%' . $term . '%');
                                        })
@@ -163,30 +171,28 @@ class ProductCatalogController extends Controller
         if ($minPrice || $maxPrice) {
             $query->whereHas('variants', function ($q) use ($minPrice, $maxPrice) {
                 if ($minPrice) {
-                    $q->where('price', '>=', $minPrice);
+                    $q->where('sell_price', '>=', $minPrice);
                 }
                 if ($maxPrice) {
-                    $q->where('price', '<=', $maxPrice);
+                    $q->where('sell_price', '<=', $maxPrice);
                 }
             });
         }
-
-        // Filter by stock (Bypassed)
-        // if ($inStock === '1') {
-        //     $query->whereHas('variants', fn($q) => $q->where('stock_quantity', '>', 0));
-        // }
 
         // Filter by selected brands (array)
         if (!empty($selectedBrands)) {
             $query->whereHas('brand', fn($q) => $q->whereIn('slug', $selectedBrands));
         }
 
-        // Filter by selected categories (array)
+        // Filter by selected categories (including all children/subcategories recursively)
         if (!empty($selectedCategories)) {
             $allCategoryIds = [];
-            $matchedCategories = ProductCategory::whereIn('slug', $selectedCategories)->get();
-            foreach ($matchedCategories as $cat) {
-                $allCategoryIds = array_merge($allCategoryIds, $this->getCategoryHierarchyIds($cat));
+            foreach ($selectedCategories as $catSlug) {
+                $catModel = ProductCategory::where('slug', $catSlug)->where('deleted', false)->first();
+                if ($catModel) {
+                    $categoryIds = $this->getCategoryHierarchyIds($catModel);
+                    $allCategoryIds = array_merge($allCategoryIds, $categoryIds);
+                }
             }
             if (!empty($allCategoryIds)) {
                 $query->whereIn('category_id', array_unique($allCategoryIds));
@@ -240,12 +246,27 @@ class ProductCatalogController extends Controller
 
     public function show(Product $product)
     {
-        $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags', 'suggestedProducts.images']);
+        $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
+
+        // Load smart related products (same category or brand - 5 items)
+        $relatedProducts = Product::where('deleted', false)
+            ->where('id', '!=', $product->id)
+            ->where(function($q) use ($product) {
+                if ($product->category_id) $q->where('category_id', $product->category_id);
+                if ($product->brand_id) $q->orWhere('brand_id', $product->brand_id);
+            })
+            ->with(['brand', 'category', 'images', 'variants'])
+            ->take(5)
+            ->get();
 
         $attributeGroups = [];
         $hasAnyNonIgnoredAttr = false;
         
         foreach ($product->variants as $variant) {
+            // Skip invalid variants (0 price)
+            if ((float) $variant->sell_price <= 0) {
+                continue;
+            }
             $variantAttributes = [];
             $rawAttributes = $variant->getRawOriginal('attributes');
             if ($rawAttributes) {
@@ -282,7 +303,24 @@ class ProductCatalogController extends Controller
             }
         }
 
-        return view('frontend.product.show', compact('product', 'attributeGroups'));
+        // Sort each attribute group from smallest to largest (numerically / dimension-wise)
+        foreach ($attributeGroups as $groupKey => &$optionsList) {
+            usort($optionsList, function ($a, $b) {
+                // Extract first number in string (e.g. 120 from "120 x 200" or "Single 120")
+                preg_match('/\d+/', (string)$a, $matchesA);
+                preg_match('/\d+/', (string)$b, $matchesB);
+                $numA = isset($matchesA[0]) ? (int)$matchesA[0] : 999999;
+                $numB = isset($matchesB[0]) ? (int)$matchesB[0] : 999999;
+
+                if ($numA === $numB) {
+                    return strnatcasecmp((string)$a, (string)$b);
+                }
+                return $numA <=> $numB;
+            });
+        }
+        unset($optionsList);
+
+        return view('frontend.product.show', compact('product', 'attributeGroups', 'relatedProducts'));
     }
 
     public function searchSuggestions(Request $request)
@@ -305,7 +343,7 @@ class ProductCatalogController extends Controller
             ->where(function ($q) use ($query, $words, $fuzzyString) {
                 // 1. Exact phrase match
                 $q->where('name', 'ilike', '%' . $query . '%')
-                  ->orWhere('code', 'ilike', '%' . $query . '%');
+                  ->orWhere('slug', 'ilike', '%' . $query . '%');
 
                 // 2. Multi-word match (e.g., "Kasur 200 100")
                 if (count($words) > 1) {
@@ -313,7 +351,7 @@ class ProductCatalogController extends Controller
                         foreach ($words as $word) {
                             $q2->where(function ($q3) use ($word) {
                                 $q3->where('name', 'ilike', '%' . $word . '%')
-                                   ->orWhere('code', 'ilike', '%' . $word . '%')
+                                   ->orWhere('slug', 'ilike', '%' . $word . '%')
                                    ->orWhereHas('category', function ($qCat) use ($word) {
                                        $qCat->where('name', 'ilike', '%' . $word . '%');
                                    })
@@ -352,10 +390,9 @@ class ProductCatalogController extends Controller
         ->values()
         ->map(function ($product) {
             $variantsData = $product->variants;
-            $validVariants = $variantsData->where('price', '>', 0);
+            $validVariants = $variantsData->where('sell_price', '>', 0);
             $hasVariants = $validVariants->isNotEmpty();
-            $basePrice = (float)($product->base_price ?? 0);
-            $originalPrice = $hasVariants ? (float) $validVariants->first()->price : $basePrice;
+            $originalPrice = $hasVariants ? (float) $validVariants->first()->price : 0;
             $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
             $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
 
@@ -364,7 +401,7 @@ class ProductCatalogController extends Controller
                 'name' => $product->name,
                 'slug' => $product->slug,
                 'thumbnail_url' => $product->thumbnail_url,
-                'price' => $price,
+                'sell_price' => $price,
                 'category' => $product->category->name ?? '',
                 'brand' => $product->brand->name ?? ''
             ];
@@ -376,13 +413,13 @@ class ProductCatalogController extends Controller
     private function getCategoryHierarchyIds(ProductCategory $category): array
     {
         $ids = [$category->id];
-        $children = $category->children()->pluck('id')->toArray();
+        $children = $category->children()->where('deleted', false)->pluck('id')->toArray();
         $ids = array_merge($ids, $children);
 
         foreach ($children as $childId) {
             $child = ProductCategory::find($childId);
-            if ($child) {
-                $grandchildren = $child->children()->pluck('id')->toArray();
+            if ($child && !$child->deleted) {
+                $grandchildren = $child->children()->where('deleted', false)->pluck('id')->toArray();
                 $ids = array_merge($ids, $grandchildren);
             }
         }

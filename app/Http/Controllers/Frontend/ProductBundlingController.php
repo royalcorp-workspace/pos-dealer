@@ -30,18 +30,18 @@ class ProductBundlingController extends Controller
         }
 
         if ($request->query('min_price')) {
-            $query->where('price', '>=', $request->query('min_price'));
+            $query->where('sell_price', '>=', $request->query('min_price'));
         }
 
         if ($request->query('max_price')) {
-            $query->where('price', '<=', $request->query('max_price'));
+            $query->where('sell_price', '<=', $request->query('max_price'));
         }
 
         $sort = $request->query('sort', 'newest');
         if ($sort === 'price_asc') {
-            $query->orderBy('price', 'asc');
+            $query->orderBy('sell_price', 'asc');
         } elseif ($sort === 'price_desc') {
-            $query->orderBy('price', 'desc');
+            $query->orderBy('sell_price', 'desc');
         } else {
             $query->orderBy('created_at', 'desc');
         }
@@ -56,9 +56,9 @@ class ProductBundlingController extends Controller
             if ($bundle->items) {
                 foreach ($bundle->items as $item) {
                     if ($item->variant) {
-                        $totalProductPrice += (float) $item->variant->price * $item->quantity;
+                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
                     } elseif ($item->product) {
-                        $totalProductPrice += (float) $item->product->base_price * $item->quantity;
+                        $totalProductPrice += (float) ($item->product->variants->where('status', true)->min('sell_price') ?? 0) * $item->quantity;
                     }
                 }
             }
@@ -120,7 +120,7 @@ class ProductBundlingController extends Controller
                 if ($item->variant) {
                     $totalProductPrice += (float) $item->variant->price * $item->quantity;
                 } elseif ($item->product) {
-                    $totalProductPrice += (float) $item->product->base_price * $item->quantity;
+                    $totalProductPrice += (float) ($item->product->variants->where('status', true)->min('sell_price') ?? 0) * $item->quantity;
                 }
             }
         }

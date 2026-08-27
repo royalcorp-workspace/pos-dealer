@@ -44,7 +44,7 @@
                         'name' => $item->name,
                         'brand' => $item->product->brand->name ?? '',
                         'image' => $item->product->thumbnail_url ?? '',
-                        'price' => (float) $item->unit_price,
+                        'sell_price' => (float) $item->unit_price,
                         'quantity' => (int) $item->quantity,
                         'item_note' => $item->item_notes ?? '',
                         'type' => $isBundle ? 'bundle' : 'product',
@@ -69,17 +69,17 @@
             if ($variantId) {
                 $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                 if ($variantModel) {
-                    $originalPrice = (float) $variantModel->price;
+                    $originalPrice = (float) $variantModel->sell_price;
                 }
             }
             if ($originalPrice <= 0.0) {
                 $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                 if ($productModel) {
-                    $originalPrice = (float) $productModel->base_price;
+                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
                 }
             }
             if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['price'];
+                $originalPrice = (float) $item['sell_price'];
             }
         }
         $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
@@ -130,27 +130,64 @@
 
                 if ($isBundle && $bundleData) {
                     $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
+                    $basePrice = $originalPrice; // For bundle, base_price is same as bundle_price (or bundle_total_original if we prefer)
                 } else {
                     $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
                     $originalPrice = 0.0;
+                    $basePrice = 0.0;
                     if ($variantId) {
                         $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                         if ($variantModel) {
-                            $originalPrice = (float) $variantModel->price;
+                            $originalPrice = (float) $variantModel->sell_price;
+                            $basePrice = (float) $variantModel->base_price;
                         }
                     }
                     if ($originalPrice <= 0.0) {
                         $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                         if ($productModel) {
-                            $originalPrice = (float) $productModel->base_price;
+                            $minVariant = $productModel->variants->where('status', true)->sortBy('sell_price')->first();
+                            if ($minVariant) {
+                                $originalPrice = (float) $minVariant->sell_price;
+                                $basePrice = (float) $minVariant->base_price;
+                            }
                         }
                     }
                     if ($originalPrice <= 0.0) {
-                        $originalPrice = (float) $item['price'];
+                        $originalPrice = (float) $item['sell_price'];
+                        $basePrice = $originalPrice;
                     }
                 }
+                
+                // If basePrice is 0 or less than originalPrice, just fallback to originalPrice
+                if ($basePrice <= 0) {
+                    $basePrice = $originalPrice;
+                }
+                
                 $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
                 $itemPrice = $res['promotional_price'];
+
+                $hasDefaultDiscount = $basePrice > $originalPrice;
+                $defaultDiscountPct = $hasDefaultDiscount ? round((($basePrice - $originalPrice) / $basePrice) * 100) : 0;
+                
+                $hasStaticPromo = $res['static_discount'] > 0;
+                
+                $strikeMinPrice = $hasDefaultDiscount ? $basePrice : null;
+                $discountBadge = null;
+
+                if ($hasStaticPromo) {
+                    $strikeMinPrice = $hasDefaultDiscount ? $basePrice : $originalPrice;
+                    if ($strikeMinPrice > 0) {
+                        $totalDiscountPct = round((($strikeMinPrice - $itemPrice) / $strikeMinPrice) * 100);
+                        if ($hasDefaultDiscount && $defaultDiscountPct > 0) {
+                            $ppsDiscountPct = round((($originalPrice - $itemPrice) / $originalPrice) * 100);
+                            $discountBadge = $defaultDiscountPct . '% + ' . $ppsDiscountPct . '% OFF';
+                        } else {
+                            $discountBadge = $totalDiscountPct . '% OFF';
+                        }
+                    }
+                } elseif ($hasDefaultDiscount) {
+                    $discountBadge = $defaultDiscountPct . '% OFF';
+                }
 
                 $promoSuggest = null;
                 $currentQty = (int) $item['quantity'];
@@ -244,18 +281,13 @@
                     </div>
                     <div class="mt-auto flex justify-between items-end">
                     <div class="flex flex-col items-start">
-                        @if($res['volume_discount'] > 0 || $res['static_discount'] > 0 || ($isBundle && $bundleData && (float)($bundleData['bundle_price'] ?? 0) > 0))
-                            @php
-                                $discountPercent = $originalPrice > 0 ? round((($originalPrice - $itemPrice) / $originalPrice) * 100) : 0;
-                            @endphp
-                            @if($discountPercent > 0)
-                                <div class="flex items-center gap-1.5 mb-0.5">
-                                    <span class="text-xs line-through text-gray-400 font-semibold">
-                                        Rp {{ number_format($originalPrice, 0, ',', '.') }}
-                                    </span>
-                                    <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountPercent }}% OFF</span>
-                                </div>
-                            @endif
+                        @if($discountBadge)
+                            <div class="flex items-center gap-1.5 mb-0.5">
+                                <span class="text-xs line-through text-gray-400 font-semibold">
+                                    Rp {{ number_format($strikeMinPrice, 0, ',', '.') }}
+                                </span>
+                                <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountBadge }}</span>
+                            </div>
                         @endif
                         <span class="font-bold text-brand-dark tracking-tight">Rp {{ number_format($itemPrice, 0, ',', '.') }}</span>
                     </div>

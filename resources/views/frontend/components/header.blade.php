@@ -43,7 +43,7 @@
                     'name' => $item->name,
                     'brand' => $item->product->brand->name ?? '',
                     'image' => $item->product->thumbnail_url ?? '',
-                    'price' => (float) $item->unit_price,
+                    'sell_price' => (float) $item->unit_price,
                     'quantity' => (int) $item->quantity,
                     'item_note' => $item->item_notes ?? '',
                     'type' => $isBundle ? 'bundle' : 'product',
@@ -54,7 +54,7 @@
     }
     $cartItemCount = collect($cart)->sum('quantity');
     $cartTotal = collect($cart)->sum(function($item) {
-        return ($item['price'] ?? 0) * ($item['quantity'] ?? 0);
+        return ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0);
     });
     $isLoggedIn = session()->get('is_logged_in', false);
     $user = session()->get('user');
@@ -95,11 +95,11 @@
     }
 @endphp
 
-<header class="w-full bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm font-sans" x-data="{ activeMegaMenu: null }">
+<header class="w-full bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm font-sans" x-data="{ activeMegaMenu: null, searchOpen: false, isMobileMenuOpen: false }">
     <!-- Top Bar -->
-    <div class="container mx-auto px-4 md:px-6 h-auto py-3 md:h-20 md:py-0 flex flex-nowrap items-center justify-between gap-2 md:gap-4">
+    <div class="container mx-auto px-4 md:px-6 h-auto py-3 md:h-20 md:py-0 flex flex-nowrap items-center justify-between gap-3 md:gap-6">
         <!-- Logo -->
-        <div class="flex items-center gap-3 md:gap-4 flex-shrink-0">
+        <div class="flex items-center gap-3 flex-shrink-0">
             <button 
                 class="md:hidden text-gray-700 hover:text-brand-gold transition-colors focus:outline-none relative w-6 h-6 flex-shrink-0"
                 @click="isMobileMenuOpen = !isMobileMenuOpen"
@@ -110,16 +110,18 @@
                 <!-- close icon -->
                 <svg :class="isMobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50'" class="w-6 h-6 absolute inset-0 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <a href="{{ route('home') }}" class="text-3xl lg:text-4xl font-extrabold tracking-tight text-brand-dark flex items-center gap-2 font-serif text-left">
-                IMG
-                <span class="hidden md:block text-xs lg:text-sm font-sans tracking-widest text-brand-gold-dark uppercase leading-tight ml-2 border-l-2 border-brand-gold pl-2">
-                    International<br/>Mattress Gallery
+            <a href="{{ route('home') }}" class="flex items-center gap-2.5 group text-left">
+                <span class="text-3xl lg:text-4xl font-extrabold tracking-tight text-brand-dark font-serif group-hover:text-brand-gold-dark transition-colors">
+                    IMG
+                </span>
+                <span class="hidden xl:block text-[10px] lg:text-[11px] font-sans tracking-[0.18em] text-gray-500 uppercase leading-tight border-l border-gray-200 pl-2.5">
+                    International<br/><strong class="text-brand-dark font-bold">Mattress Gallery</strong>
                 </span>
             </a>
         </div>
 
         <!-- Search Bar -->
-        <div class="hidden md:flex flex-1 max-w-2xl mx-6 relative" x-data="{
+        <div class="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-4 relative" x-data="{
             query: '{{ request('value', '') }}',
             suggestions: [],
             showSuggestions: false,
@@ -150,6 +152,563 @@
             <form action="{{ route('products.index') }}" method="GET" class="relative w-full z-50">
                 <input type="hidden" name="type" value="search">
                 <input 
+                    type="text" 
+                    name="value"
+                    x-model="query"
+                    @input="fetchSuggestions()"
+                    @focus="if(query.length >= 2) showSuggestions = true"
+                    placeholder="{{ __('Cari kasur, spring bed, aksesoris tidur...') }}" 
+                    class="w-full bg-gray-50/80 hover:bg-white focus:bg-white border border-gray-200 focus:border-brand-gold text-gray-800 text-sm rounded-full pl-5 pr-20 py-2.5 focus:outline-none focus:ring-3 focus:ring-brand-gold/15 transition-all placeholder:text-gray-400 shadow-2xs"
+                    autocomplete="off"
+                />
+                <!-- Clear Button Desktop -->
+                <button 
+                    type="button" 
+                    x-show="query.length > 0" 
+                    @click="query = ''; suggestions = []; showSuggestions = false; $el.closest('form').querySelector('input[name=value]').focus()" 
+                    class="absolute right-10 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-brand-dark transition-colors cursor-pointer"
+                    aria-label="Hapus pencarian"
+                    style="display: none;"
+                >
+                    <i class="fa-solid fa-circle-xmark text-sm"></i>
+                </button>
+                <button type="submit" class="absolute right-1.5 top-1.5 p-2 bg-brand-dark hover:bg-brand-darker text-white rounded-full transition-colors flex items-center justify-center min-w-[28px] shadow-2xs cursor-pointer" aria-label="Cari">
+                    <i class="fa-solid fa-magnifying-glass text-xs" x-show="!loading"></i>
+                    <i class="fa-solid fa-spinner fa-spin text-xs" x-show="loading" style="display: none;"></i>
+                </button>
+            </form>
+
+            <!-- Search Suggestions Dropdown -->
+            <div 
+                x-show="showSuggestions" 
+                x-transition
+                style="display: none;"
+                class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100]"
+            >
+                <div x-show="suggestions.length > 0" class="flex flex-col">
+                    <div class="px-4 py-2.5 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{{ __('Produk Terkait') }}</span>
+                        <span class="text-[10px] text-brand-gold-dark font-medium" x-text="suggestions.length + ' Ditemukan'"></span>
+                    </div>
+                    <template x-for="item in suggestions" :key="item.id">
+                        <a :href="'/products/' + item.slug" class="flex items-center gap-3 p-3 hover:bg-brand-light/40 transition-colors border-b border-gray-50 last:border-0 group">
+                            <div class="w-11 h-11 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
+                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="w-full h-full object-cover">
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="text-xs sm:text-sm font-bold text-brand-dark truncate group-hover:text-brand-gold-dark transition-colors" x-text="item.name"></h4>
+                                <div class="flex items-center gap-2 mt-0.5 text-xs">
+                                    <span class="text-gray-400 font-medium truncate max-w-[120px]" x-text="item.category"></span>
+                                    <span class="text-gray-300">•</span>
+                                    <span class="font-extrabold text-brand-dark truncate" x-text="'Rp ' + Number(item.price).toLocaleString('id-ID')"></span>
+                                </div>
+                            </div>
+                        </a>
+                    </template>
+                    <a :href="'/products?type=search&value=' + encodeURIComponent(query)" class="block text-center py-2.5 text-xs font-bold text-brand-dark hover:text-brand-gold-dark hover:bg-brand-light/50 transition-colors border-t border-gray-100">
+                        {{ __('Lihat Semua Hasil Pencarian') }} <i class="fa-solid fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+                <div x-show="suggestions.length === 0 && !loading" class="p-6 text-center text-gray-500">
+                    <i class="fa-solid fa-box-open mb-2 text-2xl text-gray-200"></i>
+                    <p class="text-xs font-medium">{{ __('Tidak menemukan produk untuk pencarian ini.') }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Actions -->
+        <div class="flex items-center gap-2 sm:gap-3">
+                        <!-- Language Switcher -->
+            <div x-data="{ openLang: false }" class="relative hidden sm:block z-50">
+                <button 
+                    @click="openLang = !openLang"
+                    @click.outside="openLang = false"
+                    class="flex items-center gap-1.5 px-3 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80 transition-all focus:outline-none text-sm font-bold text-gray-700 hover:text-brand-dark"
+                >
+                    <i class="fa-solid fa-globe text-brand-gold"></i>
+                    <span class="uppercase">{{ app()->getLocale() }}</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] ml-0.5 text-gray-400"></i>
+                </button>
+                <div 
+                    x-show="openLang" 
+                    x-cloak
+                    x-transition:enter="transition ease-out duration-200 transform"
+                    x-transition:enter-start="opacity-0 scale-95"
+                    x-transition:enter-end="opacity-100 scale-100"
+                    class="absolute right-0 mt-2 w-36 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50 overflow-hidden"
+                >
+                    <a href="{{ route('lang.switch', 'id') }}" class="flex items-center gap-2 px-4 py-2 hover:bg-brand-light text-sm font-bold {{ app()->getLocale() === 'id' ? 'text-brand-gold-dark bg-brand-light/50' : 'text-brand-dark' }}">
+                        <span class="w-4 h-4 flex items-center justify-center rounded-full border border-gray-200 overflow-hidden text-[10px]">🇮🇩</span> 
+                        Indonesia
+                    </a>
+                    <a href="{{ route('lang.switch', 'en') }}" class="flex items-center gap-2 px-4 py-2 hover:bg-brand-light text-sm font-bold {{ app()->getLocale() === 'en' ? 'text-brand-gold-dark bg-brand-light/50' : 'text-brand-dark' }}">
+                        <span class="w-4 h-4 flex items-center justify-center rounded-full border border-gray-200 overflow-hidden text-[10px]">🇬🇧</span> 
+                        English
+                    </a>
+                </div>
+            </div>
+
+            <!-- Wishlist Button -->
+            <a 
+                id="wishlist-link"
+                href="{{ route('wishlist.index') }}" 
+                class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80 transition-all focus:outline-none relative group" 
+                aria-label="Wishlist ({{ $wishlistCount }} Produk)"
+                title="Favorit Saya"
+            >
+                <div class="relative">
+                    <i id="wishlist-icon" class="fa-{{ $wishlistCount > 0 ? 'solid' : 'regular' }} fa-heart text-base {{ $wishlistCount > 0 ? 'text-red-500' : 'text-gray-700 group-hover:text-brand-dark' }}"></i>
+                    @if($wishlistCount > 0)
+                        <span id="wishlist-count-badge" class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-extrabold min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center shadow-xs">
+                            {{ $wishlistCount }}
+                        </span>
+                    @endif
+                </div>
+            </a>
+
+            <!-- Notification Bell -->
+            <div x-data="{ open: false }" class="relative">
+                <button 
+                    @click="open = !open; if(open) { fetchNotifications(); }"
+                    @click.outside="open = false"
+                    class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80 transition-all focus:outline-none relative group cursor-pointer"
+                    aria-label="Notifikasi"
+                    title="Pemberitahuan"
+                >
+                    <i class="fa-regular fa-bell text-base text-gray-700 group-hover:text-brand-dark"></i>
+                    @if($unreadNotificationCount > 0)
+                        <span class="absolute -top-1 -right-1 bg-brand-gold text-white text-[9px] font-extrabold min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center shadow-xs">
+                            {{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}
+                        </span>
+                    @endif
+                </button>
+
+                <div 
+                    x-show="open" 
+                    x-cloak
+                    x-transition:enter="transition ease-out duration-200 transform"
+                    x-transition:enter-start="opacity-0 scale-95"
+                    x-transition:enter-end="opacity-100 scale-100"
+                    class="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-2xl shadow-xl py-2 z-50"
+                >
+                    <div class="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
+                        <h3 class="font-bold text-xs text-gray-800 uppercase tracking-wider">{{ __('Notifikasi') }}</h3>
+                        <button onclick="markAllRead()" class="text-xs text-brand-gold-dark hover:text-brand-dark font-semibold cursor-pointer">
+                            {{ __('Tandai Dibaca') }}
+                        </button>
+                    </div>
+                    <div id="notification-list" class="max-h-80 overflow-y-auto">
+                        <div class="p-4 text-center text-xs text-gray-500">{{ __('Memuat...') }}</div>
+                    </div>
+                    <div class="border-t border-gray-100 px-4 py-2">
+                        <a href="{{ route('notifications.index') }}" class="text-center text-xs font-bold text-brand-dark hover:text-brand-gold-dark block">
+                            {{ __('Lihat Semua Notifikasi →') }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="h-5 w-px bg-gray-200 hidden sm:block mx-1"></div>
+
+            <!-- User Auth / Dashboard Module -->
+            @if($isLoggedIn)
+                <a 
+                    href="{{ route('dashboard') }}"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-light/60 hover:bg-brand-light border border-brand-muted/80 text-brand-dark text-xs font-bold transition-all group"
+                >
+                    <div class="w-6 h-6 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold text-[10px]">
+                        {{ substr($user['name'] ?? 'B', 0, 1) }}
+                    </div>
+                    <span class="hidden lg:block">{{ __('Akun') }}</span>
+                </a>
+            @else
+                <button 
+                    @click="isAuthOpen = true"
+                    class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-brand-dark hover:bg-brand-darker text-white text-xs font-bold shadow-2xs hover:shadow-sm transition-all duration-200 cursor-pointer focus:outline-none group active:scale-95"
+                >
+                    <i class="fa-solid fa-user text-[11px] text-brand-gold group-hover:scale-110 transition-transform"></i>
+                    <span class="hidden sm:inline-block">{{ __('Masuk') }}</span>
+                </button>
+            @endif
+
+            <!-- Cart Drawer Trigger (Dynamic State: Clean Icon when Empty, Expanding Pill when Loaded) -->
+            <button 
+                x-data="{ count: {{ $cartItemCount }}, total: {{ $cartTotal }} }"
+                @cart-added.window="if($event.detail.cart_count !== undefined) { count = $event.detail.cart_count; total = $event.detail.cart_total || 0; }"
+                @cart-drawer-updated.window="
+                    // Fetch if needed, or rely on the JS DOM updates.
+                    // Actually, let's just let the DOM update the text, but Alpine handles visibility
+                    setTimeout(() => {
+                        let badge = document.getElementById('cart-count-badge');
+                        if (badge) count = parseInt(badge.textContent) || 0;
+                        let totalEl = document.getElementById('header-cart-total');
+                        if (totalEl) total = parseFloat(totalEl.textContent.replace(/[^0-9]/g, '')) || 0;
+                    }, 100);
+                "
+                @click="isCartOpen = true"
+                class="flex items-center transition-all duration-300 focus:outline-none cursor-pointer group relative"
+                :class="count > 0 ? 'bg-brand-light/80 hover:bg-brand-gold/15 px-3 sm:px-4 py-2 rounded-full border border-brand-muted/80 hover:border-brand-gold/50 gap-2 sm:gap-2.5' : 'justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80'"
+                title="Buka Keranjang"
+                aria-label="Keranjang Belanja"
+            >
+                <div class="relative">
+                    <i class="fa-solid fa-bag-shopping text-base text-gray-700 group-hover:text-brand-dark transition-colors"></i>
+                    <span 
+                        id="cart-count-badge" 
+                        x-show="count > 0"
+                        x-transition:enter="transition ease-out duration-300 transform"
+                        x-transition:enter-start="opacity-0 scale-50"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        x-cloak
+                        class="absolute -top-2 -right-2 bg-brand-dark text-brand-gold text-[9px] font-black min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center shadow-xs border border-brand-gold/40"
+                    >
+                        {{ $cartItemCount }}
+                    </span>
+                </div>
+                <div x-show="count > 0" x-cloak class="hidden sm:flex flex-col items-start leading-none">
+                    <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Keranjang</span>
+                    <span id="header-cart-total" class="text-xs font-extrabold text-brand-dark group-hover:text-brand-gold-dark transition-colors mt-0.5 font-sans">
+                        Rp {{ number_format($cartTotal, 0, ',', '.') }}
+                    </span>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Search Bar -->
+    <div class="md:hidden px-4 pb-3" x-data="{ mobileQuery: '{{ request('type') === 'search' ? request('value', '') : '' }}' }">
+        <form action="{{ route('products.index') }}" method="GET" class="relative w-full">
+            <input type="hidden" name="type" value="search">
+            <input 
+                type="text" 
+                name="value"
+                x-model="mobileQuery"
+                placeholder="Cari produk..." 
+                class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-4 pr-18 py-2 focus:outline-none focus:ring-2 focus:ring-brand-gold/50"
+            />
+            <!-- Clear Button Mobile -->
+            <button 
+                type="button" 
+                x-show="mobileQuery.length > 0" 
+                @click="mobileQuery = ''; $el.closest('form').querySelector('input[name=value]').focus()" 
+                class="absolute right-9 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-brand-dark transition-colors cursor-pointer"
+                aria-label="Hapus pencarian"
+                style="display: none;"
+            >
+                <i class="fa-solid fa-circle-xmark text-sm"></i>
+            </button>
+            <button type="submit" class="absolute right-1 top-1 p-1 bg-brand-dark text-white rounded-full" aria-label="Cari">
+                <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
+            </button>
+        </form>
+    </div>
+
+    <!-- Clean Minimalist Navigation (Desktop) -->
+    <nav class="hidden md:block w-full border-t border-brand-muted/50 bg-white" aria-label="Navigasi utama">
+        <div class="container mx-auto px-6">
+            <ul class="flex items-center gap-8 h-14 relative">
+                <!-- Home -->
+                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                    <a href="{{ route('home') }}" class="py-2 text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors relative {{ request()->routeIs('home') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Home') }}
+                        @if(request()->routeIs('home'))
+                            <span class="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-gold"></span>
+                        @endif
+                    </a>
+                </li>
+
+                <!-- Kasur & Kategori Dropdown Trigger -->
+                <li 
+                    class="h-full flex items-center cursor-pointer relative"
+                    @mouseenter="activeMegaMenu = 'categories'"
+                    @mouseleave="activeMegaMenu = null"
+                >
+                    <a href="{{ route('categories') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1.5 focus:outline-hidden py-2 {{ request()->routeIs('categories*') || request()->routeIs('category.*') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Kasur & Kategori') }} 
+                        <svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-200" :class="activeMegaMenu === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+
+                    <!-- Clean Dropdown Content -->
+                    <div 
+                        x-show="activeMegaMenu === 'categories'"
+                        x-cloak
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 translate-y-2 scale-98"
+                        x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                        x-transition:leave-end="opacity-0 translate-y-2 scale-98"
+                        class="absolute top-full left-0 w-[500px] lg:w-[600px] bg-white shadow-xl border border-brand-muted/80 rounded-2xl p-4 z-50 overflow-hidden"
+                    >
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                            @foreach($categories as $category)
+                                <a 
+                                    href="{{ route('category.show', $category->slug) }}" 
+                                    class="flex items-center justify-between p-2.5 rounded-xl hover:bg-brand-light transition-colors group text-left"
+                                >
+                                    <div>
+                                        <span class="font-bold text-brand-dark text-sm group-hover:text-brand-gold-dark transition-colors block">
+                                            {{ html_entity_decode($category->name) }}
+                                        </span>
+                                        @if($category->description)
+                                            <span class="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                                                {{ $category->description }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                    <svg class="w-4 h-4 text-gray-300 group-hover:text-brand-gold group-hover:translate-x-0.5 transition-all" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </a>
+                            @endforeach
+                            <div class="pt-2 border-t border-brand-muted/50 mt-2">
+                                <a href="{{ route('categories') }}" class="flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
+                                    <span>{{ __('Semua Kategori Produk') }}</span>
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+
+                <!-- Brand Dropdown Trigger -->
+                <li 
+                    class="h-full flex items-center cursor-pointer relative"
+                    @mouseenter="activeMegaMenu = 'brands'"
+                    @mouseleave="activeMegaMenu = null"
+                >
+                    <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1.5 focus:outline-hidden py-2 {{ request()->routeIs('brands*') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Brand') }} 
+                        <svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-200" :class="activeMegaMenu === 'brands' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+                    
+                    <!-- Clean Brands Dropdown Content -->
+                    <div 
+                        x-show="activeMegaMenu === 'brands'"
+                        x-cloak
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 translate-y-2 scale-98"
+                        x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                        x-transition:leave-end="opacity-0 translate-y-2 scale-98"
+                        class="absolute top-full left-0 w-max min-w-48 pr-6 bg-white shadow-xl border border-brand-muted/80 rounded-2xl p-4 z-50 overflow-hidden"
+                    >
+                        <div class="flex flex-col gap-y-1">
+                            @foreach($brands as $brand)
+                                <a 
+                                    href="{{ route('brands.show', $brand->slug) }}" 
+                                    class="flex items-center p-2.5 rounded-xl hover:bg-brand-light transition-colors group text-left"
+                                >
+                                    <span class="font-bold text-brand-dark text-sm group-hover:text-brand-gold-dark transition-colors">
+                                        {{ html_entity_decode($brand->name) }}
+                                    </span>
+                                </a>
+                            @endforeach
+                            <div class="pt-2 border-t border-brand-muted/50 mt-2">
+                                <a href="{{ route('brands') }}" class="flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
+                                    <span>{{ __('Lihat Semua Brand') }}</span>
+                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+
+                <!-- Promo Spesial -->
+                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                    <a href="{{ route('promos') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-2 py-2 {{ request()->routeIs('promos') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Promo Spesial') }}
+                        <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase tracking-wider">Hot</span>
+                    </a>
+                </li>
+                
+                <!-- Bundling Hemat -->
+                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                    <a href="{{ route('bundling.index') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors py-2 {{ request()->routeIs('bundling.*') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Bundling Hemat') }}
+                    </a>
+                </li>
+                
+                <!-- Bantuan -->
+                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                    <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors py-2 {{ request()->routeIs('help') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Bantuan') }}
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Mobile Search Bar -->
+    <div class="md:hidden px-4 pb-3">
+        <form action="{{ route('products.index') }}" method="GET" class="relative w-full">
+            <input type="hidden" name="type" value="search">
+            <input 
+                type="text" 
+                name="value"
+                placeholder="Cari produk..." 
+                class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-4 pr-12 py-2 focus:outline-none focus:ring-2 focus:ring-brand-gold/50"
+            />
+            <button type="submit" class="absolute right-1 top-1 p-1 bg-brand-dark text-white rounded-full" aria-label="Cari">
+                <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
+            </button>
+        </form>
+    </div>
+
+    
+
+    <!-- Mobile Accordion Menu Overlay -->
+    <div 
+        x-show="isMobileMenuOpen"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 -translate-y-2"
+        x-transition:enter-end="opacity-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 translate-y-0"
+        x-transition:leave-end="opacity-0 -translate-y-2"
+        x-cloak
+        class="md:hidden border-t border-brand-muted/60 bg-white overflow-hidden shadow-2xl max-h-[85vh] z-50 overflow-y-auto"
+        x-data="{ openSection: null }"
+    >
+        <div class="p-4 space-y-4 font-sans">
+            <!-- Home Link -->
+            <a href="{{ route('home') }}" class="flex items-center justify-between p-3 rounded-xl bg-brand-light font-bold text-brand-dark text-sm" @click="isMobileMenuOpen = false">
+                <span>{{ __('Home') }}</span>
+                <svg class="w-4 h-4 text-brand-gold" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+
+                        <!-- Mobile Language Switcher -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-brand-muted/70">
+                <span class="text-sm font-bold text-brand-dark">{{ __('Bahasa') }}</span>
+                <div class="flex items-center bg-white rounded-lg border border-gray-200 overflow-hidden shadow-xs">
+                    <a href="{{ route('lang.switch', 'id') }}" class="px-3 py-1.5 text-xs font-bold transition-colors {{ app()->getLocale() === 'id' ? 'bg-brand-gold text-white' : 'text-gray-500 hover:bg-gray-100' }}">ID</a>
+                    <a href="{{ route('lang.switch', 'en') }}" class="px-3 py-1.5 text-xs font-bold transition-colors {{ app()->getLocale() === 'en' ? 'bg-brand-gold text-white' : 'text-gray-500 hover:bg-gray-100' }}">EN</a>
+                </div>
+            </div>
+
+            <!-- Kasur & Kategori Accordion -->
+            <div class="border border-brand-muted/70 rounded-2xl overflow-hidden">
+                <button 
+                    @click="openSection = (openSection === 'categories' ? null : 'categories')"
+                    class="w-full flex items-center justify-between p-3.5 bg-white text-left font-bold text-brand-dark text-sm focus:outline-hidden"
+                >
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-brand-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3v4M8 3v4"/></svg>
+                        {{ __('Kasur & Kategori') }}
+                    </span>
+                    <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div x-show="openSection === 'categories'"  class="bg-brand-light/50 border-t border-brand-muted/40 p-2 space-y-1">
+                    @foreach($categories as $category)
+                        <a 
+                            href="{{ route('category.show', $category->slug) }}" 
+                            class="block p-2.5 rounded-lg text-sm text-gray-700 font-medium hover:bg-white hover:text-brand-gold-dark transition-colors text-left"
+                            @click="isMobileMenuOpen = false"
+                        >
+                            {{ html_entity_decode($category->name) }}
+                        </a>
+                    @endforeach
+                    <a href="{{ route('categories') }}" class="block p-2.5 text-xs font-bold text-brand-gold-dark text-left" @click="isMobileMenuOpen = false">
+                        {{ __('Lihat Semua Kategori &rarr;') }}
+                    </a>
+                </div>
+            </div>
+
+            <!-- Brand Accordion -->
+            <div class="border border-brand-muted/70 rounded-2xl overflow-hidden">
+                <button 
+                    @click="openSection = (openSection === 'brands' ? null : 'brands')"
+                    class="w-full flex items-center justify-between p-3.5 bg-white text-left font-bold text-brand-dark text-sm focus:outline-hidden"
+                >
+                    <span class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-brand-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        {{ __('Brand') }}
+                    </span>
+                    <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'brands' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div x-show="openSection === 'brands'"  class="bg-brand-light/50 border-t border-brand-muted/40 p-2 space-y-1">
+                    @foreach($brands as $brand)
+                        <a 
+                            href="{{ route('brands.show', $brand->slug) }}" 
+                            class="block p-2.5 rounded-lg text-sm text-gray-700 font-medium hover:bg-white hover:text-brand-gold-dark transition-colors text-left"
+                            @click="isMobileMenuOpen = false"
+                        >
+                            {{ html_entity_decode($brand->name) }}
+                        </a>
+                    @endforeach
+                    <a href="{{ route('brands') }}" class="block p-2.5 text-xs font-bold text-brand-gold-dark text-left" @click="isMobileMenuOpen = false">
+                        {{ __('Lihat Semua Brand &rarr;') }}
+                    </a>
+                </div>
+            </div>
+
+            <!-- Direct Links -->
+            <div class="space-y-1 pt-2">
+                <a href="{{ route('promos') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-bold text-brand-dark" @click="isMobileMenuOpen = false">
+                    <span class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                        {{ __('Promo Spesial') }}
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase">Hot</span>
+                </a>
+                <a href="{{ route('bundling.index') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-bold text-brand-dark" @click="isMobileMenuOpen = false">
+                    <span>{{ __('Bundling Hemat') }}</span>
+                    <svg class="w-4 h-4 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{{ route('blog') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-semibold text-gray-700" @click="isMobileMenuOpen = false">
+                    <span>{{ __('Blog & Artikel Tidur') }}</span>
+                    <svg class="w-4 h-4 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+                <a href="{{ route('help') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-semibold text-gray-700" @click="isMobileMenuOpen = false">
+                    <span>{{ __('Pusat Bantuan & FAQ') }}</span>
+                    <svg class="w-4 h-4 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide-down Search Panel -->
+    <div x-show="searchOpen" 
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-4"
+         @click.outside="searchOpen = false"
+         class="absolute top-full left-0 w-full bg-white border-t border-b border-gray-100 shadow-md z-50 py-4 hidden md:block">
+        <div class="container mx-auto px-6">
+<!-- Search Bar -->
+        <div class="flex w-full max-w-3xl mx-auto relative" x-data="{
+            query: '{{ request('value', '') }}',
+            suggestions: [],
+            showSuggestions: false,
+            loading: false,
+            debounce: null,
+            fetchSuggestions() {
+                if (this.query.length < 2) {
+                    this.suggestions = [];
+                    this.showSuggestions = false;
+                    return;
+                }
+                this.loading = true;
+                this.showSuggestions = true;
+                clearTimeout(this.debounce);
+                this.debounce = setTimeout(async () => {
+                    try {
+                        const res = await fetch('/products/search-suggestions?q=' + encodeURIComponent(this.query));
+                        const data = await res.json();
+                        this.suggestions = data;
+                    } catch (e) {
+                        console.error(e);
+                    } finally {
+                        this.loading = false;
+                    }
+                }, 300);
+            }
+        }" @click.outside="showSuggestions = false">
+            <form action="{{ route('products.index') }}" method="GET" class="relative w-full z-50">
+                <input x-ref="searchInput" type="hidden" name="type" value="search">
+                <input x-ref="searchInput" 
                     type="text" 
                     name="value"
                     x-model="query"
@@ -186,7 +745,7 @@
                                 <div class="flex items-center gap-2 mt-1 text-xs">
                                     <span class="text-gray-500 font-medium truncate max-w-[120px]" x-text="item.category"></span>
                                     <span class="text-gray-300">•</span>
-                                    <span class="font-bold text-brand-gold-dark truncate" x-text="'Rp ' + Number(item.price).toLocaleString('id-ID')"></span>
+                                    <span class="font-bold text-brand-gold-dark truncate" x-text="'Rp ' + Number(item.sell_price).toLocaleString('id-ID')"></span>
                                 </div>
                             </div>
                         </a>
@@ -202,367 +761,7 @@
             </div>
         </div>
 
-        <!-- Right Actions -->
-        <div class="flex items-center gap-2 sm:gap-5">
-            <!-- Wishlist Button -->
-            <a 
-                id="wishlist-link"
-                href="{{ route('wishlist.index') }}" 
-                class="flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none relative" 
-                aria-label="Wishlist ({{ $wishlistCount }} Produk)"
-            >
-                <div class="relative">
-                    <i id="wishlist-icon" class="fa-{{ $wishlistCount > 0 ? 'solid' : 'regular' }} fa-heart w-5 h-5 {{ $wishlistCount > 0 ? 'text-brand-gold' : 'text-brand-dark' }}"></i>
-                    @if($wishlistCount > 0)
-                        <span id="wishlist-count-badge" class="absolute -top-1 -right-1 bg-brand-gold text-white text-[10px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center shadow-sm">
-                            {{ $wishlistCount }}
-                        </span>
-                    @endif
-                </div>
-            </a>
-
-            <!-- Language Picker -->
-            <div x-data="{ open: false }" class="hidden sm:flex items-center relative">
-                <button 
-                    @click="open = !open" 
-                    @click.outside="open = false"
-                    class="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-brand-gold transition-colors py-1 focus:outline-none"
-                >
-                    <span class="text-base leading-none">{{ $currentLocale === 'id' ? '🇮🇩' : '🇬🇧' }}</span>
-                    <span>{{ strtoupper($currentLocale) }}</span>
-                    <i class="fa-solid fa-chevron-down w-3 h-3 text-gray-400 transition-transform" :class="open ? 'rotate-180' : ''"></i>
-                </button>
-                <div 
-                    x-show="open" 
-                    x-cloak
-                    x-transition
-                    class="absolute top-full right-0 mt-3 bg-white border border-gray-100 rounded-lg shadow-lg py-1 z-50 min-w-[100px]"
-                >
-                    <a href="{{ route('lang.switch', 'id') }}" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-brand-light hover:text-brand-gold transition-colors {{ $currentLocale === 'id' ? 'bg-brand-light text-brand-gold font-medium' : '' }}">
-                        <span class="text-base leading-none">🇮🇩</span> ID
-                    </a>
-                    <a href="{{ route('lang.switch', 'en') }}" class="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-brand-light hover:text-brand-gold transition-colors {{ $currentLocale === 'en' ? 'bg-brand-light text-brand-gold font-medium' : '' }}">
-                        <span class="text-base leading-none">🇬🇧</span> EN
-                    </a>
-                </div>
-            </div>
-
-            <!-- Notification Bell -->
-            <div x-data="{ open: false }" class="relative">
-                <button 
-                    @click="open = !open; if(open) { fetchNotifications(); }"
-                    @click.outside="open = false"
-                    class="flex items-center justify-center w-10 h-10 rounded-full bg-brand-light hover:bg-brand-gold/20 transition-colors focus:outline-none relative"
-                    aria-label="Notifikasi"
-                >
-                    <i class="fa-solid fa-bell w-5 h-5 text-brand-dark"></i>
-                    @if($unreadNotificationCount > 0)
-                        <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center shadow-sm">
-                            {{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}
-                        </span>
-                    @endif
-                </button>
-
-                <div 
-                    x-show="open"
-                    x-cloak
-                    x-transition
-                    x-transition:enter="transition ease-out duration-200 transform"
-                    x-transition:enter-start="opacity-0 scale-95"
-                    x-transition:enter-end="opacity-100 scale-100"
-                    class="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50"
-                >
-                    <div class="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                        <h3 class="font-bold text-sm text-gray-800">{{ __('Notifikasi') }}</h3>
-                        <button onclick="markAllRead()" class="text-xs text-brand-gold hover:text-brand-gold-dark font-medium">
-                            {{ __('Tandai Semua Dibaca') }}
-                        </button>
-                    </div>
-                    <div id="notification-list" class="max-h-80 overflow-y-auto">
-                        <div class="p-4 text-center text-sm text-gray-500">{{ __('Memuat...') }}</div>
-                    </div>
-                    <div class="border-t border-gray-100 px-4 py-2">
-                        <a href="{{ route('notifications.index') }}" class="text-center text-sm text-brand-gold hover:text-brand-gold-dark font-medium block">
-                            {{ __('Lihat Semua Notifikasi') }}
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="h-5 w-px bg-gray-200 hidden sm:block"></div>
-
-            <!-- User Auth / Dashboard Module -->
-            @if($isLoggedIn)
-                <a 
-                    href="{{ route('dashboard') }}"
-                    class="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-brand-gold transition-colors py-1"
-                >
-                    <div class="w-8 h-8 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold">
-                        {{ substr($user['name'] ?? 'B', 0, 1) }}
-                    </div>
-                    <span class="hidden lg:block font-bold">{{ __('Akun Saya') }}</span>
-                </a>
-            @else
-                <button 
-                    @click="isAuthOpen = true"
-                    class="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-brand-gold transition-colors py-1 focus:outline-none"
-                >
-                    <div class="w-8 h-8 rounded-full bg-brand-light flex items-center justify-center text-brand-gold-dark">
-                        <i class="fa-solid fa-user w-4 h-4"></i>
-                    </div>
-                    <span class="hidden lg:block">{{ __('Masuk / Daftar') }}</span>
-                </button>
-            @endif
-
-            <!-- Cart Drawer Trigger -->
-            <button 
-                @click="isCartOpen = true"
-                class="flex items-center gap-3 bg-brand-light hover:bg-brand-muted px-3 sm:px-4 py-2 rounded-full border border-brand-muted transition-colors group relative focus:outline-none"
-            >
-                    <div class="relative">
-                    <i class="fa-solid fa-cart-shopping w-5 h-5 text-brand-dark group-hover:text-brand-gold transition-colors"></i>
-                    @if($cartItemCount > 0)
-                        <span id="cart-count-badge" class="absolute -top-2 -right-2 bg-brand-gold text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                            {{ $cartItemCount }}
-                        </span>
-                    @endif
-                </div>
-                <div class="hidden sm:flex flex-col items-start leading-none">
-                    <span class="text-[10px] text-gray-500 font-medium uppercase tracking-wider">Keranjang</span>
-                    <span id="header-cart-total" class="text-sm font-bold text-brand-dark group-hover:text-brand-gold-dark transition-colors">
-                        Rp {{ number_format($cartTotal, 0, ',', '.') }}
-                    </span>
-                </div>
-            </button>
-        </div>
-    </div>
-
-    <!-- Mobile Search Bar -->
-    <div class="md:hidden px-4 pb-3">
-        <form action="{{ route('products.index') }}" method="GET" class="relative w-full">
-            <input type="hidden" name="type" value="search">
-            <input 
-                type="text" 
-                name="value"
-                placeholder="Cari produk..." 
-                class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-4 pr-12 py-2 focus:outline-none focus:ring-2 focus:ring-brand-gold/50"
-            />
-            <button type="submit" class="absolute right-1 top-1 p-1 bg-brand-dark text-white rounded-full" aria-label="Cari">
-                <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
-            </button>
-        </form>
-    </div>
-
-    <!-- Mega Menu / Categories Navigation (Desktop) -->
-    <nav class="hidden md:block w-full border-t border-gray-100 bg-white" aria-label="Navigasi utama">
-        <div class="container mx-auto px-6">
-            <ul class="flex items-center gap-8 h-14 relative">
-                <!-- Home -->
-                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                    <a href="{{ route('home') }}" class="py-2 text-sm font-semibold hover:text-brand-gold transition-colors text-brand-dark {{ request()->routeIs('home') ? 'text-brand-gold' : '' }}">{{ __('Home') }}</a>
-                </li>
-
-                <!-- Brands Mega Menu Trigger -->
-                <li 
-                    class="h-full flex items-center cursor-pointer"
-                    @mouseenter="activeMegaMenu = 'brands'"
-                    @mouseleave="activeMegaMenu = null"
-                >
-                <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">{{ __('Brand') }} <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
-                    
-                    <!-- Brands Mega Menu Content -->
-                    <div 
-                        x-show="activeMegaMenu === 'brands'"
-                        x-cloak
-                        x-transition:enter="transition ease-out duration-200"
-                        x-transition:enter-start="opacity-0 translate-y-2"
-                        x-transition:enter-end="opacity-100 translate-y-0"
-                        x-transition:leave="transition ease-in duration-150"
-                        x-transition:leave-start="opacity-100 translate-y-0"
-                        x-transition:leave-end="opacity-0 translate-y-2"
-                        class="absolute top-full left-0 w-full bg-white shadow-xl border border-gray-100 rounded-b-xl py-6 px-8 z-50 overflow-hidden"
-                    >
-                        <div class="grid grid-cols-6 gap-6">
-                            @foreach($brands as $brand)
-                                <a 
-                                    href="{{ route('brands.show', $brand->slug) }}" 
-                                    class="group flex justify-center items-center p-4 border border-brand-muted rounded-lg hover:border-brand-gold hover:bg-brand-light transition-all focus:outline-none w-full text-center"
-                                >
-                                    <span class="font-medium text-gray-700 text-sm group-hover:text-brand-dark">{{ html_entity_decode($brand->name) }}</span>
-                                </a>
-                            @endforeach
-                        </div>
-                    </div>
-                </li>
-
-                <!-- Categories Mega Menu Trigger -->
-                <li 
-                    class="h-full flex items-center cursor-pointer"
-                    @mouseenter="activeMegaMenu = 'categories'"
-                    @mouseleave="activeMegaMenu = null"
-                >
-                <a href="{{ route('categories') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors flex items-center gap-1.5 focus:outline-none">{{ __('Kategori Produk') }} <i class="fa-solid fa-chevron-down w-4 h-4"></i></a>
-
-                    <!-- Categories Mega Menu Content -->
-                    <div 
-                        x-show="activeMegaMenu === 'categories'"
-                        x-cloak
-                        x-transition:enter="transition ease-out duration-200"
-                        x-transition:enter-start="opacity-0 translate-y-2"
-                        x-transition:enter-end="opacity-100 translate-y-0"
-                        x-transition:leave="transition ease-in duration-150"
-                        x-transition:leave-start="opacity-100 translate-y-0"
-                        x-transition:leave-end="opacity-0 translate-y-2"
-                        class="absolute top-full left-0 w-full bg-white shadow-xl border border-gray-100 rounded-b-xl p-8 z-50 flex gap-12"
-                    >
-                        <div class="flex-1 grid grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-8">
-                            @foreach($categories as $category)
-                                <div class="space-y-3">
-                                    <a 
-                                        href="{{ route('category.show', $category->slug) }}" 
-                                        class="font-bold text-gray-900 hover:text-brand-gold-dark flex items-center justify-between border-b border-gray-100 pb-2 w-full text-left"
-                                    >
-                                        {{ html_entity_decode($category->name) }}
-                                    </a>
-                                    @if($category->children->isNotEmpty())
-                                        <ul class="space-y-2 mt-2">
-                                            @foreach($category->children->take(4) as $child)
-                                                <li>
-                                                    <a 
-                                                        href="{{ route('category.show', $child->slug) }}" 
-                                                        class="text-sm text-gray-500 hover:text-brand-gold transition-colors text-left"
-                                                    >
-                                                        {{ html_entity_decode($child->name) }}
-                                                    </a>
-                                                </li>
-                                            @endforeach
-                                        </ul>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                        @php
-                            $promoProduct = \DB::table('products')
-                                ->where('status', 1)
-                                ->where('deleted', false)
-                                ->latest()
-                                ->first();
-                        @endphp
-                        @if($promoProduct)
-                            <a 
-                                href="{{ route('products.show', $promoProduct->slug) }}" 
-                                class="w-72 bg-brand-dark rounded-xl p-6 flex flex-col justify-end relative overflow-hidden group cursor-pointer"
-                            >
-                                <div class="absolute top-0 right-0 p-4 w-32 opacity-10">
-                                    <i class="fa-solid fa-bag-shopping w-full h-full text-brand-gold"></i>
-                                </div>
-                                <div class="relative z-10 flex flex-col h-full justify-end">
-                                    <span class="inline-block self-start bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">
-                                        {{ $promoProduct->is_new ? 'New Arrival' : ($promoProduct->best_seller ? 'Best Seller' : 'Hot Product') }}
-                                    </span>
-                                    <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors line-clamp-2">
-                                        {{ $promoProduct->name }}
-                                    </h4>
-                                    <p class="text-xs text-gray-300 mb-4 line-clamp-3">
-                                        {{ $promoProduct->short_description ?? 'Temukan kenyamanan tidur tak tertandingi.' }}
-                                    </p>
-                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">{{ __('Lihat Koleksi') }} &rarr;</span>
-                                </div>
-                            </a>
-                        @else
-                            <a 
-                                href="{{ route('categories') }}" 
-                                class="w-72 bg-brand-dark rounded-xl p-6 flex flex-col justify-end relative overflow-hidden group cursor-pointer"
-                            >
-                                <div class="absolute top-0 right-0 p-4 w-32 opacity-10">
-                                    <i class="fa-solid fa-bag-shopping w-full h-full text-brand-gold"></i>
-                                </div>
-                                <div class="relative z-10">
-                                    <span class="inline-block bg-brand-gold text-white text-[10px] font-bold px-2 py-1 relative rounded uppercase tracking-wider mb-2">{{ __('New Arrival') }}</span>
-                                    <h4 class="font-bold text-lg text-white mb-1 leading-tight group-hover:text-brand-light transition-colors">{{ __('Koleksi Springbed 2026') }}</h4>
-                                    <p class="text-sm text-gray-300 mb-4">{{ __('Temukan kenyamanan tidur tak tertandingi.') }}</p>
-                                    <span class="text-sm font-semibold text-brand-gold flex items-center gap-1 group-hover:gap-2 transition-all">{{ __('Lihat Koleksi') }} &rarr;</span>
-                                </div>
-                            </a>
-                        @endif
-                    </div>
-                </li>
-
-                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                     <a href="{{ route('promos') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                         {{ __('Promo Spesial') }}
-                     </a>
-                 </li>
-                 
-                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                     <a href="{{ route('bundling.index') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                         {{ __('Bundling Hemat') }}
-                     </a>
-                 </li>
-                 
-                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                     <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-gray-800 hover:text-brand-gold transition-colors">
-                         {{ __('Bantuan') }}
-                     </a>
-                 </li>
-             </ul>
-        </div>
-    </nav>
-
-    <!-- Mobile Menu Overlay -->
-    <div 
-        x-show="isMobileMenuOpen"
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 height-0"
-        x-transition:enter-end="opacity-100 height-auto"
-        x-transition:leave="transition ease-in duration-150"
-        x-transition:leave-start="opacity-100 height-auto"
-        x-transition:leave-end="opacity-0 height-0"
-        x-cloak
-        class="md:hidden border-t border-gray-100 bg-white overflow-hidden"
-    >
-        <div class="p-4 space-y-6">
-            <a href="{{ route('home') }}" class="text-sm text-gray-600 font-semibold text-left flex justify-between items-center" @click="isMobileMenuOpen = false">
-                {{ __('Home') }}
-                <span class="text-gray-400 -rotate-90 inline-block transition-transform">&rarr;</span>
-            </a>
-            <div>
-                <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">{{ __('Brand') }}</h4>
-                <div class="grid grid-cols-2 gap-2">
-                    @foreach($brands as $brand)
-                        <a 
-                             href="{{ route('brands.show', $brand->slug) }}" 
-                             class="text-sm text-gray-600 py-1.5 text-left"
-                             @click="isMobileMenuOpen = false"
-                         >
-                            {{ $brand->name }}
-                        </a>
-                    @endforeach
-                </div>
-            </div>
-            <div class="w-full h-px bg-gray-100"></div>
-            <div>
-                <h4 class="font-bold text-gray-900 mb-3 text-sm tracking-wider uppercase">{{ __('Kategori Produk') }}</h4>
-                <div class="grid grid-cols-1 gap-2">
-                    @foreach($categories as $category)
-                        <a 
-                            href="{{ route('category.show', $category->slug) }}" 
-                            class="text-sm text-gray-600 py-2 border-b border-gray-50 flex justify-between items-center group text-left"
-                            @click="isMobileMenuOpen = false"
-                        >
-                            {{ $category->name }}
-                            <span class="text-gray-400 group-hover:text-gray-600 -rotate-90 inline-block transition-transform">&rarr;</span>
-                        </a>
-                    @endforeach
-                </div>
-            </div>
-            <div class="w-full h-px bg-gray-100"></div>
-            <div class="flex flex-col gap-3 py-2">
-                <a href="{{ route('promos') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Promo Spesial') }}</a>
-                <a href="{{ route('bundling.index') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Bundling Hemat') }}</a>
-                <a href="{{ route('blog') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Blog') }}</a>
-                <a href="{{ route('help') }}" class="text-sm text-gray-600 font-semibold text-left" @click="isMobileMenuOpen = false">{{ __('Bantuan') }}</a>
-            </div>
+        
         </div>
     </div>
 </header>

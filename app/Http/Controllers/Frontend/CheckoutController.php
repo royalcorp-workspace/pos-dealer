@@ -83,7 +83,7 @@ class CheckoutController extends Controller
 
             if ($isBundle && $bundleData) {
                 $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
-                $cart[$key]['original_price'] = $originalPrice;
+                $cart[$key]['original_price'] ?? $item['sell_price'] = $originalPrice;
                 $originalCartTotal += ($originalPrice * $quantity);
                 
                 $promotionalPrice = $originalPrice;
@@ -97,7 +97,7 @@ class CheckoutController extends Controller
                     }
                 }
                 $totalPercentDiscount += $staticDiscount;
-                $cart[$key]['price'] = $promotionalPrice;
+                $cart[$key]['sell_price'] = $promotionalPrice;
                 continue;
             }
 
@@ -106,19 +106,19 @@ class CheckoutController extends Controller
             if ($variantId) {
                 $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                 if ($variantModel) {
-                    $originalPrice = (float) $variantModel->price;
+                    $originalPrice = (float) $variantModel->sell_price;
                 }
             }
             if ($originalPrice <= 0.0) {
                 $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                 if ($productModel) {
-                    $originalPrice = (float) $productModel->base_price;
+                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
                 }
             }
             if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['price'];
+                $originalPrice = (float) $item['sell_price'];
             }
-            $cart[$key]['original_price'] = $originalPrice;
+            $cart[$key]['original_price'] ?? $item['sell_price'] = $originalPrice;
 
             $itemSubtotal = $originalPrice * $quantity;
             $originalCartTotal += $itemSubtotal;
@@ -127,10 +127,10 @@ class CheckoutController extends Controller
             $totalPercentDiscount += $res['static_discount'];
             $priceProductSettingDiscount += $res['volume_discount'];
 
-            $cart[$key]['price'] = $res['promotional_price'];
+            $cart[$key]['sell_price'] = $res['promotional_price'];
         }
 
-        $cartTotal = collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']);
+        $cartTotal = collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']);
 
         return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'subDistricts', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers'));
     }
@@ -157,7 +157,7 @@ class CheckoutController extends Controller
         $buffer = $this->getCurrentBuffer();
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
         $itemNotes = (array) $request->input('item_notes', []);
-        $cartTotal = collect($cart)->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+        $cartTotal = collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
 
         $resolvedItems = [];
         $originalCartTotal = 0.0;
@@ -189,7 +189,7 @@ class CheckoutController extends Controller
                 }
                 
                 $totalStaticDiscount += $itemStaticDiscount;
-                $cart[$key]['price'] = $promotionalPrice;
+                $cart[$key]['sell_price'] = $promotionalPrice;
 
                 $resolvedItems[] = [
                     'item' => $item,
@@ -208,17 +208,17 @@ class CheckoutController extends Controller
             if ($variantId) {
                 $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                 if ($variantModel) {
-                    $originalPrice = (float) $variantModel->price;
+                    $originalPrice = (float) $variantModel->sell_price;
                 }
             }
             if ($originalPrice <= 0.0) {
                 $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                 if ($productModel) {
-                    $originalPrice = (float) $productModel->base_price;
+                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
                 }
             }
             if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['price'];
+                $originalPrice = (float) $item['sell_price'];
             }
 
             $originalSubtotal = $originalPrice * $quantity;
@@ -232,7 +232,7 @@ class CheckoutController extends Controller
             $priceProductSettingDiscount += $itemVolumeDiscount;
 
             // Recalculate cart item price for voucher calculations and database persistence
-            $cart[$key]['price'] = $res['promotional_price'];
+            $cart[$key]['sell_price'] = $res['promotional_price'];
 
             $resolvedItems[] = [
                 'item' => $item,
@@ -244,7 +244,7 @@ class CheckoutController extends Controller
             ];
         }
 
-        $cartTotal = collect($cart)->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+        $cartTotal = collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
 
         $subDistrictId = $request->sub_district_id;
         $addressId = $request->selected_address_id;
@@ -275,6 +275,14 @@ class CheckoutController extends Controller
         $addressId = $request->selected_address_id;
         $userId = null;
         $customer = null;
+
+        if (session()->get('is_logged_in')) {
+            $user = session()->get('user', []);
+            $tempUserId = $user['id'] ?? $user['sub'] ?? null;
+            if ($tempUserId && !\App\Models\User::where('id', $tempUserId)->exists()) {
+                session()->forget(['is_logged_in', 'user', 'access_token', 'refresh_token']);
+            }
+        }
 
         if (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
@@ -399,6 +407,8 @@ class CheckoutController extends Controller
             'shipping_cost_subsidy' => $shippingCostSubsidy,
             'shipping_addresses_id' => $shippingAddressesId,
             'meta' => $shippingAddressData ? ['shipping_address' => $shippingAddressData] : null,
+            'creator' => $customer ? $customer->name : 'Customer Web',
+            'editor' => $customer ? $customer->name : 'Customer Web',
         ]);
 
         $productIds = collect($cart)->pluck('product_id')->filter()->unique()->toArray();
@@ -407,7 +417,7 @@ class CheckoutController extends Controller
         foreach ($resolvedItems as $resolved) {
             $item = $resolved['item'];
             $variantId = $resolved['variant_id'];
-            $originalPrice = $resolved['original_price'];
+            $originalPrice = $resolved['original_price'] ?? $item['sell_price'];
             $originalSubtotal = $resolved['original_subtotal'];
             $staticPromoDiscountTotal = $resolved['static_promo_discount'];
 
@@ -510,8 +520,8 @@ class CheckoutController extends Controller
             'voucher_id' => $voucher?->id,
             'voucher_ids' => collect($appliedVouchers)->pluck('voucher.id')->filter()->values()->all(),
             'items' => array_map(function ($item) use ($itemNotes) {
-                $originalPrice = (float) ($item['original_price'] ?? $item['price']);
-                $price = (float) $item['price'];
+                $originalPrice = (float) ($item['original_price'] ?? $item['sell_price'] ?? $item['sell_price']);
+                $price = (float) $item['sell_price'];
                 $discountNominal = $originalPrice - $price;
                 $discountPercent = $originalPrice > 0 ? round(($discountNominal / $originalPrice) * 100, 2) : 0.0;
 
@@ -520,7 +530,7 @@ class CheckoutController extends Controller
                     'product_id' => $item['product_id'],
                     'variant_id' => $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null),
                     'name' => $item['name'],
-                    'price' => $originalPrice,
+                    'sell_price' => $originalPrice,
                     'quantity' => (int) $item['quantity'],
                     'item_note' => $item['item_note'] ?? ($itemNotes[$item['id']] ?? ''),
                     'discount_nominal' => $discountNominal,
@@ -530,20 +540,19 @@ class CheckoutController extends Controller
             }, array_values($cart)),
         ]);
 
-        return redirect()->route('payment');
+        return redirect()->route('payment', ['order_id' => $order->id]);
     }
 
     public function payment(Request $request)
     {
-        $orderData = session()->get('order_data', []);
         $orderIdFromUrl = $request->query('order_id');
+        $orderData = [];
         
-        // If order_data is missing from session, try to retrieve from URL parameter or database
-        if (empty($orderData) && $orderIdFromUrl) {
+        // Selalu ambil dari database menggunakan order_id, jangan pakai session local storage
+        if ($orderIdFromUrl) {
             $order = $this->getOrderFromIdentifier($orderIdFromUrl);
             if ($order) {
                 $orderData = $this->formatOrderDataFromModel($order);
-                session()->put('order_data', $orderData);
             }
         }
         
@@ -563,7 +572,6 @@ class CheckoutController extends Controller
                 
                 if ($order) {
                     $orderData = $this->formatOrderDataFromModel($order);
-                    session()->put('order_data', $orderData);
                 }
             }
         }
@@ -572,47 +580,23 @@ class CheckoutController extends Controller
             return redirect()->route('checkout')->with('warning', 'Data order tidak ditemukan.');
         }
 
+        $dbMethods = \App\Models\PaymentMethod::active()->orderBy('sort_order')->get();
         $paymentMethods = [];
 
-        // 1. Ambil dari Espay Merchant Info
-        try {
-            $espayUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
-            // Gunakan API Key khusus untuk merchantinfo
-            $response = \Illuminate\Support\Facades\Http::asForm()->post($espayUrl, [
-                'key' => config('espay.api_key', '')
-            ]);
-            
-            if ($response->successful() && $response->json('error_code') === '0000') {
-                $espayData = $response->json('data') ?? [];
-                foreach ($espayData as $espayMethod) {
-                    $code = $espayMethod['productCode'];
-                    // Tentukan tipe untuk grouping di UI
-                    $isTransfer = str_contains(strtoupper($code), 'ATM') || str_contains(strtoupper($code), 'VA') || str_contains(strtoupper($code), 'CREDITCARD') || str_contains(strtoupper($code), 'PERMATA');
-                    
-                    $paymentMethods[] = [
-                        'code' => $code,
-                        'name' => $espayMethod['productName'],
-                        'type' => $isTransfer ? 'transfer' : 'ewallet',
-                        'has_charge' => false,
-                        'charge_value' => 0,
-                    ];
-                }
-            }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Gagal mengambil merchantinfo dari Espay: ' . $e->getMessage());
-        }
-
-        // 2. Gabung dengan manual transfer dari DB (jika ada)
-        $manualTransfer = \App\Models\PaymentMethod::active()->where('code', 'transfer_manual')->first();
-        if ($manualTransfer) {
+        foreach ($dbMethods as $method) {
             $paymentMethods[] = [
-                'code' => $manualTransfer->code,
-                'name' => $manualTransfer->name,
-                'type' => 'transfer',
-                'has_charge' => $manualTransfer->has_charge,
-                'charge_value' => $manualTransfer->charge_value,
+                'code' => $method->code,
+                'name' => $method->name,
+                'image' => $method->image,
+                'type' => $method->typeLabel(),
+                'has_charge' => $method->has_charge,
+                'charge_value' => $method->charge_value,
+                'charge_type' => $method->charge_type, // 1: Percentage, 2: Fixed
+                'bank_info' => $method->bank_info,
             ];
         }
+
+
 
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
@@ -623,8 +607,8 @@ class CheckoutController extends Controller
 
     public function processPayment(Request $request)
     {
-        $orderData = session()->get('order_data');
-        if (!$orderData || empty($orderData['id'])) {
+        $orderId = $request->input('order_id');
+        if (!$orderId) {
             return response()->json([
                 'success' => false,
                 'message' => 'Data order tidak ditemukan.'
@@ -645,7 +629,6 @@ class CheckoutController extends Controller
             ]);
         }
 
-        $orderId = $orderData['id'];
         $order = $this->getOrderFromIdentifier($orderId);
 
         if ($order) {
@@ -658,6 +641,11 @@ class CheckoutController extends Controller
             }
 
             $meta = $order->meta ?? [];
+            $meta['payment_started_at'] = now()->toIso8601String();
+            if ($paymentMethodModel && is_array($paymentMethodModel->instructions)) {
+                $meta['payment_instructions'] = $paymentMethodModel->instructions;
+            }
+
             if ($paymentMethod === 'transfer_manual' && $request->hasFile('payment_proof')) {
                 $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
                 $meta['payment_proof'] = $proofPath;
@@ -680,22 +668,10 @@ class CheckoutController extends Controller
                 $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
                 $signature = hash('sha256', strtoupper($dataToHash));
 
-                // Lookup bankCode asli dari Espay berdasarkan productCode yang dipilih
+                // Ambil bankCode asli (e.g. 014) dari database berdasarkan productCode (e.g. BCAATM)
                 $espayBankCode = $paymentMethod;
-                try {
-                    $infoUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
-                    $infoResp = \Illuminate\Support\Facades\Http::asForm()->post($infoUrl, [
-                        'key' => config('espay.api_key', '')
-                    ]);
-                    if ($infoResp->successful() && $infoResp->json('error_code') === '0000') {
-                        $espayData = $infoResp->json('data') ?? [];
-                        $found = collect($espayData)->firstWhere('productCode', $paymentMethod);
-                        if ($found && !empty($found['bankCode'])) {
-                            $espayBankCode = $found['bankCode'];
-                        }
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error('Gagal lookup bankCode: ' . $e->getMessage());
+                if ($paymentMethodModel && is_array($paymentMethodModel->bank_info) && !empty($paymentMethodModel->bank_info['bank_code'])) {
+                    $espayBankCode = $paymentMethodModel->bank_info['bank_code'];
                 }
 
                 $payload = [
@@ -719,11 +695,22 @@ class CheckoutController extends Controller
                     $paymentData = $response->json();
 
                     if ($response->successful() && isset($paymentData['error_code']) && $paymentData['error_code'] === '0000') {
+                        // Buat data Settlement (status pending)
+                        $settlement = \App\Models\Settlement::create([
+                            'reference_id' => $order->order_number,
+                            'gross_amount' => $amount, // total + charge
+                            'fee_amount' => $charge,
+                            'net_amount' => $order->total, // nilai bersih tanpa fee tambahan Espay
+                            'status' => 'pending',
+                            'notes' => "Payment via {$paymentMethod}"
+                        ]);
+
                         $order->update([
                             'payment_method' => $paymentMethod,
                             'payment_status' => 1, // Menunggu pembayaran
                             'transaction_fee' => $charge,
                             'total' => $amount,
+                            'settlement_id' => $settlement->id,
                             'meta' => array_merge($meta, [
                                 'espay_reference' => $paymentData['reference'] ?? '',
                                 'va_number' => $paymentData['va_number'] ?? ''
@@ -735,6 +722,16 @@ class CheckoutController extends Controller
                         $logMessage .= "Payload: \n" . json_encode($payload, JSON_PRETTY_PRINT) . "\n";
                         $logMessage .= "Response: \n" . json_encode($paymentData, JSON_PRETTY_PRINT);
                         \Illuminate\Support\Facades\Log::channel('espay')->info($logMessage);
+
+                        // Kirim email notifikasi
+                        try {
+                            $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
+                            if ($customerEmail) {
+                                \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
+                            }
+                        } catch (\Exception $e) {
+                            \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated: ' . $e->getMessage());
+                        }
 
                         session()->forget('order_data');
                         session()->forget('selected_voucher_codes');
@@ -776,6 +773,16 @@ class CheckoutController extends Controller
                 'total' => $order->total + $charge,
                 'meta' => $meta,
             ]);
+
+            // Kirim email notifikasi
+            try {
+                $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
+                if ($customerEmail) {
+                    \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated (Manual): ' . $e->getMessage());
+            }
 
             session()->forget('order_data');
             session()->forget('selected_voucher_codes');
@@ -822,6 +829,7 @@ class CheckoutController extends Controller
             $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
             
             $meta = $order->meta ?? [];
+            $meta['payment_started_at'] = now()->toIso8601String();
             $meta['payment_proof'] = $proofPath;
 
             $order->update([
@@ -1058,7 +1066,7 @@ class CheckoutController extends Controller
             $productIds = $voucher->products()->where('deleted', false)->pluck('products.id')->unique()->toArray();
             return (float) collect($cart)
                 ->filter(fn($item) => in_array($item['product_id'] ?? null, $productIds, true))
-                ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
         }
 
         if ((int) $voucher->scope === 3) {
@@ -1072,10 +1080,10 @@ class CheckoutController extends Controller
 
             return (float) collect($cart)
                 ->filter(fn($item) => in_array($item['product_id'] ?? null, $productIds, true))
-                ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
         }
 
-        return (float) collect($cart)->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+        return (float) collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
     }
 
     private function calculateVoucherDiscountValue(Voucher $voucher, float $eligibleSubtotal, float $shippingCost): float
@@ -1125,7 +1133,7 @@ class CheckoutController extends Controller
 
     private function calculateItemPriceProductSettingDiscount(array $item, $globalSettings, $perProductSettings, $volumeSettings): array
     {
-        $itemTotal = ($item['price'] ?? 0) * ($item['quantity'] ?? 0);
+        $itemTotal = ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0);
         $quantity = $item['quantity'] ?? 0;
         $discount = 0;
         $nominal = 0;
@@ -1209,7 +1217,7 @@ class CheckoutController extends Controller
 
     private function getShippingCost(string $courier, string $subDistrictId): int
     {
-        $courierModel = Courier::where('code', $courier)->first();
+        $courierModel = Courier::whereRaw('LOWER(code) = ?', [strtolower($courier)])->first();
         if (!$courierModel) {
             return 0;
         }
@@ -1223,7 +1231,7 @@ class CheckoutController extends Controller
                 ->first();
         }
 
-        return $shipping ? $shipping->price : 0;
+        return $shipping ? (int) $shipping->price : 25000;
     }
 
     /**
@@ -1250,7 +1258,7 @@ class CheckoutController extends Controller
                 'product_id' => $item->product_id,
                 'variant_id' => $item->product_variant_id,
                 'name' => $item->name,
-                'price' => (float) $item->unit_price,
+                'sell_price' => (float) $item->unit_price,
                 'quantity' => (int) $item->quantity,
                 'item_note' => $item->item_notes ?? '',
                 'discount_nominal' => (float) $item->discount_nominal,
@@ -1281,6 +1289,7 @@ class CheckoutController extends Controller
             'voucher_id' => $order->voucher_id,
             'voucher_ids' => $order->voucher_id ? [$order->voucher_id] : [],
             'items' => $items,
+            'created_at' => $order->created_at ? $order->created_at->toIso8601String() : now()->toIso8601String(),
         ];
     }
 
@@ -1360,5 +1369,50 @@ class CheckoutController extends Controller
         }
 
         return response()->json(['registered' => false]);
+    }
+
+    public function trackOrder()
+    {
+        return view('frontend.track-order');
+    }
+
+    public function processTrackOrder(Request $request)
+    {
+        $request->validate([
+            'order_number' => 'required|string',
+            'contact' => 'required|string', // Bisa email atau nomor HP untuk security
+        ]);
+
+        $orderNumber = $request->input('order_number');
+        $contact = $request->input('contact');
+
+        // Cari order
+        $order = \App\Models\Frontend\Order::with(['customer', 'items'])
+            ->where('order_number', $orderNumber)
+            ->first();
+
+        if (!$order) {
+            return back()->with('error', 'Pesanan tidak ditemukan. Pastikan Nomor Pesanan benar.');
+        }
+
+        // Verifikasi contact (email atau phone)
+        $customer = $order->customer;
+        $customerData = $order->meta['customer'] ?? null;
+        
+        $validEmail = ($customer && $customer->email === $contact) || ($customerData && ($customerData['email'] ?? '') === $contact);
+        $validPhone = ($customer && $customer->phone === $contact) || ($customerData && ($customerData['phone'] ?? '') === $contact);
+
+        if (!$validEmail && !$validPhone) {
+            return back()->with('error', 'Email atau Nomor HP tidak cocok dengan data pesanan.');
+        }
+
+        // Jika cocok, redirect ke tracking detail page
+        return redirect()->route('track-order.detail', ['order_id' => $order->id]);
+    }
+
+    public function trackOrderDetail(string $orderId)
+    {
+        $order = \App\Models\Frontend\Order::with(['customer', 'courier', 'items', 'voucher'])->findOrFail($orderId);
+        return view('frontend.track-order-detail', compact('order'));
     }
 }

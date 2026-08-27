@@ -1,18 +1,72 @@
 @props(['product'])
 
 @php
-    $isSoldOut = $product['isSoldOut'] ?? false;
-    $isVariable = $product['isVariable'] ?? false;
-    $reviewProduct = $product;
-    $reviewProduct['reviews'] = $reviewProduct['reviews'] ?? [];
-    $reviewProduct['reviewsCount'] = $reviewProduct['reviewsCount'] ?? 0;
-    $reviewProduct['originalPrice'] = $reviewProduct['originalPrice'] ?? ($reviewProduct['isVariable'] ? ($reviewProduct['minPrice'] ?? $reviewProduct['price']) : $reviewProduct['price']);
-    $reviewProduct['originalMinPrice'] = $reviewProduct['originalMinPrice'] ?? $reviewProduct['originalPrice'];
-    $reviewProduct['originalMaxPrice'] = $reviewProduct['originalMaxPrice'] ?? $reviewProduct['originalPrice'];
-    $reviewProduct['hasDiscount'] = isset($reviewProduct['originalPrice']) && ($reviewProduct['originalPrice'] != $reviewProduct['price'] || isset($reviewProduct['discountBadge']));
-    $reviewProduct['discountLabel'] = $reviewProduct['discountLabel'] ?? ($reviewProduct['discountBadge'] ? trim(str_replace('Hot', '', $reviewProduct['discountBadge'])) : null);
-    $hasPriceRange = $isVariable && isset($product['minPrice']) && isset($product['maxPrice']) && $product['minPrice'] != $product['maxPrice'];
+    $validVariants = $product->variants->where('sell_price', '>', 0);
+    $isVariable = $validVariants->isNotEmpty();
+    $minPrice = $isVariable ? $validVariants->min('sell_price') : null;
+    $maxPrice = $isVariable ? $validVariants->max('sell_price') : null;
+    
+    $minBasePrice = $isVariable ? $validVariants->min('base_price') : null;
+    $maxBasePrice = $isVariable ? $validVariants->max('base_price') : null;
+
+    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) (0);
+    $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+    
+    $originalMinBasePrice = $isVariable && $minBasePrice ? (float) $minBasePrice : $originalMinPrice;
+    $originalMaxBasePrice = $isVariable && $maxBasePrice ? (float) $maxBasePrice : $originalMaxPrice;
+
+    $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+    
+    $hasDefaultDiscount = $originalMinBasePrice > $originalMinPrice;
+    $defaultDiscountPct = $hasDefaultDiscount ? round((($originalMinBasePrice - $originalMinPrice) / $originalMinBasePrice) * 100) : 0;
+
+    $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalMinPrice);
+    
+    $price = $originalMinPrice;
+    $displayOriginalPrice = $hasPriceRange ? $originalMaxPrice : null;
+    
+    $strikeMinPrice = $hasDefaultDiscount ? $originalMinBasePrice : null;
+    $strikeMaxPrice = $hasDefaultDiscount && $hasPriceRange ? $originalMaxBasePrice : null;
+
+    $defaultDiscountBadge = $hasDefaultDiscount && $defaultDiscountPct > 0 ? $defaultDiscountPct . '% OFF' : null;
+    $ppsDiscountBadge = null;
+    $ppsDiscountPct = 0;
+
+    if ($staticPromo) {
+        $price = \App\Services\StaticPromoService::discountedPrice($originalMinPrice, $staticPromo);
+        $displayOriginalPrice = $hasPriceRange ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
+        
+        $strikeMinPrice = $hasDefaultDiscount ? $originalMinBasePrice : $originalMinPrice;
+        $strikeMaxPrice = $hasPriceRange ? ($hasDefaultDiscount ? $originalMaxBasePrice : $originalMaxPrice) : null;
+        
+        if ($strikeMinPrice > 0) {
+            $totalDiscountPct = round((($strikeMinPrice - $price) / $strikeMinPrice) * 100);
+            if ($hasDefaultDiscount && $defaultDiscountPct > 0) {
+                $ppsDiscountPct = round((($originalMinPrice - $price) / $originalMinPrice) * 100);
+                $ppsDiscountBadge = 'EXTRA ' . $ppsDiscountPct . '% OFF';
+            } else {
+                $defaultDiscountBadge = $totalDiscountPct . '% OFF';
+            }
+        }
+    }
+    
+    $isInWishlist = false;
+    $isSoldOut = false;
+    $hasStock = true;
+    
+    // Data untuk review component
+    $reviewPayload = [
+        'id' => $product->id,
+        'name' => $product->name,
+        'image' => $product->thumbnail_url ?? '',
+        'brand' => $product->brand->name ?? '',
+        'rating' => number_format($product->average_rating ?? 0, 1),
+        'reviewsCount' => $product->review_count ?? 0,
+        'slug' => $product->slug,
+    ];
 @endphp
+
+
 
 <div 
     class="product-card group relative bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 flex flex-col h-full font-sans {{ $isSoldOut ? 'opacity-80' : '' }}"
@@ -90,54 +144,23 @@
         </div>
 
         <!-- Pricing -->
-        <div class="flex flex-col gap-0.5 mt-2">
-            @if($isVariable && $hasPriceRange)
-                <span class="text-sm font-medium text-gray-500">Rentang Harga</span>
-                <span class="font-bold text-lg text-brand-dark tracking-tight">
-                    Rp {{ number_format($product['minPrice'], 0, ',', '.') }} - Rp {{ number_format($product['maxPrice'], 0, ',', '.') }}
-                </span>
-            @else
-                @if(isset($product['originalPrice']) && $product['originalPrice'] != ($product['price'] ?? $product['minPrice'] ?? 0))
-                    <span class="text-sm text-gray-500 line-through decoration-gray-300">
-                        Rp {{ number_format($product['originalPrice'], 0, ',', '.') }}
-                    </span>
-                @endif
-                <span class="font-bold text-lg text-brand-dark tracking-tight">
-                    Rp {{ number_format($product['price'] ?? $product['minPrice'] ?? 0, 0, ',', '.') }}
+        <div class="flex flex-col gap-0.5 mt-2" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+            <meta itemprop="priceCurrency" content="IDR" />
+            <meta itemprop="price" content="{{ number_format($price, 0, ',', '.') }}" />
+            <link itemprop="availability" href="{{ $hasStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' }}" />
+            
+            @if($defaultDiscountBadge)
+                <span class="text-[10px] sm:text-xs text-gray-500 line-through">
+                    Rp {{ number_format($strikeMinPrice, 0, ',', '.') }}
+                    @if($hasPriceRange && $strikeMaxPrice) - Rp {{ number_format($strikeMaxPrice, 0, ',', '.') }} @endif
                 </span>
             @endif
+            
+            <span class="font-bold text-sm sm:text-lg {{ $defaultDiscountBadge ? 'text-red-600' : 'text-brand-dark' }} tracking-tight">
+                Rp {{ number_format($price, 0, ',', '.') }}
+                @if($hasPriceRange && $displayOriginalPrice) - Rp {{ number_format($displayOriginalPrice, 0, ',', '.') }} @endif
+            </span>
         </div>
 
-        <!-- Action Button -->
-        <div class="mt-5 pt-4 border-t border-gray-100">
-            @if($isSoldOut)
-                <button 
-                    disabled
-                    class="w-full py-2.5 rounded-xl font-bold text-sm flex justify-center items-center gap-2 bg-gray-100 text-gray-400 cursor-not-allowed"
-                >
-                    Sold Out
-                </button>
-            @elseif($isVariable)
-                <a 
-                    href="{{ route('products.show', $product['id']) }}"
-                    class="product-card__btn w-full py-2.5 rounded-xl font-bold text-sm flex justify-center items-center gap-2 bg-white border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white group-hover:bg-brand-dark group-hover:text-white shadow-sm transition-all duration-300 text-center"
-                >
-                    Pilih Opsi
-                </a>
-            @else
-                <form action="{{ route('cart.add') }}" method="POST">
-                    @csrf
-                    <input type="hidden" name="product_id" value="{{ $product['id'] }}">
-                    <input type="hidden" name="quantity" value="1">
-                    <button 
-                        type="submit"
-                        class="product-card__btn w-full py-2.5 rounded-xl font-bold text-sm flex justify-center items-center gap-2 bg-white border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white group-hover:bg-brand-dark group-hover:text-white shadow-sm transition-all duration-300 focus:outline-none"
-                    >
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M6 6h15l-1.5 9h-12L4 4H2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1" fill="currentColor"/><circle cx="18" cy="20" r="1" fill="currentColor"/></svg>
-                        Tambah ke Keranjang
-                    </button>
-                </form>
-            @endif
         </div>
-    </div>
 </div>

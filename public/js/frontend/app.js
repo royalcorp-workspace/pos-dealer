@@ -103,6 +103,9 @@ window.updateCartHeader = function (count, total) {
         }
     }
 
+    const drawerCount = document.getElementById('cart-drawer-count');
+    if (drawerCount) drawerCount.textContent = count;
+
     if (badge) {
         badge.textContent = count;
     }
@@ -147,7 +150,10 @@ window.updateWishlistBadge = function (delta) {
             headerIcon.parentElement.appendChild(badge);
         }
 
-        if (badge) {
+        const drawerCount = document.getElementById('cart-drawer-count');
+    if (drawerCount) drawerCount.textContent = count;
+
+    if (badge) {
             badge.textContent = nextCount;
             badge.classList.remove('hidden');
         }
@@ -180,7 +186,15 @@ window.openProductReview = function (event, productId) {
 
 window.toggleWishlist = function (el) {
     const productId = el.dataset.productId;
-    showLoading();
+    const icon = el.querySelector('i');
+    const prevClasses = icon ? icon.className : '';
+    
+    // Micro loading on the icon itself instead of blocking the entire screen
+    if (icon) {
+        icon.className = 'fa-solid fa-spinner fa-spin text-brand-gold';
+    }
+    el.disabled = true;
+
     const routeCartToggleWishlist = document.body.dataset.routeCartToggleWishlist;
     fetch(routeCartToggleWishlist, {
         method: 'POST',
@@ -195,33 +209,33 @@ window.toggleWishlist = function (el) {
         return r.json().then(data => ({ status: r.status, ok: r.ok, data }));
     })
     .then(({ status, ok, data }) => {
-        hideLoading();
+        el.disabled = false;
         
         if (status === 401 || data.require_login) {
+            if (icon) icon.className = prevClasses;
             window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: data.message || 'Silakan login terlebih dahulu.' } }));
             window.dispatchEvent(new CustomEvent('open-auth'));
             return;
         }
 
         if (!ok || !data.success) {
+            if (icon) icon.className = prevClasses;
             window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Terjadi kesalahan sistem.' } }));
             return;
         }
 
-        const icon = el.querySelector('i');
         if (icon) {
             if (data.in_wishlist) {
-                icon.classList.remove('fa-regular');
-                icon.classList.add('fa-solid', 'text-brand-gold');
+                icon.className = 'fa-solid fa-heart text-brand-gold';
             } else {
-                icon.classList.remove('fa-solid', 'text-brand-gold');
-                icon.classList.add('fa-regular');
+                icon.className = 'fa-regular fa-heart';
             }
         }
         updateWishlistBadge(data.in_wishlist ? 1 : -1);
     })
     .catch((err) => { 
-        hideLoading(); 
+        el.disabled = false;
+        if (icon) icon.className = prevClasses;
         console.error('Wishlist error:', err); 
         window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Koneksi terputus atau terjadi kesalahan.' } }));
     });

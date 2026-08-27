@@ -31,6 +31,7 @@ class PaymentMethod extends Model
         'editor',
         'deleted',
         'bank_info',
+        'instructions',
     ];
 
     protected function casts(): array
@@ -46,6 +47,7 @@ class PaymentMethod extends Model
             'status' => 'integer',
             'deleted' => 'boolean',
             'bank_info' => 'array',
+            'instructions' => 'array',
         ];
     }
 

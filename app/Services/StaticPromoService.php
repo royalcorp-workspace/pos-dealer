@@ -70,8 +70,8 @@ class StaticPromoService
         }
         // Resolve base price if not provided
         if ($basePrice === null) {
-            $firstVariant = $product->variants->where('price', '>', 0)->first();
-            $basePrice = $firstVariant ? (float) $firstVariant->price : (float) ($product->base_price ?? 0);
+            $firstVariant = $product->variants->where('sell_price', '>', 0)->first();
+            $basePrice = $firstVariant ? (float) $firstVariant->sell_price : (float) (($product->variants->where('status', true)->min('sell_price') ?? 0) ?? 0);
         }
 
         $dbPromo = PriceProductSetting::active()

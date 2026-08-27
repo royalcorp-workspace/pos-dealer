@@ -26,7 +26,7 @@
                     <li><a href="{{ route('help') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Pusat Bantuan') }}</a></li>
                     <li><a href="{{ route('warranty') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Klaim Garansi') }}</a></li>
                     <li><a href="{{ route('returns') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Cara Pengembalian') }}</a></li>
-                    <li><a href="{{ route('order.tracking') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Informasi Pengiriman') }}</a></li>
+                    <li><a href="{{ route('track-order') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Lacak Pemesanan') }}</a></li>
                 </ul>
             </div>
 
@@ -82,7 +82,7 @@
                         @forelse($paymentMethods as $method)
                             @if($method->image)
                                 <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center p-1" title="{{ $method->name }}">
-                                    <img src="{{ $method->image }}" alt="{{ $method->name }}" class="max-h-full max-w-full object-contain">
+                                    <img src="{{ cms_asset($method->image) }}" alt="{{ $method->name }}" class="max-h-full max-w-full object-contain">
                                 </div>
                             @else
                                 <div class="w-12 h-8 bg-white border border-transparent rounded flex items-center justify-center text-[9px] font-bold text-brand-dark px-1 text-center" title="{{ $method->name }}">
@@ -164,7 +164,14 @@
                             </div>
                         </div>
                     @endforeach
-                </div>
+                <!-- Download App -->
+                    <div class="mt-8 pt-6 border-t border-brand-gold/20">
+                        <h4 class="font-bold text-brand-gold mb-4 uppercase tracking-wider text-sm">{{ __('Download Aplikasi') }}</h4>
+                        <a href="#" class="inline-block transition-transform duration-300 hover:scale-105">
+                            <img src="https://play.google.com/intl/en_us/badges/static/images/badges/id_badge_web_generic.png" alt="Get it on Google Play" class="h-12 w-auto">
+                        </a>
+                    </div>
+</div>
             </div>
         </div>
         
