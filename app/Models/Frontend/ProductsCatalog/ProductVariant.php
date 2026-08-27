@@ -22,7 +22,8 @@ class ProductVariant extends Model
         'sku',
         'variant_name',
         'attributes',
-        'price',
+        'base_price',
+        'sell_price',
         'reseller_price',
         'stock_quantity',
         'min_order_qty',
@@ -34,7 +35,8 @@ class ProductVariant extends Model
     {
         return [
             'attributes' => 'array',
-            'price' => 'decimal:2',
+            'base_price' => 'decimal:2',
+            'sell_price' => 'decimal:2',
             'reseller_price' => 'decimal:2',
             'stock_quantity' => 'integer',
             'min_order_qty' => 'integer',

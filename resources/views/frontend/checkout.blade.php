@@ -6,7 +6,7 @@
 @section('content')
     @php
         $cart = $cart ?? session()->get('cart', []);
-        $cartTotal = $cartTotal ?? collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']);
+        $cartTotal = $cartTotal ?? collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']);
         $form = $checkoutFormData ?? [];
         $selectedVoucherCodes = array_values(array_unique(array_map('strtoupper', (array) ($selectedVoucherCodes ?? []))));
         if (($selectedVoucher['code'] ?? null) && !in_array(strtoupper($selectedVoucher['code']), $selectedVoucherCodes, true)) {
@@ -263,20 +263,53 @@
                                             @endif
                                         </div>
                                         <div class="text-right flex flex-col items-end">
-                                            @if(($item['original_price'] ?? $item['price']) > $item['price'])
+                                            @php
+                                                $isBundle = ($item['type'] ?? null) === 'bundle';
+                                                $bundleData = $item['bundle_data'] ?? null;
+                                                
+                                                if ($isBundle && $bundleData) {
+                                                    $basePrice = (float) ($bundleData['bundle_price'] ?? 0);
+                                                    $sellPrice = (float) $item['sell_price'];
+                                                } else {
+                                                    $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+                                                    $basePrice = 0.0;
+                                                    $sellPrice = (float) $item['sell_price'];
+                                                    if ($variantId) {
+                                                        $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                                                        if ($variantModel) {
+                                                            $basePrice = (float) $variantModel->base_price;
+                                                        }
+                                                    }
+                                                    if ($basePrice <= 0.0) {
+                                                        $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                                                        if ($productModel) {
+                                                            $minVariant = $productModel->variants->where('status', true)->sortBy('sell_price')->first();
+                                                            if ($minVariant) {
+                                                                $basePrice = (float) $minVariant->base_price;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                if ($basePrice <= 0.0) {
+                                                    $basePrice = (float) ($item['original_price'] ?? $sellPrice);
+                                                }
+                                                
+                                                $hasDefaultDiscount = $basePrice > $sellPrice;
+                                                $op = $hasDefaultDiscount ? $basePrice : ($item['original_price'] ?? $sellPrice);
+                                                $ip = $sellPrice;
+                                                $discountPercent = $op > 0 ? round((($op - $ip) / $op) * 100) : 0;
+                                            @endphp
+                                            @if($op > $ip)
                                                 <div class="flex items-center gap-1.5 justify-end mb-0.5">
-                                                    @php
-                                                        $op = $item['original_price'] ?? $item['price'];
-                                                        $ip = $item['price'];
-                                                        $discountPercent = round((($op - $ip) / $op) * 100);
-                                                    @endphp
                                                     @if($discountPercent > 0)
                                                         <span class="bg-red-50 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">{{ $discountPercent }}% OFF</span>
                                                     @endif
                                                     <span class="text-xs text-gray-500 line-through">Rp {{ number_format($op * $item['quantity'], 0, ',', '.') }}</span>
                                                 </div>
                                             @endif
-                                            <span class="font-semibold text-brand-dark">Rp {{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }}</span>
+
+                                            <span class="font-semibold text-brand-dark">Rp {{ number_format($item['sell_price'] * $item['quantity'], 0, ',', '.') }}</span>
                                         </div>
                                     </div>
                                     <textarea
@@ -486,13 +519,13 @@
         event: "begin_checkout",
         ecommerce: {
             currency: "IDR",
-            value: {{ collect($cart)->sum(fn($item) => $item['price'] * $item['quantity']) }},
+            value: {{ collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']) }},
             items: [
                 @foreach($cart as $id => $item)
                 {
                     item_id: "{{ $item['product_id'] ?? '' }}",
                     item_name: "{{ $item['name'] ?? '' }}",
-                    price: {{ $item['price'] ?? 0 }},
+                    price: {{ $item['sell_price'] ?? 0 }},
                     quantity: {{ $item['quantity'] ?? 1 }}
                 }@if(!$loop->last),@endif
                 @endforeach

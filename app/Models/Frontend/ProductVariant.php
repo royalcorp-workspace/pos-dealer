@@ -21,7 +21,8 @@ class ProductVariant extends Model
         'length',
         'height',
         'weight',
-        'price',
+        'base_price',
+        'sell_price',
         'stock_quantity',
         'min_order_qty',
         'sort_order',
@@ -31,7 +32,8 @@ class ProductVariant extends Model
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
+            'base_price' => 'decimal:2',
+            'sell_price' => 'decimal:2',
             'attributes' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

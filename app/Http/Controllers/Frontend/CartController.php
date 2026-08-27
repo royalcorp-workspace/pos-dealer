@@ -47,11 +47,11 @@ class CartController extends Controller
             return redirect()->back()->with('error', 'Silakan pilih warna terlebih dahulu.');
         }
 
-        $price = $product->base_price;
+        $price = ($product->variants->where('status', true)->min('sell_price') ?? 0);
         if ($variantId) {
             $variant = ProductVariant::where('id', $variantId)->first();
             if ($variant) {
-                $price = $variant->price;
+                $price = $variant->sell_price;
             }
         }
 
@@ -212,25 +212,35 @@ class CartController extends Controller
             if ($variantId) {
                 $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                 if ($variantModel) {
-                    $originalPrice = (float) $variantModel->price;
+                    $originalPrice = (float) $variantModel->sell_price;
                 }
             }
             if ($originalPrice <= 0.0) {
                 $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                 if ($productModel) {
-                    $originalPrice = (float) $productModel->base_price;
+                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
                 }
             }
             if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['price'];
+                $originalPrice = (float) $item['sell_price'];
             }
             $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
-            $item['price'] = $res['promotional_price'];
+            $item['sell_price'] = $res['promotional_price'];
             $recalculatedCart[$key] = $item;
             $subtotal += $res['promotional_price'] * (int) $item['quantity'];
         }
         $cart = $recalculatedCart;
-        $shippingCost = self::SHIPPING_PRICES[$courier] ?? 0;
+        
+        $courierModel = \App\Models\Frontend\Shipping\Courier::whereRaw('LOWER(code) = ?', [strtolower($courier)])->first();
+        $shippingCost = 25000;
+        if ($courierModel) {
+            $shipping = \App\Models\Frontend\Shipping\ShippingAddress::where('courier_id', $courierModel->id)->where('type', 1)->first() 
+                        ?? \App\Models\Frontend\Shipping\ShippingAddress::where('courier_id', $courierModel->id)->first();
+            if ($shipping) {
+                $shippingCost = (int) $shipping->price;
+            }
+        }
+
         $voucherCodes = $this->parseVoucherCodes($request);
 
         $voucherDiscount = 0;
@@ -263,7 +273,7 @@ class CartController extends Controller
                     $eligibleProductIds = $voucher->products()->where('deleted', false)->pluck('products.id')->unique()->toArray();
                     $eligibleSubtotal = (float) collect($cart)
                         ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
-                        ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                        ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
                 } elseif ((int) $voucher->scope === 3) {
                     $eligibleProductIds = $voucher->categories()->where('deleted', false)
                         ->with('products')
@@ -274,10 +284,10 @@ class CartController extends Controller
 
                     $eligibleSubtotal = (float) collect($cart)
                         ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
-                        ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                        ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
                 } else {
                     $eligibleSubtotal = (float) collect($cart)
-                        ->sum(fn($item) => ($item['price'] ?? 0) * ($item['quantity'] ?? 0));
+                        ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
                 }
 
                 if ($eligibleSubtotal < (float) ($voucher->min_purchase ?? 0)) continue;
@@ -305,7 +315,7 @@ class CartController extends Controller
         $preview = [
             'customer' => $request->only(['name', 'email', 'phone', 'city', 'address', 'postal_code']),
             'courier' => $courier,
-            'courier_label' => self::SHIPPING_LABELS[$courier] ?? $courier,
+            'courier_label' => $courierModel ? $courierModel->name : strtoupper($courier),
             'shipping_cost' => $shippingCost,
             'voucher_code' => implode(',', $voucherCodes),
             'voucher_codes' => $voucherCodes,
@@ -372,8 +382,8 @@ class CartController extends Controller
                     'product_variant_id' => $cartItem['variant_id'] ?? null,
                     'name' => $cartItem['name'],
                     'quantity' => $cartItem['quantity'],
-                    'unit_price' => (float) $cartItem['price'],
-                    'total' => (float) $cartItem['price'] * $cartItem['quantity'],
+                    'unit_price' => (float) $cartItem['sell_price'],
+                    'total' => (float) $cartItem['sell_price'] * $cartItem['quantity'],
                     'discount_nominal' => 0,
                     'discount_percent' => 0,
                     'item_notes' => $cartItem['item_note'] ?? '',
@@ -418,9 +428,9 @@ class CartController extends Controller
             return null;
         }
 
-        $price = $product->base_price;
+        $price = ($product->variants->where('status', true)->min('sell_price') ?? 0);
         if ($variant) {
-            $price = $variant->price;
+            $price = $variant->sell_price;
         }
 
         $cartItemId = $variant ? $variant->id : $product->id;
@@ -435,7 +445,7 @@ class CartController extends Controller
             'name' => $name,
             'brand' => $product->brand?->name ?? '',
             'image' => $product->thumbnail_url ?? '',
-            'price' => (float) $price,
+            'sell_price' => (float) $price,
             'quantity' => max(1, (int) $item->quantity),
             'reorder_from_order_id' => $item->order_id,
         ];

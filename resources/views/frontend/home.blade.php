@@ -127,6 +127,34 @@
         }
     @endphp
 
+    <!-- Top Promotional Strip (IMG Signature Style) -->
+    <!-- <section class="w-full bg-brand-dark relative overflow-hidden font-sans border-b border-brand-gold/20 mt-0">
+        
+        <div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(to right, #c09d6b 1px, transparent 1px), linear-gradient(to bottom, #c09d6b 1px, transparent 1px); background-size: 80px 80px; transform: rotate(-3deg) scale(1.5);"></div>
+        
+        <div class="container mx-auto px-4 py-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-4">
+            
+            <div class="flex-1 text-center md:text-left flex flex-col items-center md:items-start">
+                <h3 class="text-white text-3xl md:text-4xl font-serif font-extrabold leading-tight mb-2">Diskon hingga 30%*</h3>
+                <p class="text-gray-300 text-base mb-4 font-light">Prioritas utama: kualitas tidur terbaik.</p>
+                <a href="{{ route('categories') }}" class="inline-block px-8 py-2.5 bg-brand-gold text-white font-bold rounded-full hover:bg-brand-gold-dark hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 text-sm tracking-wide">Pilih Kasur</a>
+            </div>
+
+            <div class="flex-shrink-0 z-20">
+                <div class="inline-block px-10 py-3 rounded-full border-2 border-brand-gold bg-brand-light text-brand-dark font-extrabold text-xl md:text-3xl transform -rotate-2 shadow-[0_4px_20px_rgba(192,157,107,0.3)] tracking-tight whitespace-nowrap">
+                    SPECIAL PROMO
+                </div>
+            </div>
+
+
+            <div class="flex-1 text-center md:text-right flex flex-col items-center md:items-end">
+                <h3 class="text-white text-3xl md:text-4xl font-serif font-extrabold leading-tight mb-2">Ekstra Hemat 15%*</h3>
+                <p class="text-gray-300 text-base mb-4 font-light">Kenyamanan paripurna dengan Bundling.</p>
+                <a href="{{ route('bundling.index') }}" class="inline-block px-8 py-2.5 bg-white text-brand-dark font-bold rounded-full hover:bg-brand-muted hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 text-sm tracking-wide">Beli Bundling</a>
+            </div>
+        </div>
+    </section> -->
+
     <!-- Hero Section / Dynamic Banner Slider -->
     @if($sliderImages->isNotEmpty())
         <section class="w-full pt-4 sm:pt-6 pb-2 font-sans">
@@ -478,22 +506,22 @@
                     $categoryVisuals = [
                         'kasur-spring-bed' => [
                             'image' => 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=600&h=400',
-                            'tagline' => 'Penopang Tubuh Presisi',
+                            
                             'chips' => ['Pocket Spring', 'Orthopedic', 'Pillow Top'],
                         ],
                         'kasur-busa-foam' => [
                             'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&q=80&w=600&h=400',
-                            'tagline' => 'Kepadatan Tinggi & Awet',
+                            
                             'chips' => ['High Density', 'Anti-Kempes', 'Sanitized'],
                         ],
                         'bantal-guling' => [
                             'image' => 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&q=80&w=600&h=400',
-                            'tagline' => 'Kenyamanan Kepala & Leher',
+                            
                             'chips' => ['Microfiber', 'Memory Foam', 'Silikon'],
                         ],
                         'aksesoris-tidur' => [
                             'image' => 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600&h=400',
-                            'tagline' => 'Sprei, Topper & Pelindung',
+                            
                             'chips' => ['Matras Topper', 'Sprei Katun', 'Pelindung Kasur'],
                         ],
                     ];
@@ -502,9 +530,15 @@
                     @php
                         $visual = $categoryVisuals[$cat->slug] ?? [
                             'image' => 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&q=80&w=600&h=400',
-                            'tagline' => 'Kenyamanan Tidur Terbaik',
+                            
                             'chips' => ['Koleksi Pilihan'],
                         ];
+                        
+                        $catTagline = !empty($cat->tagline) ? $cat->tagline : 'Kenyamanan Tidur Terbaik';
+                        $catImage = $visual['image'];
+                        if (!empty($cat->banner_web)) {
+                            $catImage = cms_asset($cat->banner_web);
+                        }
                     @endphp
                     <a 
                         href="{{ route('category.show', $cat->slug) }}" 
@@ -513,7 +547,7 @@
                         <!-- Visual Image Container -->
                         <div class="relative w-full aspect-[4/3] bg-brand-muted overflow-hidden">
                             <img 
-                                src="{{ $visual['image'] }}" 
+                                src="{{ $catImage }}" 
                                 alt="{{ $cat->name }}" 
                                 class="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700 ease-out"
                                 loading="lazy"
@@ -530,7 +564,7 @@
                         <div class="p-4 sm:p-5 flex flex-col justify-between flex-1 gap-2.5">
                             <div>
                                 <span class="text-[10px] sm:text-[11px] font-bold text-brand-gold-dark uppercase tracking-[0.15em] block">
-                                    {{ $visual['tagline'] }}
+                                    {{ $catTagline }}
                                 </span>
                                 <h3 class="font-bold text-brand-dark text-base sm:text-lg group-hover:text-brand-gold-dark transition-colors mt-0.5 leading-snug font-serif">
                                     {{ $cat->name }}
@@ -547,6 +581,7 @@
                             </div>
                         </div>
                     </a>
+
                 @endforeach
             </div>
         </div>
@@ -631,7 +666,7 @@
     @endif
 
     @php $htmlBlocks['best_seller'] = ob_get_clean(); ob_start(); @endphp
-    <!-- Pilihan Brand (Official Brand Logo Strip / Trust Bar) -->
+    <!-- Brand (Official Brand Logo Strip / Trust Bar) -->
     @if(isset($brands) && $brands->isNotEmpty())
     <section class="py-6 sm:py-8 bg-white border-y border-brand-muted/40 font-sans">
         <div class="container mx-auto px-4 sm:px-6">
@@ -644,51 +679,62 @@
                     <span class="hidden sm:inline-block text-xs text-gray-500 font-medium">{{ __('Distributor Resmi Garansi Pabrik') }}</span>
                 </div>
 
-                <!-- Brand Vector Logos Strip (Dense & Balanced) -->
-                <div class="flex items-center gap-3 sm:gap-4 overflow-x-auto scrollbar-hide py-1 snap-x snap-mandatory flex-1 justify-start lg:justify-end">
-                    @foreach($brands as $brand)
-                        <a 
-                            href="{{ route('brands.show', $brand->slug) }}" 
-                            class="snap-start shrink-0 px-4 py-2.5 rounded-2xl bg-white hover:bg-white border border-gray-200 hover:border-brand-gold/50 shadow-sm hover:shadow-md transition-all duration-300 flex items-center justify-center min-w-[105px] sm:min-w-[125px] h-[46px] group hover:scale-105"
-                            title="{{ $brand->name }}"
-                        >
-                            @if($brand->slug === 'royal-foam')
-                                <div class="flex items-center gap-1.5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
-                                    <span class="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-black">R</span>
-                                    <div class="flex flex-col -space-y-1">
-                                        <span class="font-extrabold text-xs tracking-tight text-gray-800 group-hover:text-red-600 uppercase font-sans">ROYAL</span>
-                                        <span class="text-[8px] font-bold text-gray-500 tracking-widest uppercase">FOAM</span>
+                <!-- Brand Vector Logos Strip (Marquee Slowmo) -->
+                <style>
+                    @keyframes marquee-scroll {
+                        0% { transform: translateX(0); }
+                        100% { transform: translateX(-100%); }
+                    }
+                    .animate-marquee-slow {
+                        animation: marquee-scroll 35s linear infinite;
+                    }
+                    /* Optional: pause on hover */
+                    .marquee-container:hover .animate-marquee-slow {
+                        animation-play-state: paused;
+                    }
+                </style>
+                
+                @php
+                    // Ensure the list is long enough to cover wide screens
+                    $displayBrands = collect();
+                    while($displayBrands->count() < 12 && $brands->count() > 0) {
+                        $displayBrands = $displayBrands->merge($brands);
+                    }
+                @endphp
+                
+                <div class="relative flex-1 overflow-hidden flex items-center marquee-container py-2 group w-full lg:max-w-[70%]">
+                    <!-- Left and right gradient masks for smooth entering/exiting -->
+                    <div class="absolute left-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"></div>
+                    <div class="absolute right-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"></div>
+                    
+                    <!-- First track -->
+                    <div class="flex shrink-0 items-center gap-6 sm:gap-10 pr-6 sm:pr-10 animate-marquee-slow">
+                        @foreach($displayBrands as $brand)
+                            <a href="{{ route('brands.show', $brand->slug) }}" class="block shrink-0 transition-transform duration-300 hover:scale-105" title="{{ $brand->name }}">
+                                @if($brand->logo)
+                                    <img src="{{ cms_asset($brand->logo) }}" alt="{{ $brand->name }}" class="h-9 sm:h-12 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300 drop-shadow-sm hover:drop-shadow-md">
+                                @else
+                                    <div class="h-9 sm:h-12 px-4 rounded border border-gray-200 flex items-center justify-center bg-gray-50 transition-colors hover:border-brand-gold hover:bg-brand-light/30">
+                                        <span class="font-serif font-bold text-xs text-gray-700 hover:text-brand-dark">{{ $brand->name }}</span>
                                     </div>
-                                </div>
-                            @elseif($brand->slug === 'elite')
-                                <div class="flex items-center gap-1 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
-                                    <span class="font-serif font-black text-sm sm:text-base tracking-wider text-gray-800 group-hover:text-brand-gold-dark italic">Elite</span>
-                                    <span class="text-[8px] font-sans font-bold text-amber-600">★</span>
-                                </div>
-                            @elseif($brand->slug === 'lady-americana')
-                                <div class="flex flex-col items-center -space-y-0.5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
-                                    <span class="font-serif font-bold text-[11px] sm:text-xs tracking-widest text-gray-800 group-hover:text-blue-900 uppercase">LADY</span>
-                                    <span class="text-[8px] font-sans font-semibold tracking-[0.2em] text-gray-500 uppercase">AMERICANA</span>
-                                </div>
-                            @elseif($brand->slug === 'tote')
-                                <div class="flex items-center gap-1 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
-                                    <span class="px-1.5 py-0.5 rounded bg-gray-800 text-white font-mono text-[9px] font-black group-hover:bg-brand-dark">T</span>
-                                    <span class="font-sans font-black text-xs sm:text-sm tracking-tight text-gray-800 group-hover:text-brand-dark">tote.</span>
-                                </div>
-                            @elseif($brand->slug === 'moro')
-                                <div class="flex items-center gap-1 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
-                                    <span class="font-serif font-extrabold text-xs sm:text-sm tracking-[0.15em] text-gray-800 group-hover:text-emerald-800 uppercase">MORO</span>
-                                </div>
-                            @elseif($brand->slug === 'serenity')
-                                <div class="flex items-center gap-1.5 grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300">
-                                    <span class="text-xs font-serif italic text-gray-800 group-hover:text-purple-900 font-bold">Serenity</span>
-                                    <span class="text-[8px] font-sans font-semibold text-gray-400">BED</span>
-                                </div>
-                            @else
-                                <span class="font-serif font-bold text-xs text-gray-700 group-hover:text-brand-dark transition-colors">{{ $brand->name }}</span>
-                            @endif
-                        </a>
-                    @endforeach
+                                @endif
+                            </a>
+                        @endforeach
+                    </div>
+                    <!-- Second track (clone for seamless loop) -->
+                    <div class="flex shrink-0 items-center gap-6 sm:gap-10 pr-6 sm:pr-10 animate-marquee-slow" aria-hidden="true">
+                        @foreach($displayBrands as $brand)
+                            <a href="{{ route('brands.show', $brand->slug) }}" class="block shrink-0 transition-transform duration-300 hover:scale-105" title="{{ $brand->name }}" tabindex="-1">
+                                @if($brand->logo)
+                                    <img src="{{ cms_asset($brand->logo) }}" alt="{{ $brand->name }}" class="h-9 sm:h-12 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300 drop-shadow-sm hover:drop-shadow-md">
+                                @else
+                                    <div class="h-9 sm:h-12 px-4 rounded border border-gray-200 flex items-center justify-center bg-gray-50 transition-colors hover:border-brand-gold hover:bg-brand-light/30">
+                                        <span class="font-serif font-bold text-xs text-gray-700 hover:text-brand-dark">{{ $brand->name }}</span>
+                                    </div>
+                                @endif
+                            </a>
+                        @endforeach
+                    </div>
                 </div>
             </div>
         </div>
@@ -810,14 +856,8 @@
                         <!-- Promo Banner Image (Left) -->
                         @php
                             $safeName = \Illuminate\Support\Str::slug($brand->name);
-                            $customLogo = $promoMeta['brands'][$safeName]['logo'] ?? null;
                             $customBanner = $promoMeta['brands'][$safeName]['banner'] ?? null;
-                            
-                            $logoUrl = $customLogo ?: ($brand->logo ? cms_asset($brand->logo) : null);
                             $bannerUrl = $customBanner ?: ($brand->banner_web ? cms_asset($brand->banner_web) : ($brand->banner ? cms_asset($brand->banner) : null));
-                            if (!$bannerUrl && $logoUrl) {
-                                $bannerUrl = $logoUrl;
-                            }
                         @endphp
                         <div class="w-full md:w-1/3 relative h-[220px] sm:h-[300px] md:h-auto min-h-[280px] md:min-h-[360px] order-1 md:order-1 rounded-2xl sm:rounded-3xl overflow-hidden group shadow-lg flex-shrink-0 bg-brand-dark">
                             <!-- Banner Image -->
@@ -826,7 +866,7 @@
                             @endif
                             
                             <!-- Overlay Gradient -->
-                            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/95 via-brand-dark/45 to-transparent"></div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/95 via-brand-dark/60 to-brand-dark/10"></div>
                             
                             <!-- Banner Text & CTA -->
                             <div class="absolute inset-0 p-6 sm:p-7 flex flex-col justify-end text-center items-center">
@@ -949,7 +989,6 @@
             @endif
         </div>
     </section>
-
     @php $htmlBlocks['rekomendasi'] = ob_get_clean(); @endphp
     <!-- Dynamic Section Renderer -->
     @php
@@ -963,7 +1002,7 @@
         @if((str_contains($lowerKey, 'kategori') || str_contains($lowerKey, 'category')) && isset($htmlBlocks['kategori']))
             {!! $htmlBlocks['kategori'] !!}
             @php unset($htmlBlocks['kategori']); @endphp
-        @elseif((str_contains($lowerKey, 'pilihan') || str_contains($lowerKey, 'pilihan brand') || str_contains($lowerKey, 'merek')) && isset($htmlBlocks['pilihan_brand']))
+        @elseif((str_contains($lowerKey, 'pilihan') || str_contains($lowerKey, 'Brand') || str_contains($lowerKey, 'merek')) && isset($htmlBlocks['pilihan_brand']))
             {!! $htmlBlocks['pilihan_brand'] !!}
             @php unset($htmlBlocks['pilihan_brand']); @endphp
         @elseif(str_contains($lowerKey, 'promo') && isset($htmlBlocks['promo_brand']))
@@ -1088,5 +1127,6 @@
             </div>
         @endif
     @endif
+
 @endsection
 

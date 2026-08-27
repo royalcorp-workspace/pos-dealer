@@ -16,43 +16,24 @@ class PaymentGatewayController extends Controller
 {
     public function methods()
     {
+        $dbMethods = \App\Models\PaymentMethod::active()->orderBy('sort_order')->get();
         $methods = [];
-        try {
-            $espayUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
-            $response = \Illuminate\Support\Facades\Http::asForm()->post($espayUrl, [
-                'key' => config('espay.api_key', '')
-            ]);
-            
-            if ($response->successful() && $response->json('error_code') === '0000') {
-                $espayData = $response->json('data') ?? [];
-                foreach ($espayData as $espayMethod) {
-                    $code = $espayMethod['productCode'];
-                    $isTransfer = str_contains(strtoupper($code), 'ATM') || str_contains(strtoupper($code), 'VA') || str_contains(strtoupper($code), 'CREDITCARD') || str_contains(strtoupper($code), 'PERMATA');
-                    
-                    $methods[] = [
-                        'code' => $code,
-                        'name' => $espayMethod['productName'],
-                        'type' => $isTransfer ? 'Virtual Account' : 'E-Wallet',
-                        'icon' => null,
-                    ];
-                }
-            }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Gagal mengambil API merchantinfo dari Espay: ' . $e->getMessage());
-        }
 
-        // Add manual transfer from DB
-        $manual = \App\Models\PaymentMethod::where('code', 'transfer_manual')->first();
-        if ($manual) {
+        foreach ($dbMethods as $method) {
             $methods[] = [
-                'code' => $manual->code,
-                'name' => $manual->name,
-                'type' => 'Bank Transfer Manual',
-                'icon' => $manual->image,
+                'code' => $method->code,
+                'name' => $method->name,
+                'type' => $method->typeLabel(),
+                'has_charge' => $method->has_charge,
+                'charge_value' => $method->charge_value,
+                'charge_type' => $method->charge_type, // 1: Percentage, 2: Fixed
             ];
         }
 
-        return response()->json(['methods' => $methods]);
+        return response()->json([
+            'success' => true,
+            'data' => $methods
+        ]);
     }
 
     public function create(Request $request)
@@ -231,8 +212,40 @@ class PaymentGatewayController extends Controller
                 // order status 2 = Confirmed
                 $order->update([
                     'payment_status' => 2,
-                    'status' => \App\Models\Frontend\Order::STATUS_CONFIRMED,
+                    'status' => \App\Models\Frontend\Order::STATUS_PROCESSING,
                 ]);
+
+                if ($order->settlement_id) {
+                    $settlement = \App\Models\Settlement::find($order->settlement_id);
+                    if ($settlement) {
+                        $settlement->update([
+                            'status' => 'success',
+                            'settlement_date' => now(),
+                        ]);
+                    }
+                }
+
+                \App\Models\CreditMemo::create([
+                    'id' => \Illuminate\Support\Str::uuid()->toString(),
+                    'credit_memo_number' => 'CM-' . $order->order_number . '-' . rand(100, 999),
+                    'order_id' => $order->id,
+                    'gateway' => 'espay',
+                    'transaction_id' => $request->input('reconcile_id') ?? \Illuminate\Support\Str::uuid()->toString(),
+                    'amount' => $order->total,
+                    'status' => 'success',
+                    'payload' => $request->all(),
+                    'paid_at' => now(),
+                ]);
+                
+                try {
+                    $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
+                    if ($customerEmail) {
+                        \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\PaymentSuccess($order));
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Gagal mengirim email PaymentSuccess (Legacy): ' . $e->getMessage());
+                }
+
                 \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Payment success processed for Order ID: {$orderId}");
             } else {
                 \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Payment already processed for Order ID: {$orderId}");

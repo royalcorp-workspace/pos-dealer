@@ -13,23 +13,61 @@
             preg_match('/\d+/', $variant->variant_name, $matches);
             return $matches ? (int) $matches[0] : 999999;
         })->values();
-        $validVariants = $variantsData->where('price', '>', 0);
+        $validVariants = $variantsData->filter(function($v) { return (float) $v->sell_price > 0; });
         $colorsData = $product->colors->sortBy('color_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $hasVariants = $validVariants->isNotEmpty();
         $hasColors = $colorsData->isNotEmpty();
-        $basePrice = (float)($product->base_price ?? 0);
-        $minPrice = $hasVariants ? $validVariants->min('price') : null;
-        $maxPrice = $hasVariants ? $validVariants->max('price') : null;
-        $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
         $firstVariantName = $hasVariants ? $validVariants->first()->variant_name : '';
         $totalStock = 999;
-        $originalPrice = $hasVariants && $minPrice ? (float) $minPrice : $basePrice;
-        $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalPrice;
-        $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
-        $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
-        $displayMaxPrice = $hasMultiplePrices ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
-        $promoOriginalPrice = $staticPromo ? $originalPrice : null;
-        $promoOriginalMaxPrice = $staticPromo && $hasMultiplePrices ? $originalMaxPrice : null;
+        
+        $minPrice = $hasVariants ? $validVariants->min('sell_price') : null;
+        $maxPrice = $hasVariants ? $validVariants->max('sell_price') : null;
+        $minBasePrice = $hasVariants ? $validVariants->min('base_price') : null;
+        $maxBasePrice = $hasVariants ? $validVariants->max('base_price') : null;
+
+        $originalMinPrice = $hasVariants && $minPrice ? (float) $minPrice : (float) (0);
+        $originalMaxPrice = $hasVariants && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+        $originalMinBasePrice = $hasVariants && $minBasePrice ? (float) $minBasePrice : $originalMinPrice;
+        $originalMaxBasePrice = $hasVariants && $maxBasePrice ? (float) $maxBasePrice : $originalMaxPrice;
+
+        $hasMultiplePrices = $hasVariants && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+        $hasDefaultDiscount = $originalMinBasePrice > $originalMinPrice;
+        $defaultDiscountPct = $hasDefaultDiscount ? round((($originalMinBasePrice - $originalMinPrice) / $originalMinBasePrice) * 100) : 0;
+
+        $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalMinPrice);
+        
+        $price = $originalMinPrice;
+        $displayMaxPrice = $hasMultiplePrices ? $originalMaxPrice : null;
+        $strikeMinPrice = $hasDefaultDiscount ? $originalMinBasePrice : null;
+        $strikeMaxPrice = $hasDefaultDiscount && $hasMultiplePrices ? $originalMaxBasePrice : null;
+        $discountBadge = null;
+
+        $defaultDiscountBadge = $hasDefaultDiscount && $defaultDiscountPct > 0 ? $defaultDiscountPct . '% OFF' : null;
+        $ppsDiscountBadge = null;
+
+        if ($staticPromo) {
+            $price = \App\Services\StaticPromoService::discountedPrice($originalMinPrice, $staticPromo);
+            $displayMaxPrice = $hasMultiplePrices ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
+            
+            $strikeMinPrice = $hasDefaultDiscount ? $originalMinBasePrice : $originalMinPrice;
+            $strikeMaxPrice = $hasMultiplePrices ? ($hasDefaultDiscount ? $originalMaxBasePrice : $originalMaxPrice) : null;
+            
+            if ($strikeMinPrice > 0) {
+                $totalDiscountPct = round((($strikeMinPrice - $price) / $strikeMinPrice) * 100);
+                if ($hasDefaultDiscount && $defaultDiscountPct > 0) {
+                    $ppsDiscountPct = round((($originalMinPrice - $price) / $originalMinPrice) * 100);
+                    $ppsDiscountBadge = 'EXTRA ' . $ppsDiscountPct . '% OFF';
+                } else {
+                    $defaultDiscountBadge = $totalDiscountPct . '% OFF';
+                }
+            }
+        }
+        
+        // Setup alias for schema & Alpine component
+        $originalPrice = $price;
+        $promoOriginalPrice = $strikeMinPrice;
+        $promoOriginalMaxPrice = $strikeMaxPrice;
+
         $availability = $totalStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
         $images = collect([$product->thumbnail_url])
             ->merge($product->images->map(fn($image) => $image->image_url ?? ($image->image ? asset('storage/' . $image->image) : null)))
@@ -40,7 +78,7 @@
         $brandName = $product->brand->name ?? 'IMG';
         $categoryName = $product->category->name ?? 'Kategori';
         $categoryUrl = $product->category?->slug ? route('category.show', $product->category->slug) : route('categories');
-        $brandUrl = $product->brand?->slug ? route('products.index', ['type' => 'brand', 'value' => $product->brand->slug]) : route('brands');
+        $brandUrl = $product->brand?->slug ? route('brands.show', $product->brand->slug) : route('brands');
         $productUrl = route('products.show', $product->slug);
         $wishlist = session()->get('wishlist', []);
         $isInWishlist = in_array($product->id, $wishlist);
@@ -289,12 +327,12 @@
                             <div class="mb-6">
                                 <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">{{ __('Pilih Ukuran / Tipe') }}</h3>
                                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                                    @foreach($variantsData as $i => $variant)
+                                    @foreach($validVariants as $i => $variant)
                                         <button 
                                             type="button"
                                             data-variant-id="{{ $variant->id }}"
-                                            data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->price, $staticPromo) }}"
-                                            data-variant-original-price="{{ $variant->price }}"
+                                            data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->sell_price, $staticPromo) }}"
+                                            data-variant-original-price="{{ $variant->sell_price }}"
                                             onclick="selectVariant(this)"
                                             class="py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs legacy-variant-btn cursor-pointer"
                                         >
@@ -581,7 +619,7 @@
 
 @push('scripts')
 @php
-    $mappedVariants = collect($variantsData ?? [])->map(function($v) {
+    $mappedVariants = collect($validVariants ?? [])->map(function($v) {
         $rawAttrs = $v->getRawOriginal('attributes');
         $parsedAttrs = [];
         if ($rawAttrs) {
@@ -609,7 +647,8 @@
         }
         return [
             'id' => $v->id,
-            'price' => $v->price,
+            'price' => $v->sell_price,
+            'base_price' => $v->base_price,
             'variant_name' => $v->variant_name,
             'attributes' => $parsedAttrs
         ];

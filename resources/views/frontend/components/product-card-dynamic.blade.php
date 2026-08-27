@@ -1,49 +1,72 @@
 @props(['product'])
 
 @php
-    $validVariants = $product->variants->where('price', '>', 0);
+    $validVariants = $product->variants->where('sell_price', '>', 0);
     $isVariable = $validVariants->isNotEmpty();
-    $hasStock = true;
-    $isSoldOut = false;
-    $minPrice = $isVariable ? $validVariants->min('price') : null;
-    $maxPrice = $isVariable ? $validVariants->max('price') : null;
-    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) ($product->base_price ?? 0);
+    $minPrice = $isVariable ? $validVariants->min('sell_price') : null;
+    $maxPrice = $isVariable ? $validVariants->max('sell_price') : null;
+    
+    $minBasePrice = $isVariable ? $validVariants->min('base_price') : null;
+    $maxBasePrice = $isVariable ? $validVariants->max('base_price') : null;
+
+    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) (0);
     $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+    
+    $originalMinBasePrice = $isVariable && $minBasePrice ? (float) $minBasePrice : $originalMinPrice;
+    $originalMaxBasePrice = $isVariable && $maxBasePrice ? (float) $maxBasePrice : $originalMaxPrice;
+
     $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+    
+    $hasDefaultDiscount = $originalMinBasePrice > $originalMinPrice;
+    $defaultDiscountPct = $hasDefaultDiscount ? round((($originalMinBasePrice - $originalMinPrice) / $originalMinBasePrice) * 100) : 0;
+
     $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalMinPrice);
+    
     $price = $originalMinPrice;
     $displayOriginalPrice = $hasPriceRange ? $originalMaxPrice : null;
-    $promoOriginalMinPrice = null;
-    $promoOriginalMaxPrice = null;
+    
+    $strikeMinPrice = $hasDefaultDiscount ? $originalMinBasePrice : null;
+    $strikeMaxPrice = $hasDefaultDiscount && $hasPriceRange ? $originalMaxBasePrice : null;
+
+    $defaultDiscountBadge = $hasDefaultDiscount && $defaultDiscountPct > 0 ? $defaultDiscountPct . '% OFF' : null;
+    $ppsDiscountBadge = null;
+    $ppsDiscountPct = 0;
 
     if ($staticPromo) {
         $price = \App\Services\StaticPromoService::discountedPrice($originalMinPrice, $staticPromo);
         $displayOriginalPrice = $hasPriceRange ? \App\Services\StaticPromoService::discountedPrice($originalMaxPrice, $staticPromo) : null;
-        $promoOriginalMinPrice = $originalMinPrice;
-        $promoOriginalMaxPrice = $originalMaxPrice;
+        
+        $strikeMinPrice = $hasDefaultDiscount ? $originalMinBasePrice : $originalMinPrice;
+        $strikeMaxPrice = $hasPriceRange ? ($hasDefaultDiscount ? $originalMaxBasePrice : $originalMaxPrice) : null;
+        
+        if ($strikeMinPrice > 0) {
+            $totalDiscountPct = round((($strikeMinPrice - $price) / $strikeMinPrice) * 100);
+            if ($hasDefaultDiscount && $defaultDiscountPct > 0) {
+                $ppsDiscountPct = round((($originalMinPrice - $price) / $originalMinPrice) * 100);
+                $ppsDiscountBadge = 'EXTRA ' . $ppsDiscountPct . '% OFF';
+            } else {
+                $defaultDiscountBadge = $totalDiscountPct . '% OFF';
+            }
+        }
     }
-
-    $reviewMinPrice = $isVariable ? \App\Services\StaticPromoService::discountedPrice((float) ($minPrice ?? 0), $staticPromo) : (float) $price;
-    $reviewMaxPrice = $isVariable && $hasPriceRange ? \App\Services\StaticPromoService::discountedPrice((float) ($maxPrice ?? 0), $staticPromo) : (float) $price;
-
+    
+    $isInWishlist = false;
+    $isSoldOut = false;
+    $hasStock = true;
+    
+    // Data untuk review component
     $reviewPayload = [
-        'id' => (string) $product->id,
+        'id' => $product->id,
         'name' => $product->name,
-        'image' => $product->thumbnail_url ?? 'https://via.placeholder.com/400x300',
-        'rating' => (float) ($product->rating ?? 0),
-        'reviewsCount' => (int) ($product->reviewsCount ?? 0),
-        'isVariable' => $isVariable,
-        'price' => (float) $price,
-        'minPrice' => $reviewMinPrice,
-        'maxPrice' => $reviewMaxPrice,
-        'originalPrice' => $originalMinPrice,
-        'originalMinPrice' => $originalMinPrice,
-        'originalMaxPrice' => $originalMaxPrice,
-        'hasDiscount' => (bool) $staticPromo,
-        'discountLabel' => $staticPromo['label'] ?? null,
-        'reviews' => [],
+        'image' => $product->thumbnail_url ?? '',
+        'brand' => $product->brand->name ?? '',
+        'rating' => number_format($product->average_rating ?? 0, 1),
+        'reviewsCount' => $product->review_count ?? 0,
+        'slug' => $product->slug,
     ];
 @endphp
+
+
 
 @php
     $wishlist = session()->get('wishlist', []);
@@ -75,6 +98,7 @@
                     -{{ $staticPromo['label'] }}
                 </span>
             @endif
+
             @if($product->best_seller)
                 <span class="bg-brand-dark/95 text-brand-gold-light text-[9px] sm:text-[11px] font-bold px-2.5 py-0.5 sm:py-1 rounded-full shadow-xs tracking-wider uppercase border border-brand-gold/30">
                     ⭐ Best Seller

@@ -103,6 +103,9 @@ window.updateCartHeader = function (count, total) {
         }
     }
 
+    const drawerCount = document.getElementById('cart-drawer-count');
+    if (drawerCount) drawerCount.textContent = count;
+
     if (badge) {
         badge.textContent = count;
     }
@@ -147,7 +150,10 @@ window.updateWishlistBadge = function (delta) {
             headerIcon.parentElement.appendChild(badge);
         }
 
-        if (badge) {
+        const drawerCount = document.getElementById('cart-drawer-count');
+    if (drawerCount) drawerCount.textContent = count;
+
+    if (badge) {
             badge.textContent = nextCount;
             badge.classList.remove('hidden');
         }

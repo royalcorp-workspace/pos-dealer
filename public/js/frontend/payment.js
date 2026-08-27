@@ -10,6 +10,7 @@ window.processPayment = function () {
     var container = document.getElementById('payment-container');
     var processUrl = container ? container.dataset.routePaymentProcess : '/payment/process';
     var thankYouUrl = container ? container.dataset.routeThankyou : '/thankyou';
+    var orderId = container ? container.dataset.orderId : '';
 
     var body, headers;
 
@@ -23,6 +24,7 @@ window.processPayment = function () {
         window.showLoading();
         body = new FormData();
         body.append('payment_method', selectedMethod.value);
+        body.append('order_id', orderId);
         body.append('payment_proof', fileInput.files[0]);
 
         headers = {
@@ -32,7 +34,8 @@ window.processPayment = function () {
     } else {
         window.showLoading();
         body = JSON.stringify({
-            payment_method: selectedMethod.value
+            payment_method: selectedMethod.value,
+            order_id: orderId
         });
         headers = {
             'Content-Type': 'application/json',
@@ -49,35 +52,8 @@ window.processPayment = function () {
             localStorage.removeItem('selectedCartCoupon');
             localStorage.removeItem('selectedCartCoupons');
             
-            if (data.open_iframe && typeof SGOSignature !== 'undefined') {
-                // Konfigurasi data iframe Espay
-                var iframeData = {
-                    key: window.espayConfig.key,
-                    paymentId: window.espayConfig.paymentId,
-                    backUrl: window.espayConfig.backUrl,
-                    bankCode: data.bank_code
-                };
-
-                // Tampilkan iframe
-                var buttonContainer = document.getElementById('payment-button-container');
-                var iframeContainer = document.getElementById('espay-iframe-container');
-                var sgoPlusIframe = document.getElementById("sgoplus-iframe");
-                
-                if (buttonContainer) buttonContainer.classList.add('hidden');
-                iframeContainer.classList.remove('hidden');
-                
-                try {
-                    sgoPlusIframe.src = SGOSignature.getIframeURL(iframeData);
-                    SGOSignature.receiveForm();
-                    iframeContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                } catch (err) {
-                    console.error('Error saat inisialisasi Espay:', err);
-                    window.location.href = data.redirect_url || thankYouUrl;
-                }
-            } else {
-                // Fallback / Redirect biasa
-                window.location.href = data.redirect_url || thankYouUrl;
-            }
+            // Redirect biasa (tanpa Iframe Snap)
+            window.location.href = data.redirect_url || thankYouUrl;
         } else {
             window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Gagal memproses pembayaran.' } }));
         }
@@ -92,9 +68,42 @@ document.addEventListener('DOMContentLoaded', function() {
     var radios = document.querySelectorAll('input[name="payment_method"]');
     var detailsContainer = document.getElementById('transfer-manual-details');
     var banksContainer = document.getElementById('instructions-banks-container');
+    var chargeRow = document.getElementById('charge-row');
+    var chargeAmountLabel = document.getElementById('charge-amount');
+    var finalTotalLabel = document.getElementById('final-total');
     
     function toggleDetails() {
         var selected = document.querySelector('input[name="payment_method"]:checked');
+        
+        // 1. Kalkulasi Charge/Biaya Admin
+        if (selected && finalTotalLabel) {
+            var baseTotal = parseFloat(finalTotalLabel.getAttribute('data-base-total') || '0');
+            var hasCharge = selected.getAttribute('data-has-charge') === '1';
+            var chargeType = parseInt(selected.getAttribute('data-charge-type') || '2');
+            var chargeValue = parseFloat(selected.getAttribute('data-charge-value') || '0');
+            
+            var charge = 0;
+            if (hasCharge && chargeValue > 0) {
+                if (chargeType === 1) { // Percentage
+                    charge = (baseTotal * chargeValue) / 100;
+                } else { // Fixed
+                    charge = chargeValue;
+                }
+            }
+            
+            if (charge > 0) {
+                if (chargeRow) chargeRow.classList.remove('hidden');
+                if (chargeAmountLabel) chargeAmountLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(charge);
+            } else {
+                if (chargeRow) chargeRow.classList.add('hidden');
+            }
+            
+            if (finalTotalLabel) {
+                finalTotalLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(baseTotal + charge);
+            }
+        }
+        
+        // 2. Tampilkan Instruksi Transfer Manual (jika dipilih)
         if (selected && selected.getAttribute('data-is-manual') === '1') {
             var banksData = [];
             try {
@@ -150,4 +159,49 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Trigger initially in case of preselected radio button
     toggleDetails();
+});
+
+// Initialize countdown timer
+document.addEventListener('DOMContentLoaded', function() {
+    var countdownEl = document.getElementById('payment-countdown');
+    if (!countdownEl) return;
+    
+    var createdStr = countdownEl.getAttribute('data-created');
+    if (!createdStr) return;
+    
+    // Set expiration to 24 hours after creation
+    var createdAt = new Date(createdStr).getTime();
+    var expireAt = createdAt + (24 * 60 * 60 * 1000);
+    
+    function updateTimer() {
+        var now = new Date().getTime();
+        var distance = expireAt - now;
+        
+        if (distance < 0) {
+            countdownEl.innerHTML = "00:00:00";
+            countdownEl.classList.add('text-gray-400');
+            countdownEl.classList.remove('text-red-600');
+            // Show expired message or disable payment button if needed
+            var btn = document.querySelector('button[onclick="processPayment()"]');
+            if(btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = 'Waktu Habis';
+            }
+            return;
+        }
+        
+        var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+        
+        hours = hours < 10 ? "0" + hours : hours;
+        minutes = minutes < 10 ? "0" + minutes : minutes;
+        seconds = seconds < 10 ? "0" + seconds : seconds;
+        
+        countdownEl.innerHTML = hours + ":" + minutes + ":" + seconds;
+    }
+    
+    updateTimer();
+    setInterval(updateTimer, 1000);
 });

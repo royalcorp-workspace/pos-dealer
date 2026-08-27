@@ -204,7 +204,9 @@
 
             const countBadge = document.getElementById('cart-count-badge');
             const headerTotal = document.getElementById('header-cart-total');
+            const drawerCount = document.getElementById('cart-drawer-count');
             if (countBadge) countBadge.textContent = data.cart_count || 0;
+            if (drawerCount) drawerCount.textContent = data.cart_count || 0;
             if (headerTotal) headerTotal.textContent = formatRupiah(data.cart_total || 0);
 
             document.dispatchEvent(new CustomEvent('cart-drawer-updated'));

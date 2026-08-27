@@ -43,7 +43,7 @@
                     'name' => $item->name,
                     'brand' => $item->product->brand->name ?? '',
                     'image' => $item->product->thumbnail_url ?? '',
-                    'price' => (float) $item->unit_price,
+                    'sell_price' => (float) $item->unit_price,
                     'quantity' => (int) $item->quantity,
                     'item_note' => $item->item_notes ?? '',
                     'type' => $isBundle ? 'bundle' : 'product',
@@ -54,7 +54,7 @@
     }
     $cartItemCount = collect($cart)->sum('quantity');
     $cartTotal = collect($cart)->sum(function($item) {
-        return $item['price'] * $item['quantity'];
+        return $item['sell_price'] * $item['quantity'];
     });
 @endphp
 
@@ -93,7 +93,7 @@
                 <div class="h-full flex flex-col bg-white shadow-2xl overflow-y-scroll">
                     <div class="flex items-center justify-between p-5 md:p-6 border-b border-brand-muted">
                         <h2 class="text-xl font-bold text-brand-dark flex items-center gap-2">
-                            {{ __('Shopping Cart') }} <span class="text-gray-400 font-normal text-base">({{ $cartItemCount }} {{ __('items') }})</span>
+                            {{ __('Shopping Cart') }} <span class="text-gray-400 font-normal text-base">(<span id="cart-drawer-count">{{ $cartItemCount }}</span> {{ __('items') }})</span>
                         </h2>
                         <button
                             @click="isCartOpen = false"

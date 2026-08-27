@@ -102,8 +102,41 @@ class SnapBiController extends Controller
 
         if ($order->payment_status !== 2) {
             $order->payment_status = 2; // Paid
-            $order->status = Order::STATUS_CONFIRMED;
+            $order->status = Order::STATUS_PROCESSING;
             $order->save();
+
+            // Update status Settlement jika ada
+            if ($order->settlement_id) {
+                $settlement = \App\Models\Settlement::find($order->settlement_id);
+                if ($settlement) {
+                    $settlement->update([
+                        'status' => 'success',
+                        'settlement_date' => now(),
+                    ]);
+                }
+            }
+
+            // Catat ke tabel payments
+            \App\Models\CreditMemo::create([
+                'id' => \Illuminate\Support\Str::uuid()->toString(),
+                'credit_memo_number' => 'CM-' . $order->order_number . '-' . rand(100, 999),
+                'order_id' => $order->id,
+                'gateway' => 'espay',
+                'transaction_id' => $request->input('inquiryRequestId') ?? \Illuminate\Support\Str::uuid()->toString(),
+                'amount' => $order->total,
+                'status' => 'success',
+                'payload' => $request->all(),
+                'paid_at' => now(),
+            ]);
+
+            try {
+                $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
+                if ($customerEmail) {
+                    \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\PaymentSuccess($order));
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Gagal mengirim email PaymentSuccess (Snap): ' . $e->getMessage());
+            }
         }
 
         $responseData = [

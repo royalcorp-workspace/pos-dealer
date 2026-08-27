@@ -26,6 +26,7 @@ class HomeController extends Controller
             ->get();
 
         $recommended = Product::where('deleted', false)
+            ->whereNotIn('id', $bestsellers->pluck('id'))
             ->with(['brand', 'category', 'images', 'variants', 'tags'])
             ->take(10)
             ->get();
@@ -54,7 +55,7 @@ class HomeController extends Controller
         $categories = ProductCategory::where('deleted', false)
             ->whereNull('parent_id')
             ->withCount('products')
-            ->take(6)
+            ->take(8)
             ->get();
 
         $brands = Brand::where('deleted', false)
@@ -70,8 +71,8 @@ class HomeController extends Controller
 
         foreach ($brands as $brand) {
             $brand->top_promo_products = $brand->products->map(function($product) {
-                $validVariants = $product->variants->where('price', '>', 0);
-                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('price') : (float) ($product->base_price ?? 0);
+                $validVariants = $product->variants->where('sell_price', '>', 0);
+                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('sell_price') : (float) (0 ?? 0);
                 $promo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
                 $discountedPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $promo);
                 
@@ -106,7 +107,7 @@ class HomeController extends Controller
         $bundles = ProductBundling::where('is_active', true)
             ->with(['items.product.brand', 'items.product.images', 'items.variant'])
             ->orderBy('created_at', 'desc')
-            ->take(6)
+            ->take(8)
             ->get();
 
         foreach ($bundles as $bundle) {
@@ -115,9 +116,10 @@ class HomeController extends Controller
             if ($bundle->items) {
                 foreach ($bundle->items as $item) {
                     if ($item->variant) {
-                        $totalProductPrice += (float) $item->variant->price * $item->quantity;
+                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
                     } elseif ($item->product) {
-                        $totalProductPrice += (float) $item->product->base_price * $item->quantity;
+                        $minPrice = $item->product->variants->where('status', true)->min('sell_price') ?? 0;
+                        $totalProductPrice += (float) $minPrice * $item->quantity;
                     }
                 }
             }
@@ -193,9 +195,10 @@ class HomeController extends Controller
 
     private function getSortExpression(?string $sort): string
     {
+        $minPriceSubquery = '(SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND status = true)';
         return match ($sort) {
-            'price_asc' => 'base_price ASC',
-            'price_desc' => 'base_price DESC',
+            'price_asc' => $minPriceSubquery . ' ASC',
+            'price_desc' => $minPriceSubquery . ' DESC',
             'newest' => 'created_at DESC',
             'oldest' => 'created_at ASC',
             'name_asc' => 'name ASC',

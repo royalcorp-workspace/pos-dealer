@@ -16,28 +16,37 @@ class ProductCatalogController extends Controller
         $filterType = $request->query('type');
         $filterValue = $request->query('value');
 
-        // Handle direct root slug (catch-all route)
-        $urlSlug = $request->route()->parameter('tagSlug') ?? $request->route()->parameter('categorySlug') ?? $request->route()->parameter('brandSlug');
-        
-        if ($urlSlug && !$filterType) {
-            // Check if it's a Category
-            if (ProductCategory::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+        if (!$filterType) {
+            $catSlug = $request->route()->parameter('categorySlug');
+            $brandSlug = $request->route()->parameter('brandSlug');
+            $tagSlug = $request->route()->parameter('tagSlug');
+            $genericSlug = $request->route()->parameter('slug');
+
+            if ($catSlug) {
                 $filterType = 'category';
-                $filterValue = $urlSlug;
-            } 
-            // Check if it's a Brand
-            elseif (Brand::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterValue = $catSlug;
+                if (!\App\Models\Frontend\ProductsCatalog\ProductCategory::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
+            } elseif ($brandSlug) {
                 $filterType = 'brand';
-                $filterValue = $urlSlug;
-            }
-            // Check if it's a Tag
-            elseif (ProductTag::where('slug', $urlSlug)->where('deleted', false)->exists()) {
+                $filterValue = $brandSlug;
+                if (!\App\Models\Frontend\ProductsCatalog\Brand::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
+            } elseif ($tagSlug) {
                 $filterType = 'tag';
-                $filterValue = $urlSlug;
-            }
-            // If it doesn't match any entity, it's an invalid URL, so 404
-            else {
-                abort(404);
+                $filterValue = $tagSlug;
+                if (!\App\Models\Frontend\ProductsCatalog\ProductTag::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
+            } elseif ($genericSlug) {
+                if (\App\Models\Frontend\ProductsCatalog\ProductCategory::where('slug', $genericSlug)->where('deleted', false)->exists()) {
+                    $filterType = 'category';
+                    $filterValue = $genericSlug;
+                } elseif (\App\Models\Frontend\ProductsCatalog\Brand::where('slug', $genericSlug)->where('deleted', false)->exists()) {
+                    $filterType = 'brand';
+                    $filterValue = $genericSlug;
+                } elseif (\App\Models\Frontend\ProductsCatalog\ProductTag::where('slug', $genericSlug)->where('deleted', false)->exists()) {
+                    $filterType = 'tag';
+                    $filterValue = $genericSlug;
+                } else {
+                    abort(404);
+                }
             }
         }
 
@@ -79,14 +88,14 @@ class ProductCatalogController extends Controller
             ->orderBy('sort_order')
             ->get();
 
-        $query = Product::where('deleted', false)
+        $query = Product::where('products.deleted', false)
             ->select('products.*')
             ->selectRaw('
                 COALESCE(
                     (SELECT 
                         CASE 
-                            WHEN ppsi.discount_type = 1 THEN CAST(products.base_price AS numeric) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
-                            ELSE CAST(products.base_price AS numeric) - CAST(ppsi.discount_value AS numeric)
+                            WHEN ppsi.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) - CAST(ppsi.discount_value AS numeric)
                         END
                      FROM price_product_setting_items ppsi
                      JOIN price_product_settings pps ON pps.id = ppsi.price_product_setting_id
@@ -100,8 +109,8 @@ class ProductCatalogController extends Controller
                     ),
                     (SELECT
                         CASE 
-                            WHEN pps.discount_type = 1 THEN CAST(products.base_price AS numeric) * (1 - CAST(pps.discount_value AS numeric) / 100)
-                            ELSE CAST(products.base_price AS numeric) - CAST(pps.discount_value AS numeric)
+                            WHEN pps.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) * (1 - CAST(pps.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) - CAST(pps.discount_value AS numeric)
                         END
                      FROM price_product_settings pps
                      WHERE pps.scope = 1
@@ -111,7 +120,7 @@ class ProductCatalogController extends Controller
                        AND (pps.end_date IS NULL OR pps.end_date >= NOW())
                      LIMIT 1
                     ),
-                    CAST(products.base_price AS numeric)
+                    (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false)
                 ) as promo_price
             ')
             ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
@@ -162,10 +171,10 @@ class ProductCatalogController extends Controller
         if ($minPrice || $maxPrice) {
             $query->whereHas('variants', function ($q) use ($minPrice, $maxPrice) {
                 if ($minPrice) {
-                    $q->where('price', '>=', $minPrice);
+                    $q->where('sell_price', '>=', $minPrice);
                 }
                 if ($maxPrice) {
-                    $q->where('price', '<=', $maxPrice);
+                    $q->where('sell_price', '<=', $maxPrice);
                 }
             });
         }
@@ -254,6 +263,10 @@ class ProductCatalogController extends Controller
         $hasAnyNonIgnoredAttr = false;
         
         foreach ($product->variants as $variant) {
+            // Skip invalid variants (0 price)
+            if ((float) $variant->sell_price <= 0) {
+                continue;
+            }
             $variantAttributes = [];
             $rawAttributes = $variant->getRawOriginal('attributes');
             if ($rawAttributes) {
@@ -377,10 +390,9 @@ class ProductCatalogController extends Controller
         ->values()
         ->map(function ($product) {
             $variantsData = $product->variants;
-            $validVariants = $variantsData->where('price', '>', 0);
+            $validVariants = $variantsData->where('sell_price', '>', 0);
             $hasVariants = $validVariants->isNotEmpty();
-            $basePrice = (float)($product->base_price ?? 0);
-            $originalPrice = $hasVariants ? (float) $validVariants->first()->price : $basePrice;
+            $originalPrice = $hasVariants ? (float) $validVariants->first()->price : 0;
             $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
             $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
 
@@ -389,7 +401,7 @@ class ProductCatalogController extends Controller
                 'name' => $product->name,
                 'slug' => $product->slug,
                 'thumbnail_url' => $product->thumbnail_url,
-                'price' => $price,
+                'sell_price' => $price,
                 'category' => $product->category->name ?? '',
                 'brand' => $product->brand->name ?? ''
             ];

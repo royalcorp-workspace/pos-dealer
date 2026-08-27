@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Frontend\Order;
 
-class Payment extends Model
+class CreditMemo extends Model
 {
     protected $keyType = 'string';
     public $incrementing = false;
 
     protected $fillable = [
         'id',
-        'payment_number',
+        'credit_memo_number',
         'order_id',
         'gateway',
         'transaction_id',

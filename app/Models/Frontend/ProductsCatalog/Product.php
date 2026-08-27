@@ -25,9 +25,8 @@ class Product extends Model
         static::addGlobalScope('not-deleted', fn($q) => $q->where('products.deleted', false));
         static::addGlobalScope('sellable', function ($q) {
             $q->where(function ($query) {
-                $query->where('products.base_price', '>', 0)
-                      ->orWhereHas('variants', function ($q2) {
-                          $q2->where('price', '>', 0);
+                $query->whereHas('variants', function ($q2) {
+                          $q2->where('sell_price', '>', 0);
                       });
             });
         });
@@ -55,12 +54,12 @@ class Product extends Model
         'brand_id',
         'name',
         'slug',
+        'code',
         'thumbnail',
         'alt_text',
         'short_description',
         'description',
         'warranty_duration',
-        'base_price',
         'best_seller',
         'is_new',
         'is_bundle',
@@ -74,7 +73,6 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'base_price' => 'decimal:2',
             'best_seller' => 'boolean',
             'is_new' => 'boolean',
             'is_bundle' => 'boolean',

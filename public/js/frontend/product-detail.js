@@ -94,17 +94,70 @@ function findMatchingVariant() {
             const priceLabel = document.getElementById('price-label');
             
             let finalPrice = parseFloat(matchedVariant.price) || 0;
+            let basePrice = parseFloat(matchedVariant.base_price) || finalPrice;
+            if (basePrice <= 0) basePrice = finalPrice;
+            
+            let originalPrice = finalPrice;
+            let defaultBadge = null;
+            let ppsBadge = null;
+            let strikePrice = null;
+            
+            if (basePrice > finalPrice) {
+                let pct = Math.round(((basePrice - finalPrice) / basePrice) * 100);
+                defaultBadge = pct + '% OFF';
+            }
+            
             if (window.staticPromo) {
                 const promo = window.staticPromo;
-                if (promo.discount_type == 1) {
+                strikePrice = (basePrice > finalPrice) ? basePrice : finalPrice;
+                
+                if (promo.discount_type === 'fixed') {
                     finalPrice = Math.max(0, finalPrice - parseFloat(promo.discount_value));
-                } else if (promo.discount_type == 2) {
+                } else if (promo.discount_type === 'percentage') {
                     finalPrice = Math.max(0, finalPrice - (finalPrice * parseFloat(promo.discount_value) / 100));
                 }
+                
+                if (strikePrice > 0) {
+                    let totalPct = Math.round(((strikePrice - finalPrice) / strikePrice) * 100);
+                    if (basePrice > originalPrice) {
+                        let ppsPct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
+                        ppsBadge = 'EXTRA ' + ppsPct + '% OFF';
+                    } else {
+                        defaultBadge = totalPct + '% OFF';
+                    }
+                }
+            } else if (basePrice > finalPrice) {
+                strikePrice = basePrice;
             }
             
             if (priceEl) {
                 priceEl.textContent = 'Rp ' + Number(finalPrice).toLocaleString('id-ID');
+                
+                if (defaultBadge || ppsBadge) {
+                    priceEl.classList.remove('text-brand-dark');
+                    priceEl.classList.add('text-red-600');
+                    document.getElementById('product-discount-container').style.display = 'flex';
+                    
+                    const strikeEl = document.getElementById('product-strike-price');
+                    if (strikeEl && strikePrice) strikeEl.textContent = 'Rp ' + Number(strikePrice).toLocaleString('id-ID');
+                    
+                    const dbEl = document.getElementById('product-default-badge');
+                    if (dbEl) {
+                        dbEl.textContent = defaultBadge || '';
+                        dbEl.style.display = defaultBadge ? 'inline' : 'none';
+                    }
+                    
+                    const ppsEl = document.getElementById('product-pps-badge');
+                    if (ppsEl) {
+                        ppsEl.textContent = ppsBadge || '';
+                        ppsEl.style.display = ppsBadge ? 'inline' : 'none';
+                    }
+                } else {
+                    priceEl.classList.remove('text-red-600');
+                    priceEl.classList.add('text-brand-dark');
+                    const dc = document.getElementById('product-discount-container');
+                    if (dc) dc.style.display = 'none';
+                }
             }
             
             if (priceLabel) {

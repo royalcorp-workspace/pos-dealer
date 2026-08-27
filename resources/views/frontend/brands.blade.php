@@ -10,7 +10,7 @@
             return [
                 '@type' => 'ListItem',
                 'position' => $index + 1,
-                'url' => route('products.index', ['type' => 'brand', 'value' => $brand->slug]),
+                'url' => route('brands.show', $brand->slug),
                 'name' => $brand->name,
             ];
         })->values()->toArray();
@@ -67,7 +67,7 @@
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
             @foreach($brandsWithProducts as $brand)
                 <a 
-                    href="{{ route('products.index', ['type' => 'brand', 'value' => $brand->slug]) }}" 
+                    href="{{ route('brands.show', $brand->slug) }}" 
                     class="bg-white border border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer group h-40"
                 >
                     @if($brand->logo)

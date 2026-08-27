@@ -49,7 +49,7 @@
         $pageDescription = __('Menampilkan produk sesuai kriteria filter yang Anda pilih.');
     }
 
-    $title = $eyebrow ? $eyebrow . ': ' . $displayTitle : $displayTitle;
+    $title = $displayTitle;
     $title = html_entity_decode($title);
 @endphp
 
@@ -139,7 +139,7 @@
         if ($filterType === 'brand' && isset($brand)) {
             $targetBannerObj = $brand;
         } elseif ($filterType === 'category' && isset($category)) {
-            $targetBannerObj = $category;
+            $targetBannerObj = null; // $category; 
         }
 
         $sliderImages = $sliderBanners->flatMap(function($b) {
@@ -282,14 +282,56 @@
                             @endif
                             
                             @if($img['is_embed'])
-                                <div class="w-full h-full hidden md:block">{!! $img['web'] !!}</div>
-                                <div class="w-full h-full block md:hidden">{!! $img['mobile'] !!}</div>
-                            @else
+                                <!-- Embed Code / Custom URL Link -->
                                 <div class="w-full h-full hidden md:block">
-                                    <img src="{{ cms_asset($img['web']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover md:object-center">
+                                    {!! $img['web'] !!}
                                 </div>
                                 <div class="w-full h-full block md:hidden">
+                                    {!! $img['mobile'] !!}
+                                </div>
+                            @else
+                                <!-- Uploaded Image -->
+                                <div class="w-full h-full hidden md:block relative">
+                                    <img src="{{ cms_asset($img['web']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover md:object-center">
+                                    @if($img['title'])
+                                    <!-- Warm Dark Gradient Overlay for Signature Style -->
+                                    <div class="absolute inset-0 bg-gradient-to-r from-brand-dark/80 via-brand-dark/40 to-transparent mix-blend-multiply"></div>
+                                    <div class="absolute inset-0 flex items-center justify-start px-12 md:px-20">
+                                        <div class="max-w-xl transform translate-y-4 opacity-0 transition-all duration-1000 delay-300 z-10"
+                                             x-bind:class="activeSlide === {{ $index }} ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                                            <div class="inline-block px-4 py-1.5 mb-6 border border-brand-gold/50 rounded-full text-brand-gold text-xs font-bold tracking-[0.2em] uppercase backdrop-blur-sm bg-brand-dark/30">
+                                                Koleksi Eksklusif
+                                            </div>
+                                            <h2 class="text-4xl md:text-5xl lg:text-6xl text-white leading-tight mb-6 font-serif">{{ $img['title'] }}</h2>
+                                            <p class="text-brand-muted text-lg md:text-xl mb-10 font-light leading-relaxed">Temukan koleksi tidur premium yang dirancang khusus untuk memberikan kualitas istirahat terbaik bagi Anda dan keluarga.</p>
+                                            <div class="inline-flex items-center gap-3 px-8 py-4 bg-brand-gold text-white font-bold rounded-full hover:bg-brand-gold-dark hover:shadow-[0_8px_25px_rgba(192,157,107,0.4)] hover:-translate-y-1 transition-all duration-300 cursor-pointer text-sm tracking-wider uppercase">
+                                                <span>{{ __('Belanja Sekarang') }}</span>
+                                                <i class="fa-solid fa-arrow-right"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    @endif
+                                </div>
+                                <div class="w-full h-full block md:hidden relative">
                                     <img src="{{ cms_asset($img['mobile']) }}" alt="{{ $img['title'] }}" class="w-full h-full object-cover object-center">
+                                    @if($img['title'])
+                                    <!-- Warm Dark Gradient Overlay -->
+                                    <div class="absolute inset-0 bg-gradient-to-t from-brand-dark/90 via-brand-dark/40 to-transparent mix-blend-multiply"></div>
+                                    <div class="absolute inset-x-0 bottom-0 p-8 flex justify-start">
+                                        <div class="w-full transform translate-y-4 opacity-0 transition-all duration-1000 delay-300 z-10"
+                                             x-bind:class="activeSlide === {{ $index }} ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'">
+                                            <div class="inline-block px-3 py-1 mb-4 border border-brand-gold/50 rounded-full text-brand-gold text-[10px] font-bold tracking-wider uppercase backdrop-blur-sm bg-brand-dark/30">
+                                                Koleksi Eksklusif
+                                            </div>
+                                            <h2 class="text-3xl text-white leading-tight mb-3 font-serif">{{ $img['title'] }}</h2>
+                                            <p class="text-brand-muted text-sm mb-6 font-light line-clamp-2">Koleksi tidur premium untuk kualitas istirahat paripurna.</p>
+                                            <div class="inline-flex items-center gap-2 px-8 py-3.5 bg-brand-gold text-white font-bold rounded-full hover:bg-brand-gold-dark shadow-[0_4px_15px_rgba(192,157,107,0.3)] transition-all cursor-pointer text-xs tracking-wider uppercase">
+                                                <span>{{ __('Belanja Sekarang') }}</span>
+                                                <i class="fa-solid fa-arrow-right"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    @endif
                                 </div>
                             @endif
 
@@ -300,14 +342,14 @@
                     @endforeach
                 </div>
                 
+                <!-- Slide Indicators -->
                 @if(count($sliderImages) > 1)
-                    <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
+                    <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-3 z-20">
                         @foreach($sliderImages as $index => $img)
-                            <button @click="activeSlide = {{ $index }}" class="w-2.5 h-2.5 rounded-full transition-all duration-500" :class="activeSlide === {{ $index }} ? 'bg-brand-gold w-6' : 'bg-white/60 hover:bg-white'"></button>
+                            <button aria-label="Slide {{ $index + 1 }}" @click="activeSlide = {{ $index }}" class="w-3 h-3 rounded-full transition-all duration-500" :class="activeSlide === {{ $index }} ? 'bg-brand-gold w-8' : 'bg-white/60 hover:bg-white'"></button>
                         @endforeach
                     </div>
-                @endif
-            </section>
+                @endif            </section>
         @elseif($targetBannerObj && ($targetBannerObj->banner_web || $targetBannerObj->banner_mobile || $targetBannerObj->embed_web || $targetBannerObj->embed_mobile))
             <!-- Fallback Banner (Image or Embed) -->
             <section class="w-full mb-8 relative bg-brand-light rounded-3xl shadow-sm overflow-hidden group">
@@ -316,33 +358,33 @@
                         <a href="{{ $targetBannerObj->banner_link }}" class="block w-full">
                     @endif
 
-                    @if($targetBannerObj->embed_web)
-                        <img src="{{ $targetBannerObj->embed_web }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->embed_mobile ? 'hidden md:block' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
-                    @endif
-                    @if($targetBannerObj->embed_mobile)
-                        <img src="{{ $targetBannerObj->embed_mobile }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->embed_web ? 'block md:hidden' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
-                    @endif
+                        @if($targetBannerObj->embed_web)
+                            <img src="{{ $targetBannerObj->embed_web }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->embed_mobile ? 'hidden md:block' : 'block' }} w-full h-auto object-contain transition-transform duration-700 hover:scale-[1.02]">
+                        @endif
+                        @if($targetBannerObj->embed_mobile)
+                            <img src="{{ $targetBannerObj->embed_mobile }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->embed_web ? 'block md:hidden' : 'block' }} w-full h-auto object-contain transition-transform duration-700 hover:scale-[1.02]">
+                        @endif
 
-                    @if(!empty($targetBannerObj->banner_link))
-                        </a>
-                    @endif
-                @else
-                    @if(!empty($targetBannerObj->banner_link))
-                        <a href="{{ $targetBannerObj->banner_link }}" class="block w-full">
-                    @endif
+                        @if(!empty($targetBannerObj->banner_link))
+                            </a>
+                        @endif
+                    @else
+                        @if(!empty($targetBannerObj->banner_link))
+                            <a href="{{ $targetBannerObj->banner_link }}" class="block w-full relative">
+                        @endif
 
-                    @if($targetBannerObj->banner_web)
-                        <img src="{{ cms_asset($targetBannerObj->banner_web) }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->banner_mobile ? 'hidden md:block' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
-                    @endif
-                    @if($targetBannerObj->banner_mobile)
-                        <img src="{{ cms_asset($targetBannerObj->banner_mobile) }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->banner_web ? 'block md:hidden' : 'block' }} w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-500">
-                    @endif
+                        @if($targetBannerObj->banner_web)
+                            <img src="{{ cms_asset($targetBannerObj->banner_web) }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->banner_mobile ? 'hidden md:block' : 'block' }} w-full h-auto object-contain transition-transform duration-700 hover:scale-[1.02]">
+                        @endif
+                        @if($targetBannerObj->banner_mobile)
+                            <img src="{{ cms_asset($targetBannerObj->banner_mobile) }}" alt="{{ $targetBannerObj->name }}" class="{{ $targetBannerObj->banner_web ? 'block md:hidden' : 'block' }} w-full h-auto object-contain transition-transform duration-700 hover:scale-[1.02]">
+                        @endif
 
-                    @if(!empty($targetBannerObj->banner_link))
-                        </a>
+                        @if(!empty($targetBannerObj->banner_link))
+                            </a>
+                        @endif
                     @endif
-                @endif
-            </section>
+                </div>            </section>
         @endif
 
         <!-- Listing Controls Bar -->
