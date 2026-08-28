@@ -36,18 +36,18 @@
                                 <h3 class="text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">{{ $type }}</h3>
                                 <div class="grid grid-cols-2 gap-3">
                                     @foreach($methods as $method)
-                                        <label class="relative flex items-center gap-3 p-4 border border-brand-muted rounded-xl cursor-pointer hover:border-brand-gold transition-all duration-200 payment-method-label has-[:checked]:border-brand-gold has-[:checked]:bg-brand-gold/5">
-                                            <input type="radio" name="payment_method" value="{{ $method['code'] }}" 
+                                        <label for="payment_method_{{ $method['code'] }}" class="relative flex items-center gap-3 p-4 border border-brand-muted rounded-xl cursor-pointer hover:border-brand-gold transition-all duration-200 payment-method-label">
+                                            <input type="radio" id="payment_method_{{ $method['code'] }}" name="payment_method" value="{{ $method['code'] }}" 
                                                 data-is-manual="{{ $method['code'] === 'transfer_manual' ? '1' : '0' }}"
                                                 data-banks='@json($method["bank_info"] ?? [])'
                                                 data-has-charge="{{ ($method['has_charge'] ?? false) ? '1' : '0' }}"
                                                 data-charge-type="{{ $method['charge_type'] ?? 2 }}"
                                                 data-charge-value="{{ $method['charge_value'] ?? 0 }}"
-                                                class="peer sr-only">
+                                                class="sr-only">
                                             
                                             <!-- Custom SVG Checkmark -->
-                                            <div class="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center peer-checked:border-brand-gold peer-checked:bg-brand-gold transition-colors shadow-sm">
-                                                <svg class="w-3 h-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                            <div class="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center border-gray-300 transition-colors shadow-sm">
+                                                <svg class="w-3 h-3 text-white opacity-0 transition-opacity duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                                                     <polyline points="20 6 9 17 4 12"></polyline>
                                                 </svg>
                                             </div>

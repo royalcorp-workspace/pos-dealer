@@ -45,12 +45,7 @@
                         </div>
                     </div>
                     @endif
-                        </div>
-                        <h1 class="text-3xl font-extrabold text-brand-dark mb-3 font-serif">Pesanan Berhasil!</h1>
-                        <p class="text-gray-500 text-sm max-w-md mx-auto">
-                            Terima kasih atas kepercayaan Anda. Kami telah menerima pesanan Anda dan akan segera memprosesnya dengan penuh kehati-hatian.
-                        </p>
-                    </div>
+                </div>
 
                     <!-- Receipt Header -->
                     <div class="bg-gray-50 px-8 py-6 border-y border-dashed border-gray-300 flex justify-between items-center">
@@ -232,9 +227,11 @@
                         <a href="{{ route('home') }}" class="w-full sm:w-auto px-6 py-2.5 rounded-full font-bold text-sm text-gray-600 hover:bg-gray-200 transition-colors text-center">
                             Kembali ke Home
                         </a>
+                        @if(session()->get('is_logged_in'))
                         <a href="{{ route('dashboard', ['tab' => 'orders']) }}" class="w-full sm:w-auto px-6 py-2.5 bg-brand-dark text-brand-gold rounded-full font-bold text-sm hover:bg-brand-darker shadow-lg hover:shadow-xl transition-all text-center">
                             Lihat Status Pesanan <i class="fa-solid fa-arrow-right ml-1"></i>
                         </a>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -302,6 +299,7 @@
         // Hapus data form checkout agar pesanan berikutnya tidak terisi data lama secara tidak sengaja
         sessionStorage.removeItem('checkout_form_data');
     });
+</script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

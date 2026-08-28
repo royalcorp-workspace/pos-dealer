@@ -544,22 +544,16 @@
                     </div>
 
                     <!-- Pagination / Load More -->
-                    @if($filterType === 'category' || $filterType === 'brand')
-                        @if($products->hasMorePages())
-                            <div class="mt-12 text-center" id="catalog-load-more-container">
-                                <button 
+                    @if($products->hasMorePages())
+                        <div class="mt-12 text-center" id="catalog-load-more-container">
+                            <button 
                                     type="button"
                                     id="catalog-load-more-btn"
                                     class="group px-8 py-3.5 rounded-full font-bold text-brand-darker bg-white border-2 border-brand-dark shadow-sm transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-xl focus:outline-none"
                                     data-next-page-url="{{ $products->nextPageUrl() }}"
                                 >
-                                    {!! __('Muat Lebih Banyak') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
+                                {!! __('Muat Lebih Banyak') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
                                 </button>
-                            </div>
-                        @endif
-                    @else
-                        <div class="mt-10">
-                            {{ $products->withQueryString()->links('frontend.components.pagination') }}
                         </div>
                     @endif
                 @else
