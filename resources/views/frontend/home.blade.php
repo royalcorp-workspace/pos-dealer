@@ -679,62 +679,19 @@
                     <span class="hidden sm:inline-block text-xs text-gray-500 font-medium">{{ __('Distributor Resmi Garansi Pabrik') }}</span>
                 </div>
 
-                <!-- Brand Vector Logos Strip (Marquee Slowmo) -->
-                <style>
-                    @keyframes marquee-scroll {
-                        0% { transform: translateX(0); }
-                        100% { transform: translateX(-100%); }
-                    }
-                    .animate-marquee-slow {
-                        animation: marquee-scroll 35s linear infinite;
-                    }
-                    /* Optional: pause on hover */
-                    .marquee-container:hover .animate-marquee-slow {
-                        animation-play-state: paused;
-                    }
-                </style>
-                
-                @php
-                    // Ensure the list is long enough to cover wide screens
-                    $displayBrands = collect();
-                    while($displayBrands->count() < 12 && $brands->count() > 0) {
-                        $displayBrands = $displayBrands->merge($brands);
-                    }
-                @endphp
-                
-                <div class="relative flex-1 overflow-hidden flex items-center marquee-container py-2 group w-full lg:max-w-[70%]">
-                    <!-- Left and right gradient masks for smooth entering/exiting -->
-                    <div class="absolute left-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"></div>
-                    <div class="absolute right-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"></div>
-                    
-                    <!-- First track -->
-                    <div class="flex shrink-0 items-center gap-6 sm:gap-10 pr-6 sm:pr-10 animate-marquee-slow">
-                        @foreach($displayBrands as $brand)
-                            <a href="{{ route('brands.show', $brand->slug) }}" class="block shrink-0 transition-transform duration-300 hover:scale-105" title="{{ $brand->name }}">
-                                @if($brand->logo)
-                                    <img src="{{ cms_asset($brand->logo) }}" alt="{{ $brand->name }}" class="h-9 sm:h-12 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300 drop-shadow-sm hover:drop-shadow-md">
-                                @else
-                                    <div class="h-9 sm:h-12 px-4 rounded border border-gray-200 flex items-center justify-center bg-gray-50 transition-colors hover:border-brand-gold hover:bg-brand-light/30">
-                                        <span class="font-serif font-bold text-xs text-gray-700 hover:text-brand-dark">{{ $brand->name }}</span>
-                                    </div>
-                                @endif
-                            </a>
-                        @endforeach
-                    </div>
-                    <!-- Second track (clone for seamless loop) -->
-                    <div class="flex shrink-0 items-center gap-6 sm:gap-10 pr-6 sm:pr-10 animate-marquee-slow" aria-hidden="true">
-                        @foreach($displayBrands as $brand)
-                            <a href="{{ route('brands.show', $brand->slug) }}" class="block shrink-0 transition-transform duration-300 hover:scale-105" title="{{ $brand->name }}" tabindex="-1">
-                                @if($brand->logo)
-                                    <img src="{{ cms_asset($brand->logo) }}" alt="{{ $brand->name }}" class="h-9 sm:h-12 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300 drop-shadow-sm hover:drop-shadow-md">
-                                @else
-                                    <div class="h-9 sm:h-12 px-4 rounded border border-gray-200 flex items-center justify-center bg-gray-50 transition-colors hover:border-brand-gold hover:bg-brand-light/30">
-                                        <span class="font-serif font-bold text-xs text-gray-700 hover:text-brand-dark">{{ $brand->name }}</span>
-                                    </div>
-                                @endif
-                            </a>
-                        @endforeach
-                    </div>
+                <!-- Brand Vector Logos Strip (Static) -->
+                <div class="flex-1 flex flex-wrap items-center justify-start lg:justify-end gap-6 sm:gap-8 py-2 w-full">
+                    @foreach($brands as $brand)
+                        <a href="{{ route('brands.show', $brand->slug) }}" class="block shrink-0 transition-transform duration-300 hover:scale-105" title="{{ $brand->name }}">
+                            @if($brand->logo)
+                                <img src="{{ cms_asset($brand->logo) }}" alt="{{ $brand->name }}" class="h-9 sm:h-12 w-auto object-contain grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all duration-300 drop-shadow-sm hover:drop-shadow-md">
+                            @else
+                                <div class="h-9 sm:h-12 px-4 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50 transition-colors hover:border-brand-gold hover:bg-brand-light/30">
+                                    <span class="font-serif font-bold text-xs text-gray-700 hover:text-brand-dark">{{ $brand->name }}</span>
+                                </div>
+                            @endif
+                        </a>
+                    @endforeach
                 </div>
             </div>
         </div>

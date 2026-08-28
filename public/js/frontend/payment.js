@@ -73,7 +73,39 @@ document.addEventListener('DOMContentLoaded', function() {
     var finalTotalLabel = document.getElementById('final-total');
     
     function toggleDetails() {
-        var selected = document.querySelector('input[name="payment_method"]:checked');
+        var selected = document.querySelector('input[name="payment_method"]:checked');        
+        // 0. Visual Update for Radio Buttons (Fallback for browsers without :has() support)
+        document.querySelectorAll('.payment-method-label').forEach(function(label) {
+            label.classList.remove('border-brand-gold', 'bg-brand-gold/5');
+            var circle = label.querySelector('.rounded-full');
+            if (circle) {
+                circle.classList.remove('border-brand-gold', 'bg-brand-gold');
+                circle.classList.add('border-gray-300');
+            }
+            var svg = label.querySelector('svg');
+            if (svg) {
+                svg.classList.remove('opacity-100');
+                svg.classList.add('opacity-0');
+            }
+        });
+        
+        if (selected) {
+            var label = selected.closest('.payment-method-label');
+            if (label) {
+                label.classList.add('border-brand-gold', 'bg-brand-gold/5');
+                var circle = label.querySelector('.rounded-full');
+                if (circle) {
+                    circle.classList.remove('border-gray-300');
+                    circle.classList.add('border-brand-gold', 'bg-brand-gold');
+                }
+                var svg = label.querySelector('svg');
+                if (svg) {
+                    svg.classList.remove('opacity-0');
+                    svg.classList.add('opacity-100');
+                }
+            }
+        }
+
         
         // 1. Kalkulasi Charge/Biaya Admin
         if (selected && finalTotalLabel) {
