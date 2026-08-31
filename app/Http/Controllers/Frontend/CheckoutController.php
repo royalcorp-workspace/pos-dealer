@@ -406,7 +406,10 @@ class CheckoutController extends Controller
             'shipping_cost' => $shippingCost,
             'shipping_cost_subsidy' => $shippingCostSubsidy,
             'shipping_addresses_id' => $shippingAddressesId,
-            'meta' => $shippingAddressData ? ['shipping_address' => $shippingAddressData] : null,
+            'meta' => array_merge(
+                $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
+                ['platform' => 'website']
+            ),
             'creator' => $customer ? $customer->name : 'Customer Web',
             'editor' => $customer ? $customer->name : 'Customer Web',
         ]);
