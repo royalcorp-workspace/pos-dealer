@@ -60,11 +60,11 @@ class AboutUs extends Model
 
     public function getLogoUrlAttribute(): ?string
     {
-        return $this->logo ? asset('storage/' . $this->logo) : null;
+        return media_url($this->logo);
     }
 
     public function getCoverImageUrlAttribute(): ?string
     {
-        return $this->cover_image ? asset('storage/' . $this->cover_image) : null;
+        return media_url($this->cover_image);
     }
 }

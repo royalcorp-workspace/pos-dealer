@@ -70,7 +70,7 @@
 
         $availability = $totalStock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
         $images = collect([$product->thumbnail_url])
-            ->merge($product->images->map(fn($image) => $image->image_url ?? ($image->image ? asset('storage/' . $image->image) : null)))
+            ->merge($product->images->map(fn($image) => $image->image_url ?? ($image->image ? media_url($image->image) : null)))
             ->filter()
             ->values()
             ->take(8)
@@ -142,7 +142,7 @@
             <!-- Left Column: Sticky Product Media Gallery (Luxury Studio Viewer) -->
             @php
                 $dbImages = $product->images->isNotEmpty() 
-                    ? $product->images->map(fn($i) => $i->image_url ?? ($i->image ? asset('storage/' . $i->image) : null))->filter()->values()->toArray()
+                    ? $product->images->map(fn($i) => $i->image_url ?? ($i->image ? media_url($i->image) : null))->filter()->values()->toArray()
                     : [];
 
                 $allImages = collect([$product->thumbnail_url ?: asset('images/dummy/header.jpg')])

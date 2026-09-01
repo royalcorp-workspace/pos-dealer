@@ -39,20 +39,7 @@ class ProductImage extends Model
 
     public function getImageUrlAttribute(): ?string
     {
-        if (!$this->image) {
-            return null;
-        }
-
-        if (filter_var($this->image, FILTER_VALIDATE_URL)) {
-            return $this->image;
-        }
-
-        $cmsUrl = env('CMS_URL', '');
-        if ($cmsUrl) {
-            return rtrim($cmsUrl, '/') . '/storage/' . ltrim($this->image, '/');
-        }
-
-        return asset('storage/' . ltrim($this->image, '/'));
+        return media_url($this->image);
     }
 
     public function product(): BelongsTo

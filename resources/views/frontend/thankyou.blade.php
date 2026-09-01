@@ -197,8 +197,8 @@
                                         @if($proof)
                                             <div class="mt-5 pt-5 border-t border-brand-gold/20">
                                                 <h4 class="font-bold text-brand-dark mb-3 text-sm">Bukti Pembayaran Anda:</h4>
-                                                <a href="{{ asset('storage/' . $proof) }}" target="_blank" class="block w-32 rounded-xl overflow-hidden border-2 border-brand-gold hover:opacity-80 transition-opacity shadow-sm">
-                                                    <img src="{{ asset('storage/' . $proof) }}" alt="Bukti Transfer" loading="lazy" class="w-full h-auto object-cover">
+                                                <a href="{{ media_url($proof) }}" target="_blank" class="block w-32 rounded-xl overflow-hidden border-2 border-brand-gold hover:opacity-80 transition-opacity shadow-sm">
+                                                    <img src="{{ media_url($proof) }}" alt="Bukti Transfer" loading="lazy" class="w-full h-auto object-cover">
                                                 </a>
                                             </div>
                                         @else

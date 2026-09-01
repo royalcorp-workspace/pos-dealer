@@ -59,6 +59,6 @@ class HowToReturn extends Model
 
     public function getFeaturedImageUrlAttribute(): ?string
     {
-        return $this->featured_image ? asset('storage/' . $this->featured_image) : null;
+        return media_url($this->featured_image);
     }
 }

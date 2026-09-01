@@ -252,7 +252,7 @@
                                                             <span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md font-semibold flex items-center gap-1">
                                                                 <i class="fa-solid fa-circle-check"></i> Bukti Uploaded
                                                             </span>
-                                                            <a href="{{ asset('storage/' . $proof) }}" target="_blank" class="text-xs text-brand-gold-dark hover:underline font-bold">
+                                                            <a href="{{ media_url($proof) }}" target="_blank" class="text-xs text-brand-gold-dark hover:underline font-bold">
                                                                 Lihat Bukti
                                                             </a>
                                                         </div>

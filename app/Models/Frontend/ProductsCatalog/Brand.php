@@ -49,22 +49,22 @@ class Brand extends Model
 
     public function getLogoUrlAttribute(): ?string
     {
-        return $this->logo ? asset('storage/' . $this->logo) : null;
+        return media_url($this->logo);
     }
 
     public function getBannerUrlAttribute(): ?string
     {
-        return $this->banner ? asset('storage/' . $this->banner) : null;
+        return media_url($this->banner);
     }
 
     public function getBannerWebUrlAttribute(): ?string
     {
-        return $this->banner_web ? asset('storage/' . $this->banner_web) : ($this->banner ? $this->getBannerUrlAttribute() : null);
+        return media_url($this->banner_web ?: $this->banner);
     }
 
     public function getBannerMobileUrlAttribute(): ?string
     {
-        return $this->banner_mobile ? asset('storage/' . $this->banner_mobile) : ($this->banner ? $this->getBannerUrlAttribute() : null);
+        return media_url($this->banner_mobile ?: $this->banner);
     }
 
     public function categories(): \Illuminate\Database\Eloquent\Relations\BelongsToMany

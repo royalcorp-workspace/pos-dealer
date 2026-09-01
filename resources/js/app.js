@@ -9,3 +9,4 @@ import './frontend/product';
 import './frontend/payment';
 import './frontend/auth-reset-password';
 import './frontend/auth-forgot-password';
+import './direct-upload-interceptor';
