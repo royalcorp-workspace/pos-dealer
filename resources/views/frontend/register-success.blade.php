@@ -14,7 +14,7 @@
                 User created. Verification email sent to your inbox. Silakan cek email Anda untuk verifikasi akun.
             </p>
             <div class="flex gap-3 justify-center">
-                <a href="{{ route('login') }}" class="px-6 py-3 bg-brand-dark text-brand-gold rounded-xl font-bold hover:bg-brand-darker transition-colors">
+                <a href="{{ route('login.show') }}" class="px-6 py-3 bg-brand-dark text-brand-gold rounded-xl font-bold hover:bg-brand-darker transition-colors">
                     Ke Login
                 </a>
                 <a href="{{ route('home') }}" class="px-6 py-3 border border-brand-muted rounded-xl font-bold text-brand-dark hover:border-brand-gold transition-colors">

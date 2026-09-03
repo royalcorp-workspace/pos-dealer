@@ -96,6 +96,7 @@ Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->n
 Route::get('/password-otp-sent', [CheckoutController::class, 'passwordOtpSent'])->name('password-otp.sent');
 Route::get('/reset-password', [AuthController::class, 'showResetPassword'])->name('reset-password.show');
 
+Route::get('/login', fn() => redirect()->route('home', ['show_login' => 1]))->name('login.show');
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::post('/devices/{device}/logout', [AuthController::class, 'logoutDevice'])->name('devices.logout');

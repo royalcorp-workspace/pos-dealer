@@ -137,10 +137,12 @@ class AuthController extends Controller
                 'expires_at' => now()->addHours(24),
                 'used' => false,
             ]);
-            \Illuminate\Support\Facades\Mail::to($user->
-                email)->
-                send(new \App\Mail\VerifyEmailMail($user->
-                email, $token));
+            try {
+                \Illuminate\Support\Facades\Mail::to($user->email)
+                    ->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Failed to send verification email: ' . $e->getMessage());
+            }
             return response()->json([
                 'message' => 'User created. Verification email sent to your inbox.'
             ], 201);
