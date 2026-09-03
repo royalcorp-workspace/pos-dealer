@@ -280,51 +280,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (registerForm) {
         registerForm.addEventListener('submit', function (e) {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const submitBtn = e.target.querySelector('button[type="submit"]');
-            const csrfToken = document.querySelector('meta[name="csrf-token"]');
-
-            submitBtn.disabled = true;
-            submitBtn.querySelector('span').textContent = 'Memproses...';
-
-            fetch(window.location.origin + '/api/auth/register', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken ? csrfToken.getAttribute('content') : '',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: formData
-            })
-            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
-            .then(function (res) {
-                if (res.ok) {
-                    window.location.href = window.location.origin + '/register-success';
-                } else {
-                    var msg = res.data.message || 'Register gagal';
-                    if (res.data.errors) {
-                        var fieldErrors = [];
-                        for (var field in res.data.errors) {
-                            if (res.data.errors[field] && res.data.errors[field][0]) {
-                                fieldErrors.push(res.data.errors[field][0]);
-                            }
-                        }
-                        if (fieldErrors.length > 0) msg = fieldErrors.join('<br>');
-                    }
-                    window.dispatchEvent(new CustomEvent('show-auth-toast', {
-                        detail: { message: msg, type: 'error' }
-                    }));
-                }
-            })
-            .catch(function () {
-                window.dispatchEvent(new CustomEvent('show-auth-toast', {
-                    detail: { message: 'Terjadi kesalahan jaringan', type: 'error' }
-                }));
-            })
-            .finally(function () {
-                submitBtn.disabled = false;
-                submitBtn.querySelector('span').textContent = 'Create Account';
-            });
+            window.location.href = window.location.origin + '/register';
         });
     }
 });

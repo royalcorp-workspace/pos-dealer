@@ -85,14 +85,13 @@
                 >
                     Sign In
                 </button>
-                <button 
-                    @click="isLoginForm = false; isForgotPassword = false"
+                <a 
+                    href="{{ route('register.show') }}"
                     x-show="!isForgotPassword"
-                    :class="!isLoginForm && !isForgotPassword ? 'border-brand-gold text-brand-dark' : 'border-transparent text-gray-400 hover:text-gray-700'"
-                    class="flex-1 py-4 text-center font-bold text-sm border-b-2 transition-colors focus:outline-none"
+                    class="flex-1 py-4 text-center font-bold text-sm border-b-2 border-transparent text-gray-400 hover:text-brand-dark hover:border-brand-gold/40 transition-colors focus:outline-none"
                 >
                     Register
-                </button>
+                </a>
             </div>
 
             <!-- Forms Container -->
@@ -139,6 +138,10 @@
                         <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 mt-2 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50">
                             <span x-show="!isSubmitting">{{ __('Sign In') }}</span><span x-show="isSubmitting">{{ __('Memproses...') }}</span>
                         </button>
+                        <div class="text-center pt-2">
+                            <span class="text-xs text-gray-500">{{ __('Belum punya akun?') }}</span>
+                            <a href="{{ route('register.show') }}" class="text-xs font-bold text-brand-gold hover:text-brand-dark transition-colors ml-1">{{ __('Daftar Sekarang') }}</a>
+                        </div>
                     </form>
                 </div>
 
@@ -203,35 +206,22 @@
                     </form>
                 </div>
 
-                <!-- Register Form -->
-                <div x-show="!isLoginForm && !isForgotPassword" x-cloak>
-                    <div class="text-center mb-8">
-                        <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ __('Create an Account') }}</h2>
-                        <p class="text-gray-500 text-sm mt-2">{{ __('Daftar sekarang dan nikmati pengalaman belanja tidur impian.') }}</p>
+                <!-- Register Prompt -->
+                <div x-show="!isLoginForm && !isForgotPassword" x-cloak class="text-center py-4">
+                    <div class="w-16 h-16 bg-brand-light rounded-full flex items-center justify-center mx-auto mb-4 text-brand-gold">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                        </svg>
                     </div>
-                    <form action="/register" method="POST" class="space-y-4" id="registerModalForm">
-                        @csrf
-                        <div>
-                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">{{ __('Email Address') }}</label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <svg class="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.5v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="m3 7.5 9 6 9-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                </div>
-                                <input type="email" name="email" required placeholder="you@example.com" class="w-full pl-11 pr-4 py-3 bg-brand-light border border-brand-muted rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-colors"/>
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-brand-darker uppercase tracking-wider mb-2">{{ __('Password') }}</label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <svg class="h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                                </div>
-                                <input type="password" name="password" required placeholder="••••••••" class="w-full pl-11 pr-4 py-3 bg-brand-light border border-brand-muted rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:border-brand-gold transition-colors"/>
-                            </div>
-                        </div>
-                        <button type="submit" :disabled="isSubmitting" class="w-full py-3.5 mt-4 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] focus:outline-none disabled:opacity-50"><span x-show="!isSubmitting">{{ __('Create Account') }}</span><span x-show="isSubmitting">{{ __('Memproses...') }}</span></button>
-                        <button type="button" @click="isLoginForm = true; isForgotPassword = false" class="w-full py-2.5 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">&larr; {{ __('Kembali ke Sign In') }}</button>
-                    </form>
+                    <h2 class="text-2xl font-extrabold text-gray-900 tracking-tight">{{ __('Daftar Akun Baru') }}</h2>
+                    <p class="text-gray-500 text-sm mt-2 mb-6">{{ __('Lengkapi pendaftaran akun Anda untuk menikmati kemudahan belanja dan pelacakan pesanan.') }}</p>
+
+                    <a href="{{ route('register.show') }}" class="block w-full py-3.5 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg shadow-brand-dark/20 transition-transform active:scale-[0.98] text-center">
+                        {{ __('Lengkapi Pendaftaran Akun') }} &rarr;
+                    </a>
+                    <button type="button" @click="isLoginForm = true; isForgotPassword = false" class="w-full py-2.5 mt-3 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors focus:outline-none">
+                        &larr; {{ __('Kembali ke Sign In') }}
+                    </button>
                 </div>
 
                 <!-- Social Logins -->

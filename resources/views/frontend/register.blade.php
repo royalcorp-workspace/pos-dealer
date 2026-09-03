@@ -99,7 +99,11 @@ $locationData = \App\Models\Frontend\Location\SubDistrict::with(['city.province'
                             const data = await response.json();
 
                             if (!response.ok) {
-                                this.errorMessage = data.message || 'Terjadi kesalahan. Silakan coba lagi.';
+                                if (data.errors) {
+                                    this.errorMessage = Object.values(data.errors).flat().join('<br>');
+                                } else {
+                                    this.errorMessage = data.message || 'Terjadi kesalahan. Silakan coba lagi.';
+                                }
                                 return;
                             }
 
@@ -149,7 +153,7 @@ $locationData = \App\Models\Frontend\Location\SubDistrict::with(['city.province'
                         <circle cx="12" cy="12" r="10" stroke-width="1.6"/>
                         <path stroke-linecap="round" stroke-width="1.6" d="M12 8v4m0 4h.01"/>
                     </svg>
-                    <span x-text="errorMessage"></span>
+                    <span x-html="errorMessage"></span>
                 </div>
 
                 <form class="space-y-4" @submit.prevent="handleSubmit">
@@ -217,8 +221,14 @@ $locationData = \App\Models\Frontend\Location\SubDistrict::with(['city.province'
                 </form>
             </div>
 
-            <div class="mt-6 text-center">
-                <a href="{{ route('home') }}" class="text-sm font-semibold text-brand-gold hover:text-brand-dark transition-colors">&larr; Kembali ke Beranda</a>
+            <div class="mt-6 text-center space-y-2">
+                <p class="text-sm text-gray-600">
+                    Sudah memiliki akun? 
+                    <a href="{{ route('login.show') }}" class="font-bold text-brand-gold hover:text-brand-dark transition-colors">Masuk di sini</a>
+                </p>
+                <div>
+                    <a href="{{ route('home') }}" class="text-xs font-semibold text-gray-400 hover:text-brand-dark transition-colors">&larr; Kembali ke Beranda</a>
+                </div>
             </div>
         </div>
     </div>

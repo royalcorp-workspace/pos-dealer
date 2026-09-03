@@ -483,7 +483,7 @@
     data-route-auth-google-session="{{ route('auth.google.session') }}"
     x-data="{ 
         isCartOpen: false, 
-        isAuthOpen: {{ session()->has('show_login') ? 'true' : 'false' }}, 
+        isAuthOpen: {{ (session()->has('show_login') || request()->has('show_login')) ? 'true' : 'false' }}, 
         selectedProductForReview: null,
         isMobileMenuOpen: false,
         toasts: [],
