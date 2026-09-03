@@ -444,7 +444,7 @@ class CartController extends Controller
             'variant_id' => $variant?->id,
             'name' => $name,
             'brand' => $product->brand?->name ?? '',
-            'image' => $product->thumbnail_url ?? '',
+            'nullable|string' => $product->thumbnail_url ?? '',
             'sell_price' => (float) $price,
             'quantity' => max(1, (int) $item->quantity),
             'reorder_from_order_id' => $item->order_id,

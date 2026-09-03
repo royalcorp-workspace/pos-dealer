@@ -83,12 +83,12 @@ class ProductCategory extends Model
 
     public function getBannerWebUrlAttribute(): ?string
     {
-        return $this->banner_web ? asset('storage/' . $this->banner_web) : null;
+        return media_url($this->banner_web);
     }
 
     public function getBannerMobileUrlAttribute(): ?string
     {
-        return $this->banner_mobile ? asset('storage/' . $this->banner_mobile) : null;
+        return media_url($this->banner_mobile);
     }
 
     public function brands(): BelongsToMany

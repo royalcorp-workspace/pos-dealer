@@ -13,6 +13,13 @@ class PaymentMethod extends Model
 
     protected $table = 'payment_methods';
 
+    protected $appends = ['image_url'];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return media_url($this->image);
+    }
+
     protected $fillable = [
         'code',
         'name',

@@ -79,7 +79,17 @@ class Banner extends Model
 
     public function getDisplayImageUrlAttribute(): ?string
     {
-        return $this->image_web_url ?: $this->image_mobile_url;
+        return media_url($this->image_web_url ?: $this->image_mobile_url);
+    }
+
+    public function getImageWebFullUrlAttribute(): ?string
+    {
+        return media_url($this->image_web_url);
+    }
+
+    public function getImageMobileFullUrlAttribute(): ?string
+    {
+        return media_url($this->image_mobile_url);
     }
 
     public function images()
@@ -109,4 +119,14 @@ class BannerImage extends Model
         'sort_order' => 'integer',
         'deleted'    => 'boolean',
     ];
+
+    public function getImageWebFullUrlAttribute(): ?string
+    {
+        return media_url($this->image_web_url);
+    }
+
+    public function getImageMobileFullUrlAttribute(): ?string
+    {
+        return media_url($this->image_mobile_url);
+    }
 }

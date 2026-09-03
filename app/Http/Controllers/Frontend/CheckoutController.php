@@ -406,7 +406,10 @@ class CheckoutController extends Controller
             'shipping_cost' => $shippingCost,
             'shipping_cost_subsidy' => $shippingCostSubsidy,
             'shipping_addresses_id' => $shippingAddressesId,
-            'meta' => $shippingAddressData ? ['shipping_address' => $shippingAddressData] : null,
+            'meta' => array_merge(
+                $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
+                ['platform' => 'website']
+            ),
             'creator' => $customer ? $customer->name : 'Customer Web',
             'editor' => $customer ? $customer->name : 'Customer Web',
         ]);
@@ -625,7 +628,7 @@ class CheckoutController extends Controller
 
         if ($paymentMethod === 'transfer_manual') {
             $request->validate([
-                'payment_proof' => 'required|image|mimes:jpeg,png,jpg|max:5120',
+                'payment_proof' => 'required|string',
             ]);
         }
 
@@ -646,9 +649,13 @@ class CheckoutController extends Controller
                 $meta['payment_instructions'] = $paymentMethodModel->instructions;
             }
 
-            if ($paymentMethod === 'transfer_manual' && $request->hasFile('payment_proof')) {
-                $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
-                $meta['payment_proof'] = $proofPath;
+            if ($paymentMethod === 'transfer_manual') {
+                if ($request->hasFile('payment_proof')) {
+                    $proofPath = $request->file('payment_proof')->store('payment_proofs', 's3');
+                    $meta['payment_proof'] = $proofPath;
+                } elseif ($request->filled('payment_proof')) {
+                    $meta['payment_proof'] = $request->input('payment_proof');
+                }
             }
 
             // ------------------- INTEGRASI ESPAY -------------------
@@ -822,12 +829,17 @@ class CheckoutController extends Controller
         }
 
         $request->validate([
-            'payment_proof' => 'required|image|mimes:jpeg,png,jpg|max:5120',
+            'payment_proof' => 'required|string',
         ]);
 
+        $proofPath = null;
         if ($request->hasFile('payment_proof')) {
-            $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
-            
+            $proofPath = $request->file('payment_proof')->store('payment_proofs', 's3');
+        } elseif ($request->filled('payment_proof')) {
+            $proofPath = $request->input('payment_proof');
+        }
+
+        if ($proofPath) {
             $meta = $order->meta ?? [];
             $meta['payment_started_at'] = now()->toIso8601String();
             $meta['payment_proof'] = $proofPath;

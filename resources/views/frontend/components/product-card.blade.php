@@ -73,10 +73,10 @@
 >
     <!-- Product Image Container -->
     <div class="relative aspect-[4/3] bg-brand-light overflow-hidden">
-        <a href="{{ route('products.show', $product['id']) }}" class="block w-full h-full">
+        <a href="{{ route('products.show', $product['id'] ?? $product->id) }}" class="block w-full h-full">
             <img 
-                src="{{ $product['image'] }}" 
-                alt="{{ $product['name'] }}" 
+                src="{{ $product['image'] ?? ($product->thumbnail_url ?? '') }}" 
+                alt="{{ $product['name'] ?? $product->name }}" 
                 loading="lazy"
                 decoding="async"
                 class="product-card__image w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
@@ -105,8 +105,8 @@
                     <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.5 15.09 9.26 22.5 9.96 17.25 14.7 18.82 22.03 12 18.55 5.18 22.03 6.75 14.7 1.5 9.96 8.91 9.26 12 2.5Z"/></svg>
                 </button>
                 <button 
-                    data-product-review="{{ json_encode($reviewProduct, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
-                    data-product-id="{{ $product['id'] }}"
+                    data-product-review="{{ json_encode($reviewPayload, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
+                    data-product-id="{{ $product['id'] ?? $product->id }}"
                     @click="$dispatch('open-review', JSON.parse($el.dataset.productReview))"
                     class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-700 shadow-md hover:bg-brand-gold hover:text-white transition-colors focus:outline-none"
                     aria-label="Lihat ulasan"
@@ -120,20 +120,20 @@
     <!-- Product Info -->
     <div class="p-5 flex flex-col flex-1">
         <div class="mb-1 text-xs font-semibold text-gray-600 uppercase tracking-widest">
-            {{ $product['brand'] }}
+            {{ $product['brand'] ?? ($product->brand->name ?? '') }}
         </div>
         
         <h3 class="product-card__title font-semibold text-brand-dark text-base leading-snug mb-3 hover:text-brand-gold transition-colors cursor-pointer line-clamp-2">
-            <a href="{{ route('products.show', $product['id']) }}">
-                {{ $product['name'] }}
+            <a href="{{ route('products.show', $product['id'] ?? $product->id) }}">
+                {{ $product['name'] ?? $product->name }}
             </a>
         </h3>
         
         <!-- Rating -->
         <div 
             class="product-card__rating flex items-center gap-1.5 mb-auto cursor-pointer hover:bg-brand-light p-1 -ml-1 rounded transition-colors w-fit"
-            data-product-review="{{ json_encode($product, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
-            data-product-id="{{ $product['id'] }}"
+            data-product-review="{{ json_encode($reviewPayload, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
+            data-product-id="{{ $product['id'] ?? $product->id }}"
             @click="$dispatch('open-review', JSON.parse($el.dataset.productReview))"
         >
             <div class="flex items-center text-brand-gold-dark">

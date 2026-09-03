@@ -165,6 +165,603 @@ class HomeController extends Controller
         ));
     }
 
+
+    public function homepages3()
+    {
+        $bestsellers = Product::where('deleted', false)
+            ->where('best_seller', true)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommended = Product::where('deleted', false)
+            ->whereNotIn('id', $bestsellers->pluck('id'))
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommendedTotal = Product::where('deleted', false)->count();
+
+        $specialSection = HomepageSection::where('section_key', 'like', '%spesial%')
+            ->orWhere('section_key', 'like', '%special%')
+            ->first();
+            
+        $featuredProductId = null;
+        if ($specialSection && $specialSection->meta) {
+            $meta = is_string($specialSection->meta) ? json_decode($specialSection->meta, true) : (array)$specialSection->meta;
+            $featuredProductId = $meta['featured_product_id'] ?? null;
+        }
+
+        $featuredQuery = Product::where('deleted', false)
+            ->with(['brand', 'category', 'images', 'variants', 'tags']);
+            
+        if ($featuredProductId) {
+            $featured = $featuredQuery->where('id', $featuredProductId)->first();
+        } else {
+            $featured = $featuredQuery->where('is_new', true)->first();
+        }
+
+        $categories = ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->withCount('products')
+            ->take(8)
+            ->get();
+
+        $brands = Brand::where('deleted', false)
+            ->where('status', true)
+            ->with(['products' => function ($q) {
+                $q->where('deleted', false)
+                  ->where('status', true)
+                  ->with(['variants', 'images', 'brand', 'category'])
+                  ->take(20);
+            }])
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        foreach ($brands as $brand) {
+            $brand->top_promo_products = $brand->products->map(function($product) {
+                $validVariants = $product->variants->where('sell_price', '>', 0);
+                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('sell_price') : (float) (0 ?? 0);
+                $promo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
+                $discountedPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $promo);
+                
+                $discountPercent = $originalPrice > 0 ? (($originalPrice - $discountedPrice) / $originalPrice) * 100 : 0;
+                $product->calculated_discount = $discountPercent;
+                return $product;
+            })->sortByDesc('calculated_discount')->take(3)->values();
+        }
+
+        $banners = Banner::where('is_active', true)
+            ->where('deleted', false)
+            ->with(['images' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
+            ->orderBy('sort_order', 'asc')
+            ->get()
+            ->groupBy('type');
+
+        $homepageSections = HomepageSection::where('is_visible', true)
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        $eventPopups = Event::where('is_active', true)
+            ->where('deleted', false)
+            ->where('start_date', '<=', now())
+            ->where('end_date', '>=', now())
+            ->with('popups')
+            ->get();
+
+        $notifications = Notification::where('is_broadcast', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $bundles = ProductBundling::where('is_active', true)
+            ->with(['items.product.brand', 'items.product.images', 'items.variant'])
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        foreach ($bundles as $bundle) {
+            // Hitung total harga normal produk-produk di dalam bundling
+            $totalProductPrice = 0;
+            if ($bundle->items) {
+                foreach ($bundle->items as $item) {
+                    if ($item->variant) {
+                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
+                    } elseif ($item->product) {
+                        $minPrice = $item->product->variants->where('status', true)->min('sell_price') ?? 0;
+                        $totalProductPrice += (float) $minPrice * $item->quantity;
+                    }
+                }
+            }
+
+            // Secara default, harga coret adalah harga bundle itu sendiri
+            $bundle->total_original = (float) $bundle->price;
+
+            // Harga dasar Bundling adalah Harga Fix yang diinput Admin
+            $bundlePrice = (float) $bundle->price;
+            
+            // Cek apakah Bundling ini di-override oleh Price Product Setting (PPS)
+            $ppsPromo = \App\Services\StaticPromoService::forBundling($bundle, $bundlePrice);
+            if ($ppsPromo) {
+                // Potong diskon PPS dari Harga Fix Bundling
+                $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
+                $bundle->pps_label = $ppsPromo['label'];
+                
+                // Jika masuk PPS, harga coretnya ngambil ke total harga produk
+                if ($totalProductPrice > 0) {
+                    $bundle->total_original = $totalProductPrice;
+                }
+            }
+
+            $bundle->total_price = $bundlePrice;
+            $bundle->discount_percent = $bundle->total_original > 0
+                ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100, 0)
+                : 0;
+            $bundle->thumbnail_url = $bundle->items->first()?->product?->thumbnail_url;
+        }
+
+        return view('frontend.homepages3', compact(
+            'bestsellers',
+            'recommended',
+            'recommendedTotal',
+            'featured',
+            'categories',
+            'brands',
+            'banners',
+            'homepageSections',
+            'eventPopups',
+            'notifications',
+            'bundles'
+        ));
+    }
+
+
+    public function homepages4()
+    {
+        $bestsellers = Product::where('deleted', false)
+            ->where('best_seller', true)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommended = Product::where('deleted', false)
+            ->whereNotIn('id', $bestsellers->pluck('id'))
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommendedTotal = Product::where('deleted', false)->count();
+
+        $specialSection = HomepageSection::where('section_key', 'like', '%spesial%')
+            ->orWhere('section_key', 'like', '%special%')
+            ->first();
+            
+        $featuredProductId = null;
+        if ($specialSection && $specialSection->meta) {
+            $meta = is_string($specialSection->meta) ? json_decode($specialSection->meta, true) : (array)$specialSection->meta;
+            $featuredProductId = $meta['featured_product_id'] ?? null;
+        }
+
+        $featuredQuery = Product::where('deleted', false)
+            ->with(['brand', 'category', 'images', 'variants', 'tags']);
+            
+        if ($featuredProductId) {
+            $featured = $featuredQuery->where('id', $featuredProductId)->first();
+        } else {
+            $featured = $featuredQuery->where('is_new', true)->first();
+        }
+
+        $categories = ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->withCount('products')
+            ->take(8)
+            ->get();
+
+        $brands = Brand::where('deleted', false)
+            ->where('status', true)
+            ->with(['products' => function ($q) {
+                $q->where('deleted', false)
+                  ->where('status', true)
+                  ->with(['variants', 'images', 'brand', 'category'])
+                  ->take(20);
+            }])
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        foreach ($brands as $brand) {
+            $brand->top_promo_products = $brand->products->map(function($product) {
+                $validVariants = $product->variants->where('sell_price', '>', 0);
+                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('sell_price') : (float) (0 ?? 0);
+                $promo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
+                $discountedPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $promo);
+                
+                $discountPercent = $originalPrice > 0 ? (($originalPrice - $discountedPrice) / $originalPrice) * 100 : 0;
+                $product->calculated_discount = $discountPercent;
+                return $product;
+            })->sortByDesc('calculated_discount')->take(3)->values();
+        }
+
+        $banners = Banner::where('is_active', true)
+            ->where('deleted', false)
+            ->with(['images' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
+            ->orderBy('sort_order', 'asc')
+            ->get()
+            ->groupBy('type');
+
+        $homepageSections = HomepageSection::where('is_visible', true)
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        $eventPopups = Event::where('is_active', true)
+            ->where('deleted', false)
+            ->where('start_date', '<=', now())
+            ->where('end_date', '>=', now())
+            ->with('popups')
+            ->get();
+
+        $notifications = Notification::where('is_broadcast', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $bundles = ProductBundling::where('is_active', true)
+            ->with(['items.product.brand', 'items.product.images', 'items.variant'])
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        foreach ($bundles as $bundle) {
+            // Hitung total harga normal produk-produk di dalam bundling
+            $totalProductPrice = 0;
+            if ($bundle->items) {
+                foreach ($bundle->items as $item) {
+                    if ($item->variant) {
+                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
+                    } elseif ($item->product) {
+                        $minPrice = $item->product->variants->where('status', true)->min('sell_price') ?? 0;
+                        $totalProductPrice += (float) $minPrice * $item->quantity;
+                    }
+                }
+            }
+
+            // Secara default, harga coret adalah harga bundle itu sendiri
+            $bundle->total_original = (float) $bundle->price;
+
+            // Harga dasar Bundling adalah Harga Fix yang diinput Admin
+            $bundlePrice = (float) $bundle->price;
+            
+            // Cek apakah Bundling ini di-override oleh Price Product Setting (PPS)
+            $ppsPromo = \App\Services\StaticPromoService::forBundling($bundle, $bundlePrice);
+            if ($ppsPromo) {
+                // Potong diskon PPS dari Harga Fix Bundling
+                $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
+                $bundle->pps_label = $ppsPromo['label'];
+                
+                // Jika masuk PPS, harga coretnya ngambil ke total harga produk
+                if ($totalProductPrice > 0) {
+                    $bundle->total_original = $totalProductPrice;
+                }
+            }
+
+            $bundle->total_price = $bundlePrice;
+            $bundle->discount_percent = $bundle->total_original > 0
+                ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100, 0)
+                : 0;
+            $bundle->thumbnail_url = $bundle->items->first()?->product?->thumbnail_url;
+        }
+
+        return view('frontend.homepages4', compact(
+            'bestsellers',
+            'recommended',
+            'recommendedTotal',
+            'featured',
+            'categories',
+            'brands',
+            'banners',
+            'homepageSections',
+            'eventPopups',
+            'notifications',
+            'bundles'
+        ));
+    }
+
+
+    public function homepages5()
+    {
+        $bestsellers = Product::where('deleted', false)
+            ->where('best_seller', true)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommended = Product::where('deleted', false)
+            ->whereNotIn('id', $bestsellers->pluck('id'))
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommendedTotal = Product::where('deleted', false)->count();
+
+        $specialSection = HomepageSection::where('section_key', 'like', '%spesial%')
+            ->orWhere('section_key', 'like', '%special%')
+            ->first();
+            
+        $featuredProductId = null;
+        if ($specialSection && $specialSection->meta) {
+            $meta = is_string($specialSection->meta) ? json_decode($specialSection->meta, true) : (array)$specialSection->meta;
+            $featuredProductId = $meta['featured_product_id'] ?? null;
+        }
+
+        $featuredQuery = Product::where('deleted', false)
+            ->with(['brand', 'category', 'images', 'variants', 'tags']);
+            
+        if ($featuredProductId) {
+            $featured = $featuredQuery->where('id', $featuredProductId)->first();
+        } else {
+            $featured = $featuredQuery->where('is_new', true)->first();
+        }
+
+        $categories = ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->withCount('products')
+            ->take(8)
+            ->get();
+
+        $brands = Brand::where('deleted', false)
+            ->where('status', true)
+            ->with(['products' => function ($q) {
+                $q->where('deleted', false)
+                  ->where('status', true)
+                  ->with(['variants', 'images', 'brand', 'category'])
+                  ->take(20);
+            }])
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        foreach ($brands as $brand) {
+            $brand->top_promo_products = $brand->products->map(function($product) {
+                $validVariants = $product->variants->where('sell_price', '>', 0);
+                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('sell_price') : (float) (0 ?? 0);
+                $promo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
+                $discountedPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $promo);
+                
+                $discountPercent = $originalPrice > 0 ? (($originalPrice - $discountedPrice) / $originalPrice) * 100 : 0;
+                $product->calculated_discount = $discountPercent;
+                return $product;
+            })->sortByDesc('calculated_discount')->take(3)->values();
+        }
+
+        $banners = Banner::where('is_active', true)
+            ->where('deleted', false)
+            ->with(['images' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
+            ->orderBy('sort_order', 'asc')
+            ->get()
+            ->groupBy('type');
+
+        $homepageSections = HomepageSection::where('is_visible', true)
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        $eventPopups = Event::where('is_active', true)
+            ->where('deleted', false)
+            ->where('start_date', '<=', now())
+            ->where('end_date', '>=', now())
+            ->with('popups')
+            ->get();
+
+        $notifications = Notification::where('is_broadcast', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $bundles = ProductBundling::where('is_active', true)
+            ->with(['items.product.brand', 'items.product.images', 'items.variant'])
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        foreach ($bundles as $bundle) {
+            // Hitung total harga normal produk-produk di dalam bundling
+            $totalProductPrice = 0;
+            if ($bundle->items) {
+                foreach ($bundle->items as $item) {
+                    if ($item->variant) {
+                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
+                    } elseif ($item->product) {
+                        $minPrice = $item->product->variants->where('status', true)->min('sell_price') ?? 0;
+                        $totalProductPrice += (float) $minPrice * $item->quantity;
+                    }
+                }
+            }
+
+            // Secara default, harga coret adalah harga bundle itu sendiri
+            $bundle->total_original = (float) $bundle->price;
+
+            // Harga dasar Bundling adalah Harga Fix yang diinput Admin
+            $bundlePrice = (float) $bundle->price;
+            
+            // Cek apakah Bundling ini di-override oleh Price Product Setting (PPS)
+            $ppsPromo = \App\Services\StaticPromoService::forBundling($bundle, $bundlePrice);
+            if ($ppsPromo) {
+                // Potong diskon PPS dari Harga Fix Bundling
+                $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
+                $bundle->pps_label = $ppsPromo['label'];
+                
+                // Jika masuk PPS, harga coretnya ngambil ke total harga produk
+                if ($totalProductPrice > 0) {
+                    $bundle->total_original = $totalProductPrice;
+                }
+            }
+
+            $bundle->total_price = $bundlePrice;
+            $bundle->discount_percent = $bundle->total_original > 0
+                ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100, 0)
+                : 0;
+            $bundle->thumbnail_url = $bundle->items->first()?->product?->thumbnail_url;
+        }
+
+        return view('frontend.homepages5', compact(
+            'bestsellers',
+            'recommended',
+            'recommendedTotal',
+            'featured',
+            'categories',
+            'brands',
+            'banners',
+            'homepageSections',
+            'eventPopups',
+            'notifications',
+            'bundles'
+        ));
+    }
+
+
+    public function homepages6()
+    {
+        $bestsellers = Product::where('deleted', false)
+            ->where('best_seller', true)
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommended = Product::where('deleted', false)
+            ->whereNotIn('id', $bestsellers->pluck('id'))
+            ->with(['brand', 'category', 'images', 'variants', 'tags'])
+            ->take(10)
+            ->get();
+
+        $recommendedTotal = Product::where('deleted', false)->count();
+
+        $specialSection = HomepageSection::where('section_key', 'like', '%spesial%')
+            ->orWhere('section_key', 'like', '%special%')
+            ->first();
+            
+        $featuredProductId = null;
+        if ($specialSection && $specialSection->meta) {
+            $meta = is_string($specialSection->meta) ? json_decode($specialSection->meta, true) : (array)$specialSection->meta;
+            $featuredProductId = $meta['featured_product_id'] ?? null;
+        }
+
+        $featuredQuery = Product::where('deleted', false)
+            ->with(['brand', 'category', 'images', 'variants', 'tags']);
+            
+        if ($featuredProductId) {
+            $featured = $featuredQuery->where('id', $featuredProductId)->first();
+        } else {
+            $featured = $featuredQuery->where('is_new', true)->first();
+        }
+
+        $categories = ProductCategory::where('deleted', false)
+            ->whereNull('parent_id')
+            ->withCount('products')
+            ->take(8)
+            ->get();
+
+        $brands = Brand::where('deleted', false)
+            ->where('status', true)
+            ->with(['products' => function ($q) {
+                $q->where('deleted', false)
+                  ->where('status', true)
+                  ->with(['variants', 'images', 'brand', 'category'])
+                  ->take(20);
+            }])
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        foreach ($brands as $brand) {
+            $brand->top_promo_products = $brand->products->map(function($product) {
+                $validVariants = $product->variants->where('sell_price', '>', 0);
+                $originalPrice = $validVariants->isNotEmpty() ? (float) $validVariants->min('sell_price') : (float) (0 ?? 0);
+                $promo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
+                $discountedPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $promo);
+                
+                $discountPercent = $originalPrice > 0 ? (($originalPrice - $discountedPrice) / $originalPrice) * 100 : 0;
+                $product->calculated_discount = $discountPercent;
+                return $product;
+            })->sortByDesc('calculated_discount')->take(3)->values();
+        }
+
+        $banners = Banner::where('is_active', true)
+            ->where('deleted', false)
+            ->with(['images' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
+            ->orderBy('sort_order', 'asc')
+            ->get()
+            ->groupBy('type');
+
+        $homepageSections = HomepageSection::where('is_visible', true)
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        $eventPopups = Event::where('is_active', true)
+            ->where('deleted', false)
+            ->where('start_date', '<=', now())
+            ->where('end_date', '>=', now())
+            ->with('popups')
+            ->get();
+
+        $notifications = Notification::where('is_broadcast', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $bundles = ProductBundling::where('is_active', true)
+            ->with(['items.product.brand', 'items.product.images', 'items.variant'])
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        foreach ($bundles as $bundle) {
+            // Hitung total harga normal produk-produk di dalam bundling
+            $totalProductPrice = 0;
+            if ($bundle->items) {
+                foreach ($bundle->items as $item) {
+                    if ($item->variant) {
+                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
+                    } elseif ($item->product) {
+                        $minPrice = $item->product->variants->where('status', true)->min('sell_price') ?? 0;
+                        $totalProductPrice += (float) $minPrice * $item->quantity;
+                    }
+                }
+            }
+
+            // Secara default, harga coret adalah harga bundle itu sendiri
+            $bundle->total_original = (float) $bundle->price;
+
+            // Harga dasar Bundling adalah Harga Fix yang diinput Admin
+            $bundlePrice = (float) $bundle->price;
+            
+            // Cek apakah Bundling ini di-override oleh Price Product Setting (PPS)
+            $ppsPromo = \App\Services\StaticPromoService::forBundling($bundle, $bundlePrice);
+            if ($ppsPromo) {
+                // Potong diskon PPS dari Harga Fix Bundling
+                $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
+                $bundle->pps_label = $ppsPromo['label'];
+                
+                // Jika masuk PPS, harga coretnya ngambil ke total harga produk
+                if ($totalProductPrice > 0) {
+                    $bundle->total_original = $totalProductPrice;
+                }
+            }
+
+            $bundle->total_price = $bundlePrice;
+            $bundle->discount_percent = $bundle->total_original > 0
+                ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100, 0)
+                : 0;
+            $bundle->thumbnail_url = $bundle->items->first()?->product?->thumbnail_url;
+        }
+
+        return view('frontend.homepages6', compact(
+            'bestsellers',
+            'recommended',
+            'recommendedTotal',
+            'featured',
+            'categories',
+            'brands',
+            'banners',
+            'homepageSections',
+            'eventPopups',
+            'notifications',
+            'bundles'
+        ));
+    }
+
+
     public function loadMore(Request $request)
     {
         $offset = $request->query('offset', 10);

@@ -5,7 +5,13 @@ use App\Http\Controllers\Api\GoogleAuthController;
 use App\Http\Controllers\Api\PaymentGatewayController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\MediaController;
 use Illuminate\Support\Facades\Route;
+
+Route::prefix('media')->group(function () {
+    Route::post('upload-url', [MediaController::class, 'getUploadUrl']);
+    Route::delete('{id}', [MediaController::class, 'destroy']);
+});
 
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->middleware(\Illuminate\Session\Middleware\StartSession::class);

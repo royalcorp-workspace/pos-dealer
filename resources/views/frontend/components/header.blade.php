@@ -93,15 +93,39 @@
         $brands = collect();
         $categories = collect();
     }
+    // --- UI/UX Dynamic Theming ---
+    $isHp3 = request()->routeIs('homepages3');
+    $isHp4 = request()->routeIs('homepages4');
+    
+    // Theme colors
+    $headerBg = 'bg-white';
+    $textColor = 'text-brand-dark';
+    $iconColor = 'text-gray-700 hover:text-brand-gold';
+    $logoColor = 'text-brand-dark';
+    $searchBg = 'bg-gray-50/80 hover:bg-white focus:bg-white border-gray-200';
+    $borderBottom = 'border-b border-gray-100 shadow-sm';
+    
+    if ($isHp3) {
+        $headerBg = 'bg-[#FCF9F3]';
+        $borderBottom = 'shadow-md border-b-2 border-brand-gold/20';
+        // playful look
+    } elseif ($isHp4) {
+        $headerBg = 'bg-brand-dark';
+        $textColor = 'text-white';
+        $iconColor = 'text-white hover:text-brand-gold';
+        $logoColor = 'text-brand-gold';
+        $searchBg = 'bg-white/10 hover:bg-white/20 focus:bg-white text-brand-dark border-white/20 focus:border-brand-gold placeholder-gray-300 focus:placeholder-gray-400';
+        $borderBottom = 'border-b border-brand-gold/30 shadow-lg';
+    }
 @endphp
 
-<header class="w-full bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm font-sans" x-data="{ activeMegaMenu: null, searchOpen: false, isMobileMenuOpen: false }">
+<header class="w-full {{ $headerBg }} {{ $borderBottom }} sticky top-0 z-40 font-sans {{ $textColor }}" x-data="{ activeMegaMenu: null, searchOpen: false, isMobileMenuOpen: false }">
     <!-- Top Bar -->
     <div class="container mx-auto px-4 md:px-6 h-auto py-3 md:h-20 md:py-0 flex flex-nowrap items-center justify-between gap-3 md:gap-6">
         <!-- Logo -->
         <div class="flex items-center gap-3 flex-shrink-0">
             <button 
-                class="md:hidden text-gray-700 hover:text-brand-gold transition-colors focus:outline-none relative w-6 h-6 flex-shrink-0"
+                class="md:hidden {{ $iconColor }} transition-colors focus:outline-none relative w-6 h-6 flex-shrink-0"
                 @click="isMobileMenuOpen = !isMobileMenuOpen"
                 aria-label="Buka menu"
             >
@@ -111,7 +135,7 @@
                 <svg :class="isMobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50'" class="w-6 h-6 absolute inset-0 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <a href="{{ route('home') }}" class="flex items-center gap-2.5 group text-left">
-                <span class="text-3xl lg:text-4xl font-extrabold tracking-tight text-brand-dark font-serif group-hover:text-brand-gold-dark transition-colors">
+                <span class="text-3xl lg:text-4xl font-extrabold tracking-tight font-serif {{ $logoColor }} group-hover:text-brand-gold-dark transition-colors">
                     IMG
                 </span>
                 <span class="hidden xl:block text-[10px] lg:text-[11px] font-sans tracking-[0.18em] text-gray-500 uppercase leading-tight border-l border-gray-200 pl-2.5">
@@ -158,7 +182,7 @@
                     @input="fetchSuggestions()"
                     @focus="if(query.length >= 2) showSuggestions = true"
                     placeholder="{{ __('Cari kasur, spring bed, aksesoris tidur...') }}" 
-                    class="w-full bg-gray-50/80 hover:bg-white focus:bg-white border border-gray-200 focus:border-brand-gold text-gray-800 text-sm rounded-full pl-5 pr-20 py-2.5 focus:outline-none focus:ring-3 focus:ring-brand-gold/15 transition-all placeholder:text-gray-400 shadow-2xs"
+                    class="w-full {{ $searchBg }} border focus:border-brand-gold text-gray-800 text-sm rounded-full pl-5 pr-20 py-2.5 focus:outline-none focus:ring-3 focus:ring-brand-gold/15 transition-all placeholder:text-gray-400 shadow-2xs"
                     autocomplete="off"
                 />
                 <!-- Clear Button Desktop -->

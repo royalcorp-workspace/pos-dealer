@@ -52,10 +52,24 @@ return [
 
     'channels' => [
 
-        'espay' => [
+                'espay' => [
             'driver' => 'daily',
             'path' => storage_path('logs/espay.log'),
             'level' => 'debug',
+            'days' => 14,
+        ],
+
+        'espay-web' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/espay-web.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+
+        'espay-mobile' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/espay-mobile.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
             'days' => 14,
         ],
 

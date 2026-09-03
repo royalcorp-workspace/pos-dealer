@@ -20,7 +20,7 @@ class ReviewController extends Controller
             'order_id' => 'required|uuid|exists:orders,id',
             'rating' => 'required|integer|min:1|max:5',
             'text' => 'required|string|min:10',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|string',
         ]);
 
         $user = session()->get('user', []);
@@ -45,7 +45,9 @@ class ReviewController extends Controller
 
         $imageUrl = null;
         if ($request->hasFile('image')) {
-            $imageUrl = $request->file('image')->store('reviews', 'public');
+            $imageUrl = $request->file('image')->store('reviews', 's3');
+        } elseif ($request->filled('image')) {
+            $imageUrl = $request->input('image');
         }
 
         $review = Review::create([

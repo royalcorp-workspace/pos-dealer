@@ -24,8 +24,7 @@ class ReviewController extends Controller
                 'id' => $r->user_name . $r->created_at->timestamp,
                 'user_name' => $r->user_name,
                 'rating' => $r->rating,
-                'text' => $r->text,
-                'image' => $r->image_url ? asset('storage/' . ltrim($r->image_url, '/')) : null,
+                'image_url' => media_url($r->image_url),
                 'created_at' => $r->created_at->diffForHumans(),
             ])->all(),
         ]);

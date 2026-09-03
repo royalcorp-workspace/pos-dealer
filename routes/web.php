@@ -19,6 +19,11 @@ use Illuminate\Support\Facades\Route;
 
 
 Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/homepages3', [HomeController::class, 'homepages3'])->name('homepages3');
+Route::get('/homepages4', [HomeController::class, 'homepages4'])->name('homepages4');
+Route::get('/homepages5', [HomeController::class, 'homepages5'])->name('homepages5');
+Route::get('/homepages6', [HomeController::class, 'homepages6'])->name('homepages6');
+
 Route::get('/home/load-more', [HomeController::class, 'loadMore'])->name('home.load-more');
 Route::get('/home', fn () => redirect()->route('home'))->name('home.redirect');
 

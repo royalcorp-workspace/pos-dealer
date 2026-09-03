@@ -97,16 +97,7 @@ class Product extends Model
             return asset('images/dummy/header.jpg');
         }
 
-        if (filter_var($this->thumbnail, FILTER_VALIDATE_URL)) {
-            return $this->thumbnail;
-        }
-
-        $cmsUrl = env('CMS_URL', '');
-        if ($cmsUrl) {
-            return rtrim($cmsUrl, '/') . '/storage/' . ltrim($this->thumbnail, '/');
-        }
-
-        return asset('storage/' . ltrim($this->thumbnail, '/'));
+        return media_url($this->thumbnail);
     }
 
     public function brand(): BelongsTo
