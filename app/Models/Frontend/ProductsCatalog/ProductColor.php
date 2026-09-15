@@ -21,7 +21,6 @@ class ProductColor extends Model
         'product_id',
         'color_name',
         'color_code',
-        'status',
         'creator',
         'editor',
         'deleted',
@@ -30,7 +29,6 @@ class ProductColor extends Model
     protected function casts(): array
     {
         return [
-            'status' => 'boolean',
             'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

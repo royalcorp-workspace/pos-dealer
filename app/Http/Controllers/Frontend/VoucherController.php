@@ -30,36 +30,23 @@ class VoucherController extends Controller
             ]);
         }
 
-        $productIds = (array) $request->input('product_ids', []);
-        $categoryIds = (array) $request->input('category_ids', []);
-        if ((int) $voucher->
-            scope === 2 && $voucher->
-            products()->
-            where('deleted', false)->
-            pluck('products.id')->
-            intersect($productIds)->
-            isEmpty()) {
+        $user = session()->get('user');
+        $userId = $user['id'] ?? $user['sub'] ?? null;
+
+        if ((int) $voucher->scope === 2 && !$voucher->canBeUsedBy($userId)) {
             return response()->json([
                 'valid' => false,
-                'message' => 'Voucher ini hanya berlaku untuk produk tertentu.',
+                'message' => 'Voucher ini hanya berlaku untuk pelanggan tertentu.',
             ]);
         }
 
-        if ((int) $voucher->
-            scope === 3 && $voucher->
-            categories()->
-            where('deleted', false)->
-            pluck('product_category.id')->
-            intersect($categoryIds)->
-            isEmpty()) {
+        $categoryIds = (array) $request->input('category_ids', []);
+        if ((int) $voucher->scope === 3 && $voucher->categories()->where('deleted', false)->pluck('product_category.id')->intersect($categoryIds)->isEmpty()) {
             return response()->json([
                 'valid' => false,
                 'message' => 'Voucher ini hanya berlaku untuk kategori tertentu.',
             ]);
         }
-
-        $user = session()->get('user');
-        $userId = $user['id'] ?? $user['sub'] ?? null;
 
         if ($request->cart_total < $voucher->min_purchase) {
             return response()->json([
@@ -109,7 +96,7 @@ class VoucherController extends Controller
                 'scope' => $voucher->scope,
                 'scopeLabel' => $voucher->scopeLabel(),
                 'allowStacking' => $voucher->isStackable(),
-                'products' => (int)$voucher->type === 4 ? $voucher->products()->where('deleted', false)->pluck('name')->toArray() : [],
+                'products' => [],
             ],
         ]);
     }

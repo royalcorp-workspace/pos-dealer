@@ -37,6 +37,11 @@
                     if ($isBundle && $item->item_notes) {
                         $bundleNotes = json_decode($item->item_notes, true) ?? [];
                     }
+                    $itemMeta = is_array($item->meta) ? $item->meta : (json_decode((string) $item->meta, true) ?: []);
+                    $colorId = $itemMeta['color_id'] ?? null;
+                    $colorName = $itemMeta['color_name'] ?? null;
+                    $colorCode = $itemMeta['color_code'] ?? null;
+
                     return [
                         'id' => $item->id,
                         'product_id' => $item->product_id,
@@ -47,6 +52,9 @@
                         'sell_price' => (float) $item->unit_price,
                         'quantity' => (int) $item->quantity,
                         'item_note' => $item->item_notes ?? '',
+                        'color_id' => $colorId,
+                        'color_name' => $colorName,
+                        'color_code' => $colorCode,
                         'type' => $isBundle ? 'bundle' : 'product',
                         'bundle_data' => $bundleNotes,
                     ];
@@ -89,9 +97,9 @@
     $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
     $cartCategoryIds = \App\Models\Frontend\ProductsCatalog\Product::whereIn('id', $cartProductIds)->pluck('category_id')->unique()->values()->all();
     $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
-    $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()->with(['products', 'categories'])->get()->filter(function($coupon) use ($cartProductIds, $cartCategoryIds) {
+    $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()->where('show_on_web', true)->with(['categories'])->get()->filter(function($coupon) use ($cartProductIds, $cartCategoryIds, $userId) {
         if ((int) $coupon->scope === 2) {
-            return $coupon->products()->where('deleted', false)->whereIn('products.id', $cartProductIds)->exists();
+            return $coupon->canBeUsedBy($userId);
         }
 
         if ((int) $coupon->scope === 3) {

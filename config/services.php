@@ -70,4 +70,16 @@ return [
         ],
     ],
 
+    'biteship' => [
+        'api_key' => env('BITESHIP_API_KEY'),
+        'base_url' => env('BITESHIP_BASE_URL', 'https://api.biteship.com'),
+        'origin_area_id' => env('BITESHIP_ORIGIN_AREA_ID'),
+        'origin_postal_code' => env('BITESHIP_ORIGIN_POSTAL_CODE', '40552'),
+        'origin_latitude' => env('BITESHIP_ORIGIN_LATITUDE'),
+        'origin_longitude' => env('BITESHIP_ORIGIN_LONGITUDE'),
+        'origin_address' => env('BITESHIP_ORIGIN_ADDRESS', 'Jl. Raya Barat, Cimareme, Kec. Ngamprah, Kabupaten Bandung Barat'),
+        'origin_contact_name' => env('BITESHIP_ORIGIN_CONTACT_NAME', 'Admin Gudang IMG'),
+        'origin_contact_phone' => env('BITESHIP_ORIGIN_CONTACT_PHONE', '081112345678'),
+    ],
+
 ];

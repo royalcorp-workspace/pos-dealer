@@ -166,8 +166,19 @@
                     currentIndex: 0,
                     get currentImage() { return this.images[this.currentIndex] || this.images[0]; },
                     nextImage() { this.currentIndex = (this.currentIndex + 1) % this.images.length; },
-                    prevImage() { this.currentIndex = (this.currentIndex - 1 + this.images.length) % this.images.length; }
+                    prevImage() { this.currentIndex = (this.currentIndex - 1 + this.images.length) % this.images.length; },
+                    setMainImage(url) {
+                        if (!url) return;
+                        let idx = this.images.indexOf(url);
+                        if (idx === -1) {
+                            this.images.unshift(url);
+                            this.currentIndex = 0;
+                        } else {
+                            this.currentIndex = idx;
+                        }
+                    }
                 }"
+                @set-main-image.window="setMainImage($event.detail)"
             >
                 <!-- Main Stage Image with Smooth Hover Zoom & Navigation -->
                 <div class="aspect-[4/3] bg-gradient-to-b from-[#FAF8F5] to-[#F3F1EC] rounded-3xl overflow-hidden border border-[#EFECE6] relative shadow-sm group">
@@ -309,14 +320,31 @@
                                     </div>
                                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                                         @foreach($options as $option)
+                                            @php
+                                                $optionImage = null;
+                                                foreach ($validVariants as $vv) {
+                                                    $rawAttr = $vv->getRawOriginal('attributes');
+                                                    $vAttrs = $rawAttr ? (is_string($rawAttr) ? json_decode($rawAttr, true) : $rawAttr) : [];
+                                                    if (is_array($vAttrs) && isset($vAttrs[$groupName]) && (string)$vAttrs[$groupName] === (string)$option) {
+                                                        $firstImg = $vv->images->first();
+                                                        if ($firstImg && $firstImg->image) {
+                                                            $optionImage = $firstImg->image_url ?? media_url($firstImg->image);
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            @endphp
                                             <button 
                                                 type="button"
                                                 data-attribute-group="{{ $groupName }}"
                                                 data-attribute-value="{{ $option }}"
                                                 onclick="selectAttribute(this)"
-                                                class="py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs attribute-btn cursor-pointer"
+                                                class="py-2.5 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-2 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs attribute-btn cursor-pointer"
                                             >
-                                                {{ $option }}
+                                                @if($optionImage)
+                                                    <img src="{{ $optionImage }}" alt="{{ $option }}" class="w-6 h-6 rounded-lg object-cover border border-gray-200 shrink-0">
+                                                @endif
+                                                <span>{{ $option }}</span>
                                             </button>
                                         @endforeach
                                     </div>
@@ -343,6 +371,32 @@
                             </div>
                         @endif
                         <input type="hidden" name="variant_id" id="variant-id-input" value="">
+                    @endif
+
+                    <!-- Options (Colors) -->
+                    @if($hasColors)
+                        <div class="mb-6 color-selection-container">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500">{{ __('Pilih Warna') }}</h3>
+                                <span class="text-[11px] text-gray-400 font-medium">{{ $colorsData->count() }} {{ __('opsi tersedia') }}</span>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                @foreach($colorsData as $color)
+                                    <button 
+                                        type="button"
+                                        data-color-id="{{ $color->id }}"
+                                        data-color-name="{{ $color->color_name }}"
+                                        data-color-code="{{ $color->color_code }}"
+                                        onclick="selectColor(this)"
+                                        class="py-2.5 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-2.5 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs color-btn cursor-pointer"
+                                    >
+                                        <span class="w-4 h-4 rounded-full border border-black/15 shadow-2xs shrink-0" style="background-color: {{ $color->color_code ?: '#1e293b' }}"></span>
+                                        <span class="truncate">{{ $color->color_name }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                            <input type="hidden" name="color_id" id="color-id-input" value="">
+                        </div>
                     @endif
 
                     <!-- Dual Action Luxury CTA Section -->
@@ -378,7 +432,7 @@
                                 disabled
                             >
                                 <i class="fa-solid fa-bag-shopping text-brand-gold text-base" id="add-to-cart-icon"></i>
-                                <span id="add-to-cart-text">{{ $isDisabledByOptions ? __('Pilih Ukuran Terlebih Dahulu') : __('Tambah ke Keranjang') }}</span>
+                                <span id="add-to-cart-text">{{ $hasVariants ? __('Pilih Ukuran Terlebih Dahulu') : ($hasColors ? __('Pilih Warna Terlebih Dahulu') : __('Tambah ke Keranjang')) }}</span>
                             </button>
 
                             <!-- Wishlist Heart Button -->
@@ -410,8 +464,8 @@
                     </div>
                     <div class="flex flex-col items-center text-center p-2 border-x border-gray-100">
                         <i class="fa-solid fa-truck-fast text-brand-gold text-lg mb-1.5"></i>
-                        <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ __('Pengiriman Cepat') }}</span>
-                        <span class="text-[10px] text-gray-400 mt-0.5">{{ __('Handling Aman') }}</span>
+                        <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ __('Pengiriman') }}</span>
+                        <span class="text-[10px] text-gray-400 mt-0.5">{{ __('Aman & Cepat') }}</span>
                     </div>
                     <div class="flex flex-col items-center text-center p-2">
                         <i class="fa-solid fa-headset text-brand-gold text-lg mb-1.5"></i>
@@ -493,6 +547,56 @@
                                 <div class="p-3 bg-gray-50 rounded-xl">
                                     <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Ketersediaan') }}</dt>
                                     <dd class="mt-0.5 font-bold text-emerald-700 text-sm">{{ __('Ready Stock') }}</dd>
+                                </div>
+                                @php
+                                    $dimP = (float) ($product->length ?? 0);
+                                    $dimL = (float) ($product->width ?? 0);
+                                    $dimT = (float) ($product->height ?? 0);
+                                    $dimW = (float) ($product->weight ?? 0);
+
+                                    if (($dimP <= 0 || $dimL <= 0 || $dimT <= 0) && $hasVariants) {
+                                        $vWithDim = $validVariants->first(function($v) {
+                                            $vl = (float) ($v->length ?? ($v->attributes['length'] ?? 0));
+                                            $vw = (float) ($v->width ?? ($v->attributes['width'] ?? 0));
+                                            $vh = (float) ($v->height ?? ($v->attributes['height'] ?? 0));
+                                            return $vl > 0 && $vw > 0 && $vh > 0;
+                                        });
+                                        if ($vWithDim) {
+                                            $dimP = (float) ($vWithDim->length ?? ($vWithDim->attributes['length'] ?? 0));
+                                            $dimL = (float) ($vWithDim->width ?? ($vWithDim->attributes['width'] ?? 0));
+                                            $dimT = (float) ($vWithDim->height ?? ($vWithDim->attributes['height'] ?? 0));
+                                        }
+                                    }
+
+                                    if ($dimW <= 0 && $hasVariants) {
+                                        $vWithW = $validVariants->first(function($v) {
+                                            $w = (float) ($v->weight ?? ($v->attributes['weight'] ?? 0));
+                                            return $w > 0;
+                                        });
+                                        if ($vWithW) {
+                                            $dimW = (float) ($vWithW->weight ?? ($vWithW->attributes['weight'] ?? 0));
+                                        }
+                                    }
+                                @endphp
+                                @if($dimP > 0 && $dimL > 0 && $dimT > 0)
+                                    <div class="p-3 bg-gray-50 rounded-xl">
+                                        <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Dimensi (P × L × T)') }}</dt>
+                                        <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $dimP }} × {{ $dimL }} × {{ $dimT }} cm</dd>
+                                    </div>
+                                @endif
+                                @if($dimW > 0)
+                                    <div class="p-3 bg-gray-50 rounded-xl">
+                                        <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Berat Produk') }}</dt>
+                                        <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $dimW }} kg</dd>
+                                    </div>
+                                @endif
+                                <div class="p-3 bg-gray-50 rounded-xl">
+                                    <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Opsi Pengiriman') }}</dt>
+                                    <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ __('Aman & Cepat') }}</dd>
+                                </div>
+                                <div class="p-3 bg-gray-50 rounded-xl">
+                                    <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Keaslian') }}</dt>
+                                    <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ __('100% Produk Original') }}</dd>
                                 </div>
                             </dl>
                         </div>
@@ -590,7 +694,7 @@
                 const qty = parseInt(document.getElementById('quantity-input')?.value || 1);
                 
                 let selectedVariantPrice = {{ $price ?? 0 }};
-                const activeVariant = document.querySelector('[data-variant-id].border-brand-gold');
+                const activeVariant = document.querySelector('[data-variant-id].border-brand-dark, [data-variant-id].border-brand-gold');
                 if (activeVariant && activeVariant.dataset.variantPrice) {
                     selectedVariantPrice = parseFloat(activeVariant.dataset.variantPrice) || selectedVariantPrice;
                 }
@@ -645,12 +749,16 @@
                 }
             }
         }
+        $vImg = $v->images->first()?->image ?? null;
+        $vImgUrl = $vImg ? media_url($vImg) : null;
+
         return [
             'id' => $v->id,
             'price' => $v->sell_price,
             'base_price' => $v->base_price,
             'variant_name' => $v->variant_name,
-            'attributes' => $parsedAttrs
+            'attributes' => $parsedAttrs,
+            'image_url' => $vImgUrl
         ];
     })->values()->all();
 @endphp

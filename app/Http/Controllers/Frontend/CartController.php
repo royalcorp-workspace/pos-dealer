@@ -60,18 +60,36 @@ class CartController extends Controller
 
         $buffer = $this->findOrCreateBuffer();
 
-        $cartItemId = $variantId ? $variantId : $productId;
-        $existingItem = BufferItem::where('buffer_id', $buffer->id)
-            ->where(function ($q) use ($cartItemId, $productId) {
-                $q->where('id', $cartItemId)
-                  ->orWhere(function ($q2) use ($cartItemId, $productId) {
-                      $q2->where('product_variant_id', $cartItemId)
-                         ->orWhere(function ($q3) use ($cartItemId, $productId) {
-                             $q3->whereNull('product_variant_id')->where('product_id', $cartItemId);
-                         });
-                  });
-            })
-            ->first();
+        $colorId = $request->input('color_id');
+        $color = $colorId ? \App\Models\Frontend\ProductsCatalog\ProductColor::find($colorId) : null;
+        $colorName = $color?->color_name;
+        $colorCode = $color?->color_code;
+
+        $meta = [];
+        if ($colorId && $color) {
+            $meta['color_id'] = $colorId;
+            $meta['color_name'] = $colorName;
+            $meta['color_code'] = $colorCode;
+        }
+
+        $existingItemQuery = BufferItem::where('buffer_id', $buffer->id)
+            ->where('product_id', $productId);
+
+        if ($variantId) {
+            $existingItemQuery->where('product_variant_id', $variantId);
+        } else {
+            $existingItemQuery->whereNull('product_variant_id');
+        }
+
+        if ($colorId) {
+            $existingItemQuery->where('meta->color_id', $colorId);
+        } else {
+            $existingItemQuery->where(function ($q) {
+                $q->whereNull('meta')->orWhereNull('meta->color_id');
+            });
+        }
+
+        $existingItem = $existingItemQuery->first();
 
         if ($existingItem) {
             $existingItem->update([
@@ -79,24 +97,37 @@ class CartController extends Controller
             ]);
             $item = $existingItem;
         } else {
+            $itemName = $product->name;
+            if ($variant && !empty($variant->variant_name)) {
+                $itemName .= ' - ' . $variant->variant_name;
+            }
+            if ($colorName) {
+                $itemName .= ' (' . $colorName . ')';
+            }
+
             $item = BufferItem::create([
                 'id' => Str::uuid()->toString(),
                 'buffer_id' => $buffer->id,
                 'product_id' => $productId,
                 'product_variant_id' => $variantId,
-                'name' => $product->name,
+                'name' => $itemName,
                 'quantity' => $quantity,
                 'unit_price' => (float) $price,
                 'total' => (float) $price * $quantity,
                 'discount_nominal' => 0,
                 'discount_percent' => 0,
                 'item_notes' => '',
+                'meta' => !empty($meta) ? $meta : null,
             ]);
         }
 
         $this->recalculateBuffer($buffer);
 
         $cart = $this->getBufferCartArray($buffer);
+
+        if (!empty($product->slug)) {
+            $this->rememberLastProductUrl(route('products.show', $product->slug));
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -115,7 +146,7 @@ class CartController extends Controller
     public function update(Request $request, string $id)
     {
         $request->validate([
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:0',
         ]);
 
         $quantity = (int) $request->input('quantity');
@@ -127,6 +158,20 @@ class CartController extends Controller
         }
 
         if ($quantity < 1) {
+            if ($item->product_id) {
+                $prod = \App\Models\Frontend\ProductsCatalog\Product::find($item->product_id);
+                if ($prod && !empty($prod->slug)) {
+                    $this->rememberLastProductUrl(route('products.show', $prod->slug));
+                }
+            } elseif ($item->item_notes) {
+                $bundleNotes = json_decode((string) $item->item_notes, true);
+                if (!empty($bundleNotes['bundle_id'])) {
+                    $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleNotes['bundle_id']);
+                    if ($bundle && !empty($bundle->slug)) {
+                        $this->rememberLastProductUrl(route('bundling.show', $bundle->slug));
+                    }
+                }
+            }
             $item->delete();
         } else {
             $item->update(['quantity' => $quantity]);
@@ -134,15 +179,23 @@ class CartController extends Controller
 
         $this->recalculateBuffer($buffer);
         $cart = $this->getBufferCartArray($buffer);
+        $cartCount = $this->getCartCount($cart);
+        $lastProductUrl = $this->getLastProductUrl();
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
-                'cart_count' => $this->getCartCount($cart),
+                'cart_count' => $cartCount,
                 'cart_total' => $this->getCartTotal($cart),
+                'redirect_url' => $cartCount === 0 ? $lastProductUrl : null,
                 'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
             ]);
+        }
+
+        $referer = (string) $request->header('referer', '');
+        if ($cartCount === 0 && (str_contains($referer, '/checkout') || str_contains($referer, '/payment'))) {
+            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda telah kosong.');
         }
 
         return redirect()->back();
@@ -154,20 +207,42 @@ class CartController extends Controller
 
         $item = BufferItem::where('buffer_id', $buffer->id)->where('id', $id)->first();
         if ($item) {
+            if ($item->product_id) {
+                $prod = \App\Models\Frontend\ProductsCatalog\Product::find($item->product_id);
+                if ($prod && !empty($prod->slug)) {
+                    $this->rememberLastProductUrl(route('products.show', $prod->slug));
+                }
+            } elseif ($item->item_notes) {
+                $bundleNotes = json_decode((string) $item->item_notes, true);
+                if (!empty($bundleNotes['bundle_id'])) {
+                    $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleNotes['bundle_id']);
+                    if ($bundle && !empty($bundle->slug)) {
+                        $this->rememberLastProductUrl(route('bundling.show', $bundle->slug));
+                    }
+                }
+            }
             $item->delete();
             $this->recalculateBuffer($buffer);
         }
 
         $cart = $this->getBufferCartArray($buffer);
+        $cartCount = $this->getCartCount($cart);
+        $lastProductUrl = $this->getLastProductUrl();
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
-                'cart_count' => $this->getCartCount($cart),
+                'cart_count' => $cartCount,
                 'cart_total' => $this->getCartTotal($cart),
+                'redirect_url' => $cartCount === 0 ? $lastProductUrl : null,
                 'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
             ]);
+        }
+
+        $referer = (string) $request->header('referer', '');
+        if ($cartCount === 0 && (str_contains($referer, '/checkout') || str_contains($referer, '/payment'))) {
+            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda telah kosong.');
         }
 
         return redirect()->back();
@@ -250,7 +325,7 @@ class CartController extends Controller
                 : null;
 
             $vouchers = \App\Models\Frontend\Promo\Voucher::active()
-                ->with(['products', 'categories'])
+                ->with(['categories'])
                 ->where(function ($query) use ($voucherCodes) {
                     foreach ($voucherCodes as $code) {
                         $query->orWhereRaw('LOWER(code) = ?', [strtolower($code)]);
@@ -264,15 +339,17 @@ class CartController extends Controller
                 ->filter()
                 ->values();
 
+            if ($orderedVouchers->count() > 1 && !\App\Models\Frontend\Promo\Voucher::validateVoucherCombination($orderedVouchers)) {
+                $orderedVouchers = $orderedVouchers->take(1);
+            }
+
             $discountSum = 0;
             foreach ($orderedVouchers as $voucher) {
                 if (!$voucher->canBeUsedBy($userId)) continue;
 
                 $eligibleSubtotal = 0.0;
                 if ((int) $voucher->scope === 2) {
-                    $eligibleProductIds = $voucher->products()->where('deleted', false)->pluck('products.id')->unique()->toArray();
                     $eligibleSubtotal = (float) collect($cart)
-                        ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
                         ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
                 } elseif ((int) $voucher->scope === 3) {
                     $eligibleProductIds = $voucher->categories()->where('deleted', false)
@@ -444,7 +521,7 @@ class CartController extends Controller
             'variant_id' => $variant?->id,
             'name' => $name,
             'brand' => $product->brand?->name ?? '',
-            'nullable|string' => $product->thumbnail_url ?? '',
+            'image' => $product->thumbnail_url ?? '',
             'sell_price' => (float) $price,
             'quantity' => max(1, (int) $item->quantity),
             'reorder_from_order_id' => $item->order_id,

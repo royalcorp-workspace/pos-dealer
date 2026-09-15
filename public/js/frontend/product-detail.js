@@ -67,6 +67,17 @@ function selectAttribute(el) {
     el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
     selectedAttributes[groupName] = value;
+    
+    // Immediately trigger main stage image update if an image matches this option (Shopee UX)
+    if (window.productVariants) {
+        const optionWithImg = window.productVariants.find(v => {
+            return v.attributes && v.attributes[groupName] === value && v.image_url;
+        });
+        if (optionWithImg && optionWithImg.image_url) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: optionWithImg.image_url }));
+        }
+    }
+    
     findMatchingVariant();
 }
 
@@ -89,6 +100,10 @@ function findMatchingVariant() {
         
         if (matchedVariant) {
             if (variantInput) variantInput.value = matchedVariant.id;
+
+            if (matchedVariant.image_url) {
+                window.dispatchEvent(new CustomEvent('set-main-image', { detail: matchedVariant.image_url }));
+            }
             
             const priceEl = document.getElementById('product-price');
             const priceLabel = document.getElementById('price-label');
@@ -162,6 +177,10 @@ function findMatchingVariant() {
             
             if (priceLabel) {
                 let selectionText = Object.entries(selectedAttributes).map(([k,v]) => `${k}: ${v}`).join(', ');
+                const activeColor = document.querySelector('[data-color-id].border-brand-dark, [data-color-id].border-brand-gold');
+                if (activeColor && activeColor.dataset.colorName) {
+                    selectionText += ', Warna: ' + activeColor.dataset.colorName;
+                }
                 priceLabel.textContent = 'Harga untuk ' + selectionText;
             }
         } else {
@@ -192,12 +211,24 @@ function selectVariant(el) {
     
     if (priceLabel) {
         const variantName = el.textContent.trim().split('\n')[0];
-        priceLabel.textContent = 'Harga untuk variasi: ' + variantName;
+        const activeColor = document.querySelector('[data-color-id].border-brand-dark, [data-color-id].border-brand-gold');
+        if (activeColor && activeColor.dataset.colorName) {
+            priceLabel.textContent = 'Harga untuk variasi: ' + variantName + ', Warna: ' + activeColor.dataset.colorName;
+        } else {
+            priceLabel.textContent = 'Harga untuk variasi: ' + variantName;
+        }
     }
     
     const variantInput = document.getElementById('variant-id-input');
     if (variantInput) {
         variantInput.value = el.dataset.variantId;
+    }
+
+    if (window.productVariants) {
+        const vObj = window.productVariants.find(v => String(v.id) === String(el.dataset.variantId));
+        if (vObj && vObj.image_url) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: vObj.image_url }));
+        }
     }
     
     checkSelection();
@@ -205,27 +236,27 @@ function selectVariant(el) {
 
 function selectColor(el) {
     document.querySelectorAll('[data-color-id]').forEach(btn => {
-        btn.classList.remove('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
-        btn.classList.add('border-brand-muted', 'bg-white', 'text-gray-600');
+        btn.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40', 'border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
     });
-    el.classList.remove('border-brand-muted', 'bg-white', 'text-gray-600');
-    el.classList.add('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+    el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700', 'border-brand-muted');
+    el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
     const priceLabel = document.getElementById('price-label');
     if (priceLabel) {
         let variantName = '';
-        if (Object.keys(selectedAttributes).length > 0) {
+        if (typeof selectedAttributes !== 'undefined' && Object.keys(selectedAttributes).length > 0) {
             variantName = Object.entries(selectedAttributes).map(([k,v]) => `${k}: ${v}`).join(', ');
         } else {
-            const selectedVariant = document.querySelector('.legacy-variant-btn.border-brand-gold');
+            const selectedVariant = document.querySelector('.legacy-variant-btn.border-brand-dark, .legacy-variant-btn.border-brand-gold');
             variantName = selectedVariant ? selectedVariant.textContent.trim().split('\n')[0] : '';
         }
         
         const colorName = el.dataset.colorName;
         if (variantName) {
-            priceLabel.textContent = 'Harga untuk variasi: ' + variantName + ', warna: ' + colorName;
+            priceLabel.textContent = 'Harga untuk ' + variantName + ', Warna: ' + colorName;
         } else {
-            priceLabel.textContent = 'Harga untuk warna: ' + colorName;
+            priceLabel.textContent = 'Harga untuk Warna: ' + colorName;
         }
     }
     

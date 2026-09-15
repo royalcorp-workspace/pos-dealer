@@ -15,7 +15,7 @@ class ViewServiceProvider extends ServiceProvider
             $view->with(compact('about'));
         });
 
-        View::composer('frontend.layouts.app', function ($view) {
+        View::composer(['frontend.layouts.app', 'frontend.*'], function ($view) {
             $about = AboutUs::first();
             $whatsappNumber = $about && isset($about->social_media['whatsapp'])
                 ? preg_replace('/[^0-9]/', '', $about->social_media['whatsapp'])

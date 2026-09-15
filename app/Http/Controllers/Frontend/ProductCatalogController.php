@@ -246,7 +246,11 @@ class ProductCatalogController extends Controller
 
     public function show(Product $product)
     {
-        $product->load(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
+        if (!empty($product->slug)) {
+            session()->put('last_checkout_product_url', route('products.show', $product->slug));
+        }
+
+        $product->load(['brand', 'category', 'images', 'variants.images', 'colors', 'tags']);
 
         // Load smart related products (same category or brand - 5 items)
         $relatedProducts = Product::where('deleted', false)
@@ -368,7 +372,7 @@ class ProductCatalogController extends Controller
                     $q->orWhere('name', 'ilike', $fuzzyString);
                 }
             })
-            ->with(['category', 'brand'])
+            ->with(['category', 'brand', 'variants'])
             ->limit(20) // Fetch more to sort by relevance in PHP
             ->get();
 
@@ -389,10 +393,11 @@ class ProductCatalogController extends Controller
         ->take(5)
         ->values()
         ->map(function ($product) {
-            $variantsData = $product->variants;
+            $variantsData = $product->variants ? $product->variants->where('deleted', false) : collect();
             $validVariants = $variantsData->where('sell_price', '>', 0);
             $hasVariants = $validVariants->isNotEmpty();
-            $originalPrice = $hasVariants ? (float) $validVariants->first()->price : 0;
+            $minVariant = $hasVariants ? $validVariants->sortBy('sell_price')->first() : null;
+            $originalPrice = $minVariant ? (float) $minVariant->sell_price : 0;
             $staticPromo = \App\Services\StaticPromoService::forProduct($product, $originalPrice);
             $price = \App\Services\StaticPromoService::discountedPrice($originalPrice, $staticPromo);
 
@@ -401,7 +406,8 @@ class ProductCatalogController extends Controller
                 'name' => $product->name,
                 'slug' => $product->slug,
                 'thumbnail_url' => $product->thumbnail_url,
-                'sell_price' => $price,
+                'price' => (float) $price,
+                'sell_price' => (float) $price,
                 'category' => $product->category->name ?? '',
                 'brand' => $product->brand->name ?? ''
             ];

@@ -7,6 +7,7 @@ namespace App\Models\Frontend;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Event extends Model
 {
@@ -20,6 +21,8 @@ class Event extends Model
     protected $fillable = [
         'title',
         'slug',
+        'event_type',
+        'banner_image',
         'description',
         'start_date',
         'end_date',
@@ -28,6 +31,16 @@ class Event extends Model
         'creator',
         'editor',
     ];
+
+    protected $appends = ['banner_image_url'];
+
+    public function getBannerImageUrlAttribute(): ?string
+    {
+        if ($this->banner_image) {
+            return cms_asset($this->banner_image);
+        }
+        return null;
+    }
 
     protected $casts = [
         'start_date' => 'datetime',
@@ -42,6 +55,11 @@ class Event extends Model
     {
         parent::boot();
         static::addGlobalScope('active', fn($q) => $q->where('is_active', true)->where('deleted', false));
+    }
+
+    public function popup(): HasOne
+    {
+        return $this->hasOne(EventPopup::class, 'event_id');
     }
 
     public function popups(): HasMany

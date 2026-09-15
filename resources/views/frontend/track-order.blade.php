@@ -26,12 +26,12 @@
             
             <div class="space-y-1.5">
                 <label class="text-sm font-bold text-gray-700">Nomor Pesanan <span class="text-red-500">*</span></label>
-                <input type="text" name="order_number" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none transition-all" placeholder="Contoh: ORD12345678" required>
+                <input type="text" name="order_number" value="{{ request('order_number', request('order_id', old('order_number'))) }}" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none transition-all" placeholder="Contoh: ORD12345678" required>
             </div>
             
             <div class="space-y-1.5">
                 <label class="text-sm font-bold text-gray-700">Email / Nomor HP <span class="text-red-500">*</span></label>
-                <input type="text" name="contact" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none transition-all" placeholder="Email atau Nomor HP saat pesan" required>
+                <input type="text" name="contact" value="{{ request('contact', request('email', old('contact'))) }}" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-brand-gold focus:ring-1 focus:ring-brand-gold outline-none transition-all" placeholder="Email atau Nomor HP saat pesan" required>
             </div>
             
             <button type="submit" class="w-full py-3.5 bg-brand-dark text-brand-gold rounded-xl font-bold hover:bg-brand-darker transition-colors shadow-lg">

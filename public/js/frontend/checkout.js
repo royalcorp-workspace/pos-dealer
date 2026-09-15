@@ -89,20 +89,91 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var courierShippingPricesEl = document.getElementById('checkout-courier-shipping-prices');
     var courierShippingPrices = courierShippingPricesEl ? JSON.parse(courierShippingPricesEl.textContent || '{}') : {};
+    var courierShippingDetailsEl = document.getElementById('checkout-courier-shipping-details');
+    var courierShippingDetails = courierShippingDetailsEl ? JSON.parse(courierShippingDetailsEl.textContent || '{}') : {};
+
+    function updateShippingUI(courier, cost, details) {
+        currentShippingCost = cost;
+        if (shippingCost) {
+            shippingCost.innerHTML = '<span class="text-brand-dark">' + formatRupiah(currentShippingCost) + '</span>';
+        }
+        var shippingLabel = document.getElementById('checkout-shipping-label');
+        if (shippingLabel) {
+            var labelText = 'Shipping';
+            if (courier) {
+                labelText += ' (' + courier.toUpperCase();
+                if (details && details.has_fixed_items && details.has_dimension_items) {
+                    labelText += ' - Tetap + ' + (details.billable_weight || 1) + ' kg';
+                } else if (details && details.has_fixed_items) {
+                    labelText += ' - Tetap';
+                } else if (details && details.is_calculated && details.billable_weight) {
+                    labelText += ' - ' + details.billable_weight + ' kg';
+                }
+                labelText += ')';
+            }
+            shippingLabel.textContent = labelText;
+        }
+        updateSelectedCouponDisplay();
+        updateTotal();
+    }
+
+    function fetchAndUpdateShippingCost() {
+        if (!courierSelect || !courierSelect.value) {
+            updateShippingUI('', 0, null);
+            return;
+        }
+
+        var courier = courierSelect.value;
+        var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
+        var subDistrictId = subDistrictSelect ? subDistrictSelect.value : '';
+
+        // If subdistrict is empty, fallback to pre-rendered price
+        if (!subDistrictId) {
+            var fallbackCost = courierShippingPrices[courier] || 0;
+            var fallbackDetails = courierShippingDetails[courier] || null;
+            updateShippingUI(courier, fallbackCost, fallbackDetails);
+            return;
+        }
+
+        // Fetch accurate shipping cost for selected courier and subdistrict
+        fetch('/checkout/calculate-shipping?courier=' + encodeURIComponent(courier) + '&sub_district_id=' + encodeURIComponent(subDistrictId))
+            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (res.success && res.data) {
+                    var data = res.data;
+                    courierShippingPrices[courier] = data.shipping_cost;
+                    courierShippingDetails[courier] = data;
+                    updateShippingUI(courier, data.shipping_cost, data);
+
+                    // Update option text dynamically
+                    var opt = courierSelect.querySelector('option[value="' + courier + '"]');
+                    if (opt) {
+                        var courierName = opt.textContent.split(' - ')[0];
+                        var weightText = '';
+                        if (data.has_fixed_items && data.has_dimension_items) {
+                            weightText = ' (Tetap + ' + (data.billable_weight || 1) + ' kg)';
+                        } else if (data.has_fixed_items) {
+                            weightText = ' (Ongkir Tetap)';
+                        } else if (data.is_calculated && data.billable_weight > 0) {
+                            weightText = ' (' + data.billable_weight + ' kg)';
+                        } else {
+                            weightText = ' (Tarif Tetap)';
+                        }
+                        opt.textContent = courierName + ' - ' + formatRupiah(data.shipping_cost) + weightText;
+                    }
+                }
+            })
+            .catch(function () {
+                var fallbackCost = courierShippingPrices[courier] || 0;
+                var fallbackDetails = courierShippingDetails[courier] || null;
+                updateShippingUI(courier, fallbackCost, fallbackDetails);
+            });
+    }
+
+    window.fetchAndUpdateShippingCost = fetchAndUpdateShippingCost;
 
     if (courierSelect) {
-        courierSelect.addEventListener('change', function () {
-            currentShippingCost = courierShippingPrices[this.value] || 0;
-            if (shippingCost) {
-                shippingCost.innerHTML = '<span class="text-brand-dark">' + formatRupiah(currentShippingCost) + '</span>';
-            }
-            var shippingLabel = document.getElementById('checkout-shipping-label');
-            if (shippingLabel) {
-                shippingLabel.textContent = 'Shipping (' + this.value.toUpperCase() + ')';
-            }
-            updateSelectedCouponDisplay();
-            updateTotal();
-        });
+        courierSelect.addEventListener('change', fetchAndUpdateShippingCost);
     }
 
     window.selectCoupon = function (button) {
@@ -347,7 +418,13 @@ document.addEventListener('DOMContentLoaded', function () {
     var isLoggedIn = formEl ? formEl.dataset.isLoggedIn === '1' : false;
 
     restoreCartCoupon();
-    updateTotal();
+    if (courierSelect && courierSelect.value && courierShippingPrices[courierSelect.value] !== undefined) {
+        currentShippingCost = courierShippingPrices[courierSelect.value];
+        var initDetails = courierShippingDetails[courierSelect.value] || null;
+        updateShippingUI(courierSelect.value, currentShippingCost, initDetails);
+    } else {
+        updateTotal();
+    }
 });
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -364,6 +441,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data) {
                 cityInput.value = data.city;
                 if (postalInput) postalInput.value = data.postal_code || '';
+            }
+            if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                window.fetchAndUpdateShippingCost();
             }
         });
     }
@@ -383,6 +463,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             var addressSelector = document.getElementById('address-selector');
             if (addressSelector) addressSelector.classList.add('hidden');
+
+            if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                window.fetchAndUpdateShippingCost();
+            }
         }
     };
 });

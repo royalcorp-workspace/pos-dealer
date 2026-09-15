@@ -13,6 +13,8 @@ class Product extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
+    protected $appends = ['thumbnail_url'];
+
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -22,6 +24,13 @@ class Product extends Model
         'alt_text',
         'short_description',
         'description',
+        'courier_type',
+        'shipping_scheme',
+        'shipping_cost',
+        'length',
+        'width',
+        'height',
+        'weight',
         'best_seller',
         'is_new',
         'sort_order',
@@ -76,5 +85,23 @@ class Product extends Model
     public function getReviewCountAttribute(): int
     {
         return $this->reviews()->where('is_published', true)->where('is_approved', true)->count();
+    }
+
+    public function getCourierTypeLabelAttribute(): string
+    {
+        return match($this->courier_type) {
+            'toko' => 'Kurir Dari Toko',
+            'expedisi' => 'Kurir Dari Expedisi',
+            default => 'Dari Keduanya',
+        };
+    }
+
+    public function getThumbnailUrlAttribute(): string
+    {
+        if (!$this->thumbnail) {
+            return asset('images/dummy/header.jpg');
+        }
+
+        return media_url($this->thumbnail);
     }
 }

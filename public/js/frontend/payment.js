@@ -16,16 +16,13 @@ window.processPayment = function () {
 
     if (isManualTransfer) {
         var fileInput = document.getElementById('payment_proof');
-        if (!fileInput || fileInput.files.length === 0) {
-            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Silakan upload bukti transfer terlebih dahulu.' } }));
-            return;
-        }
-
         window.showLoading();
         body = new FormData();
         body.append('payment_method', selectedMethod.value);
         body.append('order_id', orderId);
-        body.append('payment_proof', fileInput.files[0]);
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+            body.append('payment_proof', fileInput.files[0]);
+        }
 
         headers = {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
@@ -74,9 +71,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function toggleDetails() {
         var selected = document.querySelector('input[name="payment_method"]:checked');        
-        // 0. Visual Update for Radio Buttons (Fallback for browsers without :has() support)
+        // 0. Visual Update for Radio Buttons
         document.querySelectorAll('.payment-method-label').forEach(function(label) {
-            label.classList.remove('border-brand-gold', 'bg-brand-gold/5');
+            label.classList.remove('bg-brand-gold/5');
             var circle = label.querySelector('.rounded-full');
             if (circle) {
                 circle.classList.remove('border-brand-gold', 'bg-brand-gold');
@@ -88,11 +85,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 svg.classList.add('opacity-0');
             }
         });
+
+        // 0b. Visual & Badge Update for Shopee Accordion Groups
+        var accordionGroups = document.querySelectorAll('.payment-accordion-group');
+        accordionGroups.forEach(function(group) {
+            var badge = group.querySelector('.category-selected-badge');
+            var badgeText = group.querySelector('.badge-text');
+            var checkedInGroup = group.querySelector('input[name="payment_method"]:checked');
+            
+            if (checkedInGroup) {
+                var methodName = checkedInGroup.getAttribute('data-method-name') || checkedInGroup.value;
+                if (badge && badgeText) {
+                    badgeText.textContent = methodName;
+                    badge.classList.remove('hidden');
+                    badge.classList.add('inline-flex');
+                }
+                group.classList.add('border-brand-gold', 'ring-2', 'ring-brand-gold/20');
+                group.classList.remove('border-gray-200');
+
+                var content = group.querySelector('.payment-accordion-content');
+                var chevron = group.querySelector('.accordion-chevron');
+                if (content) content.classList.remove('hidden');
+                if (chevron) chevron.classList.add('rotate-180');
+            } else {
+                if (badge) {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('inline-flex');
+                }
+                group.classList.remove('border-brand-gold', 'ring-2', 'ring-brand-gold/20');
+                group.classList.add('border-gray-200');
+            }
+        });
         
         if (selected) {
             var label = selected.closest('.payment-method-label');
             if (label) {
-                label.classList.add('border-brand-gold', 'bg-brand-gold/5');
+                label.classList.add('bg-brand-gold/5');
                 var circle = label.querySelector('.rounded-full');
                 if (circle) {
                     circle.classList.remove('border-gray-300');
@@ -152,28 +180,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 }];
             }
             
-            var orderTotal = detailsContainer ? detailsContainer.getAttribute('data-order-total') : '0';
+            var orderTotal = (typeof baseTotal !== 'undefined' && baseTotal > 0) ? (baseTotal + charge) : (detailsContainer ? parseFloat(detailsContainer.getAttribute('data-order-total') || '0') : 0);
 
             banksContainer.innerHTML = '';
             banksData.forEach(function(bank) {
                 var card = document.createElement('div');
-                card.className = 'bg-white p-4 rounded-xl border border-brand-muted space-y-2 shadow-sm mb-4';
+                card.className = 'bg-white p-4.5 rounded-2xl border border-brand-muted/80 space-y-3 shadow-2xs mb-3';
+                var formattedAmount = new Intl.NumberFormat('id-ID').format(orderTotal);
                 card.innerHTML = `
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <span class="text-gray-500 text-xs">Bank</span>
-                        <span class="font-bold text-brand-dark">${bank.bank_name}</span>
+                    <div class="flex justify-between items-center pb-2.5 border-b border-gray-100">
+                        <span class="text-gray-500 text-xs font-semibold">Nama Bank</span>
+                        <span class="font-extrabold text-brand-dark text-sm bg-brand-light px-2.5 py-0.5 rounded-md border border-brand-muted">${bank.bank_name}</span>
                     </div>
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <span class="text-gray-500 text-xs">No. Rekening</span>
-                        <span class="font-bold text-brand-dark font-mono text-base">${bank.account_number}</span>
+                    <div class="flex justify-between items-center pb-2.5 border-b border-gray-100">
+                        <span class="text-gray-500 text-xs font-semibold">Nomor Rekening</span>
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono font-bold text-brand-dark text-base tracking-wider">${bank.account_number}</span>
+                            <button type="button" onclick="navigator.clipboard.writeText('${bank.account_number}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'Nomor rekening ${bank.account_number} berhasil disalin!' } }));" class="text-xs bg-brand-gold/15 hover:bg-brand-gold/25 text-brand-gold-dark font-bold px-2 py-1 rounded-lg transition-colors inline-flex items-center gap-1" title="Salin nomor rekening">
+                                <i class="fa-regular fa-copy text-[11px]"></i> Salin
+                            </button>
+                        </div>
                     </div>
-                    <div class="flex justify-between items-center border-b pb-2">
-                        <span class="text-gray-500 text-xs">Atas Nama</span>
-                        <span class="font-bold text-brand-dark">${bank.account_holder}</span>
+                    <div class="flex justify-between items-center pb-2.5 border-b border-gray-100">
+                        <span class="text-gray-500 text-xs font-semibold">Atas Nama</span>
+                        <span class="font-bold text-gray-800 text-sm">${bank.account_holder}</span>
                     </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-500 text-xs">Total Transfer</span>
-                        <span class="font-extrabold text-brand-gold-dark text-base">Rp ${new Intl.NumberFormat('id-ID').format(orderTotal)}</span>
+                    <div class="flex justify-between items-center pt-1">
+                        <div>
+                            <span class="text-gray-500 text-xs font-semibold block">Total yang Harus Ditransfer</span>
+                            <span class="text-[11px] text-amber-700">Pastikan nominal tepat sampai digit terakhir</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-extrabold text-brand-gold-dark text-base sm:text-lg">Rp ${formattedAmount}</span>
+                            <button type="button" onclick="navigator.clipboard.writeText('${Math.round(orderTotal)}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'Nominal transfer berhasil disalin!' } }));" class="text-xs bg-brand-gold/15 hover:bg-brand-gold/25 text-brand-gold-dark font-bold px-2 py-1 rounded-lg transition-colors inline-flex items-center gap-1" title="Salin jumlah transfer">
+                                <i class="fa-regular fa-copy text-[11px]"></i>
+                            </button>
+                        </div>
                     </div>
                 `;
                 banksContainer.appendChild(card);
@@ -189,6 +231,38 @@ document.addEventListener('DOMContentLoaded', function() {
         radio.addEventListener('change', toggleDetails);
     });
     
+    // Accordion toggle click listener
+    document.querySelectorAll('.payment-accordion-group').forEach(function(group) {
+        var header = group.querySelector('.payment-accordion-header');
+        var content = group.querySelector('.payment-accordion-content');
+        var chevron = group.querySelector('.accordion-chevron');
+        
+        if (header && content) {
+            header.addEventListener('click', function(e) {
+                var isHidden = content.classList.contains('hidden');
+                if (isHidden) {
+                    content.classList.remove('hidden');
+                    if (chevron) chevron.classList.add('rotate-180');
+                } else {
+                    content.classList.add('hidden');
+                    if (chevron) chevron.classList.remove('rotate-180');
+                }
+            });
+        }
+    });
+
+    // Auto-open first accordion if no radio is selected yet
+    var checkedInit = document.querySelector('input[name="payment_method"]:checked');
+    if (!checkedInit) {
+        var firstGroup = document.querySelector('.payment-accordion-group');
+        if (firstGroup) {
+            var firstContent = firstGroup.querySelector('.payment-accordion-content');
+            var firstChevron = firstGroup.querySelector('.accordion-chevron');
+            if (firstContent) firstContent.classList.remove('hidden');
+            if (firstChevron) firstChevron.classList.add('rotate-180');
+        }
+    }
+
     // Trigger initially in case of preselected radio button
     toggleDetails();
 });

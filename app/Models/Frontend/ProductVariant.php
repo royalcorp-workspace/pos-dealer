@@ -21,6 +21,7 @@ class ProductVariant extends Model
         'length',
         'height',
         'weight',
+        'shipping_cost',
         'base_price',
         'sell_price',
         'stock_quantity',
@@ -32,6 +33,7 @@ class ProductVariant extends Model
     protected function casts(): array
     {
         return [
+            'shipping_cost' => 'decimal:2',
             'base_price' => 'decimal:2',
             'sell_price' => 'decimal:2',
             'attributes' => 'array',
@@ -48,5 +50,20 @@ class ProductVariant extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function getPriceAttribute()
+    {
+        return $this->sell_price ?? $this->base_price ?? 0;
+    }
+
+    public function getStockQuantityAttribute($value)
+    {
+        $invStock = \Illuminate\Support\Facades\DB::table('inventories')
+            ->where('product_variant_id', $this->id)
+            ->where('deleted', false)
+            ->sum('available');
+
+        return $invStock !== null ? (int) $invStock : ($value ?? 0);
     }
 }

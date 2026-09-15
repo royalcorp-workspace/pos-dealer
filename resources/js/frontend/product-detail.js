@@ -1,49 +1,206 @@
 function checkSelection() {
-    const hasVariants = document.querySelector('[data-variant-id]') !== null;
+    const hasLegacyVariants = document.querySelector('.legacy-variant-btn') !== null;
+    const hasAttributeGroups = document.querySelectorAll('.attribute-group-container').length > 0;
     const hasColors = document.querySelector('[data-color-id]') !== null;
     
     const variantInput = document.getElementById('variant-id-input');
     const colorInput = document.getElementById('color-id-input');
     
     let isComplete = true;
-    if (hasVariants && (!variantInput || !variantInput.value)) {
+    let missingPrompt = '';
+    
+    if ((hasLegacyVariants || hasAttributeGroups) && (!variantInput || !variantInput.value)) {
         isComplete = false;
-    }
-    if (hasColors && (!colorInput || !colorInput.value)) {
+        missingPrompt = 'Pilih Ukuran Terlebih Dahulu';
+    } else if (hasColors && (!colorInput || !colorInput.value)) {
         isComplete = false;
+        missingPrompt = 'Pilih Warna Terlebih Dahulu';
     }
     
     const addToCartBtn = document.getElementById('add-to-cart-btn');
+    const addToCartText = document.getElementById('add-to-cart-text');
     const qtyInput = document.getElementById('quantity-input');
     const qtyMinusBtn = document.getElementById('qty-minus-btn');
     const qtyPlusBtn = document.getElementById('qty-plus-btn');
     
-    // Only enable if completed and not artificially disabled by qty check
     if (isComplete) {
-        if (addToCartBtn) addToCartBtn.disabled = false;
+        if (addToCartBtn) {
+            addToCartBtn.disabled = false;
+            addToCartBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+        if (addToCartText) {
+            addToCartText.textContent = 'Tambah ke Keranjang';
+        }
         if (qtyInput) qtyInput.disabled = false;
         if (qtyMinusBtn) qtyMinusBtn.disabled = false;
         if (qtyPlusBtn) qtyPlusBtn.disabled = false;
         
-        // Re-run qty validation just in case
         if (qtyInput && parseInt(qtyInput.value) < 1) {
             if (addToCartBtn) addToCartBtn.disabled = true;
         }
     } else {
-        if (addToCartBtn) addToCartBtn.disabled = true;
+        if (addToCartBtn) {
+            addToCartBtn.disabled = true;
+            addToCartBtn.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+        if (addToCartText) {
+            addToCartText.textContent = missingPrompt || 'Pilih Ukuran Terlebih Dahulu';
+        }
         if (qtyInput) qtyInput.disabled = true;
         if (qtyMinusBtn) qtyMinusBtn.disabled = true;
         if (qtyPlusBtn) qtyPlusBtn.disabled = true;
     }
 }
 
-function selectVariant(el) {
-    document.querySelectorAll('[data-variant-id]').forEach(btn => {
-        btn.classList.remove('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
-        btn.classList.add('border-brand-muted', 'bg-white', 'text-gray-600');
+let selectedAttributes = {};
+
+function selectAttribute(el) {
+    const groupName = el.dataset.attributeGroup;
+    const value = el.dataset.attributeValue;
+    
+    const container = el.closest('.attribute-group-container');
+    container.querySelectorAll('.attribute-btn').forEach(btn => {
+        btn.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
     });
-    el.classList.remove('border-brand-muted', 'bg-white', 'text-gray-600');
-    el.classList.add('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+    el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
+    el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
+    
+    selectedAttributes[groupName] = value;
+    
+    // Immediately trigger main stage image update if an image matches this option (Shopee UX)
+    if (window.productVariants) {
+        const optionWithImg = window.productVariants.find(v => {
+            return v.attributes && v.attributes[groupName] === value && v.image_url;
+        });
+        if (optionWithImg && optionWithImg.image_url) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: optionWithImg.image_url }));
+        }
+    }
+    
+    findMatchingVariant();
+}
+
+function findMatchingVariant() {
+    const requiredGroupsCount = document.querySelectorAll('.attribute-group-container').length;
+    const currentSelectedCount = Object.keys(selectedAttributes).length;
+    const variantInput = document.getElementById('variant-id-input');
+    
+    if (requiredGroupsCount > 0 && currentSelectedCount === requiredGroupsCount) {
+        let matchedVariant = null;
+        if (window.productVariants) {
+            matchedVariant = window.productVariants.find(v => {
+                if (!v.attributes) return false;
+                for (const key in selectedAttributes) {
+                    if (v.attributes[key] !== selectedAttributes[key]) return false;
+                }
+                return true;
+            });
+        }
+        
+        if (matchedVariant) {
+            if (variantInput) variantInput.value = matchedVariant.id;
+
+            if (matchedVariant.image_url) {
+                window.dispatchEvent(new CustomEvent('set-main-image', { detail: matchedVariant.image_url }));
+            }
+            
+            const priceEl = document.getElementById('product-price');
+            const priceLabel = document.getElementById('price-label');
+            
+            let finalPrice = parseFloat(matchedVariant.price) || 0;
+            let basePrice = parseFloat(matchedVariant.base_price) || finalPrice;
+            if (basePrice <= 0) basePrice = finalPrice;
+            
+            let originalPrice = finalPrice;
+            let defaultBadge = null;
+            let ppsBadge = null;
+            let strikePrice = null;
+            
+            if (basePrice > finalPrice) {
+                let pct = Math.round(((basePrice - finalPrice) / basePrice) * 100);
+                defaultBadge = pct + '% OFF';
+            }
+            
+            if (window.staticPromo) {
+                const promo = window.staticPromo;
+                strikePrice = (basePrice > finalPrice) ? basePrice : finalPrice;
+                
+                if (promo.discount_type === 'fixed') {
+                    finalPrice = Math.max(0, finalPrice - parseFloat(promo.discount_value));
+                } else if (promo.discount_type === 'percentage') {
+                    finalPrice = Math.max(0, finalPrice - (finalPrice * parseFloat(promo.discount_value) / 100));
+                }
+                
+                if (strikePrice > 0) {
+                    let totalPct = Math.round(((strikePrice - finalPrice) / strikePrice) * 100);
+                    if (basePrice > originalPrice) {
+                        let ppsPct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
+                        ppsBadge = 'EXTRA ' + ppsPct + '% OFF';
+                    } else {
+                        defaultBadge = totalPct + '% OFF';
+                    }
+                }
+            } else if (basePrice > finalPrice) {
+                strikePrice = basePrice;
+            }
+            
+            if (priceEl) {
+                priceEl.textContent = 'Rp ' + Number(finalPrice).toLocaleString('id-ID');
+                
+                if (defaultBadge || ppsBadge) {
+                    priceEl.classList.remove('text-brand-dark');
+                    priceEl.classList.add('text-red-600');
+                    document.getElementById('product-discount-container').style.display = 'flex';
+                    
+                    const strikeEl = document.getElementById('product-strike-price');
+                    if (strikeEl && strikePrice) strikeEl.textContent = 'Rp ' + Number(strikePrice).toLocaleString('id-ID');
+                    
+                    const dbEl = document.getElementById('product-default-badge');
+                    if (dbEl) {
+                        dbEl.textContent = defaultBadge || '';
+                        dbEl.style.display = defaultBadge ? 'inline' : 'none';
+                    }
+                    
+                    const ppsEl = document.getElementById('product-pps-badge');
+                    if (ppsEl) {
+                        ppsEl.textContent = ppsBadge || '';
+                        ppsEl.style.display = ppsBadge ? 'inline' : 'none';
+                    }
+                } else {
+                    priceEl.classList.remove('text-red-600');
+                    priceEl.classList.add('text-brand-dark');
+                    const dc = document.getElementById('product-discount-container');
+                    if (dc) dc.style.display = 'none';
+                }
+            }
+            
+            if (priceLabel) {
+                let selectionText = Object.entries(selectedAttributes).map(([k,v]) => `${k}: ${v}`).join(', ');
+                const activeColor = document.querySelector('[data-color-id].border-brand-dark, [data-color-id].border-brand-gold');
+                if (activeColor && activeColor.dataset.colorName) {
+                    selectionText += ', Warna: ' + activeColor.dataset.colorName;
+                }
+                priceLabel.textContent = 'Harga untuk ' + selectionText;
+            }
+        } else {
+            if (variantInput) variantInput.value = "";
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Kombinasi varian ini sedang tidak tersedia' } }));
+        }
+    } else if (requiredGroupsCount > 0) {
+        if (variantInput) variantInput.value = "";
+    }
+    
+    checkSelection();
+}
+
+function selectVariant(el) {
+    document.querySelectorAll('.legacy-variant-btn').forEach(btn => {
+        btn.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
+    });
+    el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
+    el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
     const priceEl = document.getElementById('product-price');
     const priceLabel = document.getElementById('price-label');
@@ -54,12 +211,24 @@ function selectVariant(el) {
     
     if (priceLabel) {
         const variantName = el.textContent.trim().split('\n')[0];
-        priceLabel.textContent = 'Harga untuk ukuran: ' + variantName;
+        const activeColor = document.querySelector('[data-color-id].border-brand-dark, [data-color-id].border-brand-gold');
+        if (activeColor && activeColor.dataset.colorName) {
+            priceLabel.textContent = 'Harga untuk variasi: ' + variantName + ', Warna: ' + activeColor.dataset.colorName;
+        } else {
+            priceLabel.textContent = 'Harga untuk variasi: ' + variantName;
+        }
     }
     
     const variantInput = document.getElementById('variant-id-input');
     if (variantInput) {
         variantInput.value = el.dataset.variantId;
+    }
+
+    if (window.productVariants) {
+        const vObj = window.productVariants.find(v => String(v.id) === String(el.dataset.variantId));
+        if (vObj && vObj.image_url) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: vObj.image_url }));
+        }
     }
     
     checkSelection();
@@ -67,18 +236,28 @@ function selectVariant(el) {
 
 function selectColor(el) {
     document.querySelectorAll('[data-color-id]').forEach(btn => {
-        btn.classList.remove('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
-        btn.classList.add('border-brand-muted', 'bg-white', 'text-gray-600');
+        btn.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40', 'border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
     });
-    el.classList.remove('border-brand-muted', 'bg-white', 'text-gray-600');
-    el.classList.add('border-brand-gold', 'bg-brand-light', 'text-brand-dark');
+    el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700', 'border-brand-muted');
+    el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
     const priceLabel = document.getElementById('price-label');
     if (priceLabel) {
-        const selectedVariant = document.querySelector('[data-variant-id].border-brand-gold');
-        const variantName = selectedVariant ? selectedVariant.textContent.trim().split('\n')[0] : '';
+        let variantName = '';
+        if (typeof selectedAttributes !== 'undefined' && Object.keys(selectedAttributes).length > 0) {
+            variantName = Object.entries(selectedAttributes).map(([k,v]) => `${k}: ${v}`).join(', ');
+        } else {
+            const selectedVariant = document.querySelector('.legacy-variant-btn.border-brand-dark, .legacy-variant-btn.border-brand-gold');
+            variantName = selectedVariant ? selectedVariant.textContent.trim().split('\n')[0] : '';
+        }
+        
         const colorName = el.dataset.colorName;
-        priceLabel.textContent = 'Harga untuk ukuran: ' + variantName + ', warna: ' + colorName;
+        if (variantName) {
+            priceLabel.textContent = 'Harga untuk ' + variantName + ', Warna: ' + colorName;
+        } else {
+            priceLabel.textContent = 'Harga untuk Warna: ' + colorName;
+        }
     }
     
     const colorInput = document.getElementById('color-id-input');
@@ -149,4 +328,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Run check immediately on load
+    checkSelection();
 });
