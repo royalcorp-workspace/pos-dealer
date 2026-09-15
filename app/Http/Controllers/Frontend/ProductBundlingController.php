@@ -106,6 +106,10 @@ class ProductBundlingController extends Controller
             abort(404);
         }
 
+        if (!empty($bundle->slug)) {
+            session()->put('last_checkout_product_url', route('bundling.show', $bundle->slug));
+        }
+
         $bundle->load([
             'items.product.variants',
             'items.product.brand',

@@ -22,6 +22,7 @@ use App\Models\Frontend\Buffer\Buffer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
+use App\Services\BiteshipService;
 
 class CheckoutController extends Controller
 {
@@ -30,13 +31,63 @@ class CheckoutController extends Controller
     {
         $buffer = $this->getCurrentBuffer();
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
+
+        if (empty($cart)) {
+            $lastProductUrl = $this->getLastProductUrl();
+            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda kosong.');
+        }
+
+        $lastItem = end($cart);
+        if ($lastItem) {
+            if (($lastItem['type'] ?? '') === 'bundle' && !empty($lastItem['bundle_data']['bundle_id'])) {
+                $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($lastItem['bundle_data']['bundle_id']);
+                if ($bundle && !empty($bundle->slug)) {
+                    $this->rememberLastProductUrl(route('bundling.show', $bundle->slug));
+                }
+            } elseif (!empty($lastItem['product_id'])) {
+                $product = \App\Models\Frontend\ProductsCatalog\Product::find($lastItem['product_id']);
+                if ($product && !empty($product->slug)) {
+                    $this->rememberLastProductUrl(route('products.show', $product->slug));
+                }
+            }
+        }
+
         $vouchers = $this->getAvailableVouchers($cart);
-        $couriers = Courier::with('shippingAddresses')->get();
+
+        // Kurir per produk & kategori: filter kurir toko vs expedisi
+        $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
+        $cartProducts = \App\Models\Frontend\ProductsCatalog\Product::with('category')->whereIn('id', $cartProductIds)->get();
+
+        $resolvedCourierTypes = [];
+        foreach ($cartProducts as $cp) {
+            $cat = $cp->category;
+            // Jika kategori diset global, ikuti kurir kategori. Jika detail / kosong, ikuti kurir produk.
+            if ($cat && $cat->courier_setting_type === 'global' && !empty($cat->courier_type)) {
+                $resolvedCourierTypes[] = $cat->courier_type;
+            } else {
+                $resolvedCourierTypes[] = $cp->courier_type ?: 'keduanya';
+            }
+        }
+
+        $hasTokoOnly = in_array('toko', $resolvedCourierTypes, true);
+        $hasExpedisiOnly = in_array('expedisi', $resolvedCourierTypes, true);
+
+        $courierQuery = Courier::with('shippingAddresses');
+        $enforcedCourierType = null;
+        if ($hasTokoOnly && !$hasExpedisiOnly) {
+            $courierQuery->where('courier_type', 'toko');
+            $enforcedCourierType = 'toko';
+        } elseif ($hasExpedisiOnly && !$hasTokoOnly) {
+            $courierQuery->where('courier_type', 'expedisi');
+            $enforcedCourierType = 'expedisi';
+        }
+        $couriers = $courierQuery->get();
+
         $selectedVoucher = Session::get('selected_voucher');
         $selectedVoucherCodes = $this->getSelectedVoucherCodesFromSession();
         $selectedVouchers = \App\Models\Frontend\Promo\Voucher::active()
             ->whereIn('code', $selectedVoucherCodes)
-            ->with('products')
+            ->with('categories')
             ->get();
         $savedAddresses = collect();
         $savedAddressesSafe = collect();
@@ -132,13 +183,20 @@ class CheckoutController extends Controller
 
         $cartTotal = collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']);
 
-        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'subDistricts', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers'));
+        $cartWeightDetails = $this->calculateCartWeightAndDimensions($cart);
+        $initialSubDistrictId = $savedAddresses->first()->sub_district_id ?? ($checkoutFormData['sub_district_id'] ?? '');
+
+        $courierPrices = [];
+        foreach ($couriers as $courier) {
+            $courierPrices[$courier->code] = $this->calculateShippingDetails($courier->code, $initialSubDistrictId ?? '', $cart);
+        }
+
+        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'subDistricts', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers', 'enforcedCourierType', 'cartWeightDetails', 'courierPrices'));
     }
 
     public function store(Request $request)
     {
         $formFields = $request->only(['name', 'email', 'phone', 'address', 'postal_code', 'courier', 'voucher_code', 'selected_address_id', 'sub_district_id']);
-
 
         $request->validate([
             'name' => 'required|string|max:255',
@@ -156,6 +214,27 @@ class CheckoutController extends Controller
 
         $buffer = $this->getCurrentBuffer();
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
+
+        if (empty($cart) || !$buffer) {
+            $lastProductUrl = $this->getLastProductUrl();
+            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda kosong.');
+        }
+
+        $lastItem = end($cart);
+        if ($lastItem) {
+            if (($lastItem['type'] ?? '') === 'bundle' && !empty($lastItem['bundle_data']['bundle_id'])) {
+                $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($lastItem['bundle_data']['bundle_id']);
+                if ($bundle && !empty($bundle->slug)) {
+                    $this->rememberLastProductUrl(route('bundling.show', $bundle->slug));
+                }
+            } elseif (!empty($lastItem['product_id'])) {
+                $product = \App\Models\Frontend\ProductsCatalog\Product::find($lastItem['product_id']);
+                if ($product && !empty($product->slug)) {
+                    $this->rememberLastProductUrl(route('products.show', $product->slug));
+                }
+            }
+        }
+
         $itemNotes = (array) $request->input('item_notes', []);
         $cartTotal = collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
 
@@ -231,7 +310,7 @@ class CheckoutController extends Controller
             $totalStaticDiscount += $itemStaticDiscount;
             $priceProductSettingDiscount += $itemVolumeDiscount;
 
-            // Recalculate cart item price for voucher calculations and database persistence
+            // Recalculate cart item price for voucher calculations
             $cart[$key]['sell_price'] = $res['promotional_price'];
 
             $resolvedItems[] = [
@@ -260,74 +339,27 @@ class CheckoutController extends Controller
         $appliedVouchers = [];
         $voucherCodes = $this->parseVoucherCodes($request);
         if ($voucherCodes) {
-            $shippingCostForVoucher = $this->getShippingCost($request->courier, $subDistrictId ?? '');
+            $shippingCostForVoucher = $this->getShippingCost($request->courier, $subDistrictId ?? '', $cart);
             $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCostForVoucher);
             $voucherDiscount = $voucherResult['discount'];
             $voucher = $voucherResult['primary'];
             $appliedVouchers = $voucherResult['vouchers'];
         }
 
-        $shippingCost = $this->getShippingCost($request->courier, $subDistrictId ?? '');
+        $shippingCost = $this->getShippingCost($request->courier, $subDistrictId ?? '', $cart);
         $subtotal = $originalCartTotal;
         $totalDiscount = $totalStaticDiscount + $priceProductSettingDiscount + $voucherDiscount;
         $total = max(0, $subtotal - $totalDiscount + $shippingCost);
 
-        $addressId = $request->selected_address_id;
         $userId = null;
-        $customer = null;
-
         if (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
             $tempUserId = $user['id'] ?? $user['sub'] ?? null;
             if ($tempUserId && !\App\Models\User::where('id', $tempUserId)->exists()) {
                 session()->forget(['is_logged_in', 'user', 'access_token', 'refresh_token']);
-            }
-        }
-
-        if (session()->get('is_logged_in')) {
-            $user = session()->get('user', []);
-            $userId = $user['id'] ?? $user['sub'] ?? null;
-
-            if ($addressId) {
-                Address::where('id', $addressId)->update(['is_primary' => true]);
             } else {
-                $subDistrict = SubDistrict::findOrFail($request->sub_district_id);
-                Address::create([
-                    'id' => Str::uuid()->toString(),
-                    'user_id' => $userId,
-                    'sub_district_id' => $request->sub_district_id,
-                    'city_id' => $subDistrict->city_id,
-                    'label' => 'Rumah',
-                    'recipient_name' => $request->name,
-                    'phone' => $request->phone,
-                    'address' => $request->address,
-                    'postal_code' => $subDistrict->postal_code,
-                    'is_primary' => true,
-                ]);
+                $userId = $tempUserId;
             }
-
-            $customer = Customer::updateOrCreate(
-                ['user_id' => $userId],
-                [
-                    'email' => $request->email,
-                    'name' => $request->name,
-                    'phone' => $request->phone,
-                ]
-            );
-
-            // Perbarui juga data session agar UI langsung menggunakan nama baru
-            $user['name'] = $request->name;
-            $user['phone'] = $request->phone;
-            // $user['email'] = $request->email; // opsional, tergantung jika ingin merubah email akun
-            session()->put('user', $user);
-        } else {
-            $customer = Customer::updateOrCreate(
-                ['email' => $request->email],
-                [
-                    'name' => $request->name,
-                    'phone' => $request->phone,
-                ]
-            );
         }
 
         $shippingCostSubsidy = 0;
@@ -340,6 +372,30 @@ class CheckoutController extends Controller
         }
 
         $courierModel = Courier::where('code', $request->courier)->first();
+        if ($courierModel) {
+            $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
+            $cartProducts = \App\Models\Frontend\ProductsCatalog\Product::with('category')->whereIn('id', $cartProductIds)->get();
+
+            $resolvedCourierTypes = [];
+            foreach ($cartProducts as $cp) {
+                $cat = $cp->category;
+                if ($cat && $cat->courier_setting_type === 'global' && !empty($cat->courier_type)) {
+                    $resolvedCourierTypes[] = $cat->courier_type;
+                } else {
+                    $resolvedCourierTypes[] = $cp->courier_type ?: 'keduanya';
+                }
+            }
+
+            $hasTokoOnly = in_array('toko', $resolvedCourierTypes, true);
+            $hasExpedisiOnly = in_array('expedisi', $resolvedCourierTypes, true);
+
+            if ($hasTokoOnly && !$hasExpedisiOnly && $courierModel->courier_type !== 'toko') {
+                return redirect()->route('checkout')->withErrors(['courier' => 'Produk di keranjang hanya dapat dikirim menggunakan Kurir Toko.'])->withInput();
+            }
+            if ($hasExpedisiOnly && !$hasTokoOnly && $courierModel->courier_type !== 'expedisi') {
+                return redirect()->route('checkout')->withErrors(['courier' => 'Produk di keranjang hanya dapat dikirim menggunakan Kurir Ekspedisi.'])->withInput();
+            }
+        }
         $finalSubDistrictId = $subDistrictId ?? $request->sub_district_id;
 
         $shippingAddressRecord = null;
@@ -351,7 +407,6 @@ class CheckoutController extends Controller
         }
         $shippingAddressesId = $shippingAddressRecord ? $shippingAddressRecord->id : null;
 
-        // Fetch complete location details for metadata storage
         $shippingAddressData = null;
         if ($finalSubDistrictId) {
             $subDistrictModel = \App\Models\Frontend\Location\SubDistrict::with('city.province')->find($finalSubDistrictId);
@@ -379,6 +434,7 @@ class CheckoutController extends Controller
                     'city' => $subDistrictModel->city->name ?? '',
                     'province' => $subDistrictModel->city->province->name ?? '',
                     'postal_code' => $postalCode,
+                    'sub_district_id' => $finalSubDistrictId,
                 ];
             }
         }
@@ -387,211 +443,181 @@ class CheckoutController extends Controller
         $dbDiscount = $voucherDiscount;
         $dbTotal = max(0, $dbSubtotal - $dbDiscount + $shippingCost);
 
-        $orderId = 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
-        $order = Order::create([
-            'id' => Str::uuid()->toString(),
-            'order_number' => $orderId,
-            'customer_id' => $customer ? $customer->id : null,
-            'courier_id' => $courierModel ? $courierModel->id : null,
-            'status' => Order::STATUS_PENDING_APPROVAL,
-            'payment_method' => null,
-            'payment_status' => 1,
-            'subtotal' => $dbSubtotal,
-            'tax' => 0,
-            'discount' => $dbDiscount,
-            'total' => $dbTotal,
-            'notes' => null,
-            'voucher_id' => $voucher ? $voucher->id : null,
-            'voucher_nominal' => $voucherDiscount,
-            'shipping_cost' => $shippingCost,
-            'shipping_cost_subsidy' => $shippingCostSubsidy,
-            'shipping_addresses_id' => $shippingAddressesId,
-            'meta' => array_merge(
-                $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
-                ['platform' => 'website']
-            ),
-            'creator' => $customer ? $customer->name : 'Customer Web',
-            'editor' => $customer ? $customer->name : 'Customer Web',
-        ]);
-
-        $productIds = collect($cart)->pluck('product_id')->filter()->unique()->toArray();
-        [$globalSettings, $perProductSettings, $volumeSettings] = $this->getPriceProductSettings($productIds);
-
-        foreach ($resolvedItems as $resolved) {
-            $item = $resolved['item'];
-            $variantId = $resolved['variant_id'];
-            $originalPrice = $resolved['original_price'] ?? $item['sell_price'];
-            $originalSubtotal = $resolved['original_subtotal'];
-            $staticPromoDiscountTotal = $resolved['static_promo_discount'];
-
-            $productDiscountNominal = $staticPromoDiscountTotal + (float) $resolved['volume_promo_discount'];
-            $discountPercent = $originalSubtotal > 0 ? round(($productDiscountNominal / $originalSubtotal) * 100, 2) : 0.0;
-
-            $itemNotesValue = $item['item_note'] ?? ($itemNotes[$item['id']] ?? '');
-            if (($item['type'] ?? null) === 'bundle' && ($item['bundle_data'] ?? null)) {
-                $itemNotesValue = $item['bundle_data'];
-                $itemName = ($item['bundle_data']['bundle_name'] ?? 'Paket Bundling');
-            } else {
-                $itemName = $item['name'];
-            }
-
-            OrderItem::create([
-                'id' => Str::uuid(),
-                'order_id' => $order->id,
-                'product_id' => $item['product_id'],
-                'product_variant_id' => $variantId,
-                'name' => $itemName,
-                'quantity' => $item['quantity'],
-                'unit_price' => $originalPrice,
-                'discount_nominal' => $productDiscountNominal,
-                'discount_percent' => $discountPercent,
-                'total' => max(0, $originalSubtotal - $productDiscountNominal),
-                'item_notes' => is_array($itemNotesValue) ? json_encode($itemNotesValue) : $itemNotesValue,
-            ]);
-
-            // Jika ini bundling, masukkan juga isi item-itemnya sebagai order_items anak dengan harga 0
-            if (($item['type'] ?? null) === 'bundle' && isset($item['bundle_data']['items'])) {
-                foreach ($item['bundle_data']['items'] as $bItem) {
-                    OrderItem::create([
-                        'id' => Str::uuid(),
-                        'order_id' => $order->id,
-                        'product_id' => $bItem['product_id'],
-                        'product_variant_id' => $bItem['variant_id'] ?? null,
-                        'name' => ' - ' . ($bItem['product_name'] ?? 'Produk'),
-                        'quantity' => ((int)$bItem['quantity']) * ((int)$item['quantity']),
-                        'unit_price' => 0,
-                        'discount_nominal' => 0,
-                        'discount_percent' => 0,
-                        'total' => 0,
-                        'item_notes' => 'Bagian dari paket: ' . ($item['bundle_data']['bundle_name'] ?? 'Bundling'),
-                        'meta' => json_encode(['is_bundle_item' => true, 'bundle_id' => $item['bundle_data']['bundle_id'] ?? null])
-                    ]);
-                }
-            }
-        }
-
-        foreach ($appliedVouchers as $appliedVoucher) {
-            $appliedVoucherModel = $appliedVoucher['voucher'];
-            VoucherUsage::create([
-                'id' => Str::uuid(),
-                'voucher_id' => $appliedVoucherModel->id,
-                'user_id' => $userId,
-                'order_id' => $order->id,
-                'discount_amount' => $appliedVoucher['discount'],
-            ]);
-
-            if ((int)$appliedVoucherModel->type === 4) {
-                foreach ($appliedVoucherModel->products as $bp) {
-                    OrderItem::create([
-                        'id' => Str::uuid(),
-                        'order_id' => $order->id,
-                        'product_id' => $bp->id,
-                        'product_variant_id' => null,
-                        'name' => $bp->name . ' (Bonus)',
-                        'quantity' => (int) $appliedVoucherModel->value,
-                        'unit_price' => 0.0,
-                        'discount_nominal' => 0.0,
-                        'discount_percent' => 0.0,
-                        'total' => 0.0,
-                        'item_notes' => 'Bonus Voucher: ' . $appliedVoucherModel->code,
-                    ]);
-                }
-            }
-        }
-
-        Session::put('selected_voucher_codes', $voucherCodes);
-        Session::put('order_data', [
-            'id' => $order->id,
-            'order_number' => $order->order_number,
+        // Update Buffer without creating Order in orders table!
+        $bufferMeta = array_merge($buffer->meta ?? [], [
+            'shipping_address' => $shippingAddressData,
             'customer' => [
                 'name' => $request->name,
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'user_id' => $userId,
                 'selected_address_id' => $addressId,
+                'address' => $request->address,
+                'sub_district_id' => $finalSubDistrictId,
+                'postal_code' => $shippingAddressData['postal_code'] ?? ($request->postal_code ?? ''),
             ],
             'courier' => $request->courier,
+            'courier_id' => $courierModel?->id,
+            'applied_vouchers' => $appliedVouchers,
+            'voucher_codes' => $voucherCodes,
+            'voucher_code' => implode(',', $voucherCodes),
+            'voucher_id' => $voucher?->id,
+            'voucher_ids' => collect($appliedVouchers)->pluck('voucher.id')->filter()->values()->all(),
+            'voucher_discount' => $voucherDiscount,
+            'total_static_discount' => $totalStaticDiscount,
+            'price_product_setting_discount' => $priceProductSettingDiscount,
+            'original_cart_total' => $originalCartTotal,
+            'resolved_items' => $resolvedItems,
+            'item_notes' => $itemNotes,
+            'platform' => 'website',
+        ]);
+
+        $buffer->update([
+            'customer_name' => $request->name,
+            'customer_email' => $request->email,
+            'customer_phone' => $request->phone,
+            'subtotal' => $dbSubtotal,
+            'discount' => $dbDiscount,
+            'total' => $dbTotal,
+            'courier_id' => $courierModel?->id,
+            'voucher_id' => $voucher?->id,
+            'voucher_nominal' => $voucherDiscount,
+            'shipping_cost' => $shippingCost,
+            'shipping_cost_subsidy' => $shippingCostSubsidy,
+            'shipping_addresses_id' => $shippingAddressesId,
+            'meta' => $bufferMeta,
+        ]);
+
+        $itemsForOrderData = array_map(function ($item) use ($itemNotes) {
+            $originalPrice = (float) ($item['original_price'] ?? $item['sell_price'] ?? $item['sell_price']);
+            $price = (float) $item['sell_price'];
+            $discountNominal = $originalPrice - $price;
+            $discountPercent = $originalPrice > 0 ? round(($discountNominal / $originalPrice) * 100, 2) : 0.0;
+
+            return [
+                'id' => $item['id'],
+                'product_id' => $item['product_id'],
+                'variant_id' => $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null),
+                'name' => $item['name'],
+                'image' => $item['image'] ?? '',
+                'sell_price' => $originalPrice,
+                'quantity' => (int) $item['quantity'],
+                'item_note' => $item['item_note'] ?? ($itemNotes[$item['id']] ?? ''),
+                'discount_nominal' => $discountNominal,
+                'discount_percent' => $discountPercent,
+                'total' => $price * (int) $item['quantity'],
+            ];
+        }, array_values($cart));
+
+        $orderData = [
+            'id' => $buffer->id,
+            'order_number' => null,
+            'customer' => [
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'user_id' => $userId,
+                'selected_address_id' => $addressId,
+                'address' => $request->address,
+                'sub_district_id' => $finalSubDistrictId,
+                'postal_code' => $shippingAddressData['postal_code'] ?? ($request->postal_code ?? ''),
+            ],
+            'shipping_address' => $shippingAddressData,
+            'courier' => $request->courier,
+            'courier_id' => $courierModel?->id,
             'shipping_cost' => $shippingCost,
             'subtotal' => $dbSubtotal,
-            'price_product_setting_discount' => 0.0,
+            'price_product_setting_discount' => $priceProductSettingDiscount,
             'voucher_discount' => $voucherDiscount,
-            'total_discount' => $voucherDiscount,
+            'total_discount' => $voucherDiscount + $totalStaticDiscount + $priceProductSettingDiscount,
             'total' => $dbTotal,
             'transaction_fee' => 0.0,
             'voucher_code' => implode(',', $voucherCodes),
             'voucher_codes' => $voucherCodes,
             'voucher_id' => $voucher?->id,
             'voucher_ids' => collect($appliedVouchers)->pluck('voucher.id')->filter()->values()->all(),
-            'items' => array_map(function ($item) use ($itemNotes) {
-                $originalPrice = (float) ($item['original_price'] ?? $item['sell_price'] ?? $item['sell_price']);
-                $price = (float) $item['sell_price'];
-                $discountNominal = $originalPrice - $price;
-                $discountPercent = $originalPrice > 0 ? round(($discountNominal / $originalPrice) * 100, 2) : 0.0;
+            'items' => $itemsForOrderData,
+        ];
 
-                return [
-                    'id' => $item['id'],
-                    'product_id' => $item['product_id'],
-                    'variant_id' => $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null),
-                    'name' => $item['name'],
-                    'sell_price' => $originalPrice,
-                    'quantity' => (int) $item['quantity'],
-                    'item_note' => $item['item_note'] ?? ($itemNotes[$item['id']] ?? ''),
-                    'discount_nominal' => $discountNominal,
-                    'discount_percent' => $discountPercent,
-                    'total' => $price * (int) $item['quantity'],
-                ];
-            }, array_values($cart)),
-        ]);
+        Session::put('selected_voucher_codes', $voucherCodes);
+        Session::put('order_data', $orderData);
+        Session::put('checkout_data', $orderData);
 
-        return redirect()->route('payment', ['order_id' => $order->id]);
+        return redirect()->route('payment');
     }
 
     public function payment(Request $request)
     {
-        $orderIdFromUrl = $request->query('order_id');
-        $orderData = [];
-        
-        // Selalu ambil dari database menggunakan order_id, jangan pakai session local storage
-        if ($orderIdFromUrl) {
-            $order = $this->getOrderFromIdentifier($orderIdFromUrl);
-            if ($order) {
-                $orderData = $this->formatOrderDataFromModel($order);
-            }
+        $buffer = $this->getCurrentBuffer();
+        $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
+
+        if (empty($cart) || !$buffer) {
+            $lastProductUrl = $this->getLastProductUrl();
+            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda kosong.');
         }
-        
-        // If still no order data, try to get most recent pending order for logged-in user
-        if (empty($orderData)) {
-            $user = session()->get('user', []);
-            $userId = $user['id'] ?? $user['sub'] ?? null;
-            
-            if ($userId) {
-                $order = Order::with(['customer', 'courier', 'items', 'voucher'])
-                    ->whereHas('customer', function ($q) use ($userId) {
-                        $q->where('user_id', $userId);
-                    })
-                    ->where('status', Order::STATUS_PENDING_APPROVAL)
-                    ->latest()
-                    ->first();
-                
-                if ($order) {
-                    $orderData = $this->formatOrderDataFromModel($order);
-                }
+
+        $orderData = session()->get('order_data');
+
+        if (empty($orderData) || ($orderData['id'] ?? '') !== $buffer->id) {
+            $meta = $buffer->meta ?? [];
+            if (empty($meta['customer'])) {
+                return redirect()->route('checkout')->with('warning', 'Silakan lengkapi formulir pengiriman terlebih dahulu.');
             }
-        }
-        
-        if (empty($orderData)) {
-            return redirect()->route('checkout')->with('warning', 'Data order tidak ditemukan.');
+
+            $orderData = [
+                'id' => $buffer->id,
+                'order_number' => null,
+                'customer' => $meta['customer'] ?? [],
+                'shipping_address' => $meta['shipping_address'] ?? [],
+                'courier' => $meta['courier'] ?? 'kurir',
+                'courier_id' => $buffer->courier_id,
+                'shipping_cost' => (float) $buffer->shipping_cost,
+                'subtotal' => (float) $buffer->subtotal,
+                'price_product_setting_discount' => (float) ($meta['price_product_setting_discount'] ?? 0),
+                'voucher_discount' => (float) ($buffer->voucher_nominal ?? 0),
+                'total_discount' => (float) $buffer->discount,
+                'total' => (float) $buffer->total,
+                'transaction_fee' => 0.0,
+                'voucher_code' => $meta['voucher_code'] ?? '',
+                'voucher_codes' => $meta['voucher_codes'] ?? [],
+                'voucher_id' => $buffer->voucher_id,
+                'voucher_ids' => $meta['voucher_ids'] ?? [],
+                'items' => array_map(function ($item) {
+                    return [
+                        'id' => $item['id'],
+                        'product_id' => $item['product_id'],
+                        'variant_id' => $item['variant_id'] ?? null,
+                        'name' => $item['name'],
+                        'image' => $item['image'] ?? '',
+                        'sell_price' => (float) $item['sell_price'],
+                        'quantity' => (int) $item['quantity'],
+                        'item_note' => $item['item_note'] ?? '',
+                        'discount_nominal' => (float) ($item['discount_nominal'] ?? 0),
+                        'discount_percent' => (float) ($item['discount_percent'] ?? 0),
+                        'total' => (float) $item['sell_price'] * (int) $item['quantity'],
+                    ];
+                }, $cart),
+            ];
+            session()->put('order_data', $orderData);
         }
 
         $dbMethods = \App\Models\PaymentMethod::active()->orderBy('sort_order')->get();
         $paymentMethods = [];
 
         foreach ($dbMethods as $method) {
+            $isManual = (int)$method->type === 1 
+                || $method->isTypeBankTransfer() 
+                || strtolower((string)$method->provider) !== 'espay' 
+                || in_array($method->code, ['transfer_manual', 'trf'], true);
+
             $paymentMethods[] = [
                 'code' => $method->code,
                 'name' => $method->name,
                 'image' => $method->image,
                 'type' => $method->typeLabel(),
+                'type_id' => $method->type,
+                'provider' => $method->provider,
+                'is_manual' => $isManual,
                 'has_charge' => $method->has_charge,
                 'charge_value' => $method->charge_value,
                 'charge_type' => $method->charge_type, // 1: Percentage, 2: Fixed
@@ -599,26 +625,22 @@ class CheckoutController extends Controller
             ];
         }
 
-
-
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
-        $address = \App\Models\Frontend\Customer\Address::where('user_id', $userId)->where('is_primary', true)->first();
+        $address = null;
+        if ($userId) {
+            $address = \App\Models\Frontend\Customer\Address::where('user_id', $userId)->where('is_primary', true)->first();
+        }
+        $shippingAddress = $orderData['shipping_address'] ?? null;
 
-        return view('frontend.payment', compact('orderData', 'paymentMethods', 'address'));
+        return view('frontend.payment', compact('orderData', 'paymentMethods', 'address', 'shippingAddress'));
     }
 
     public function processPayment(Request $request)
     {
         $orderId = $request->input('order_id');
-        if (!$orderId) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Data order tidak ditemukan.'
-            ], 404);
-        }
-
         $paymentMethod = $request->input('payment_method');
+
         if (!$paymentMethod) {
             return response()->json([
                 'success' => false,
@@ -626,56 +648,329 @@ class CheckoutController extends Controller
             ], 400);
         }
 
-        if ($paymentMethod === 'transfer_manual') {
+        $buffer = $this->getCurrentBuffer();
+        if (!$buffer && $orderId) {
+            $buffer = Buffer::find($orderId);
+        }
+
+        $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
+
+        // Check if an order was already created previously for this ID
+        $existingOrder = $this->getOrderFromIdentifier($orderId);
+
+        if (!$buffer && !$existingOrder) {
+            $lastProductUrl = $this->getLastProductUrl();
+            return response()->json([
+                'success' => false,
+                'redirect_url' => $lastProductUrl,
+                'message' => 'Keranjang belanja Anda telah kosong atau sesi telah kedaluwarsa.'
+            ], 400);
+        }
+
+        if (empty($cart) && !$existingOrder) {
+            $lastProductUrl = $this->getLastProductUrl();
+            return response()->json([
+                'success' => false,
+                'redirect_url' => $lastProductUrl,
+                'message' => 'Keranjang belanja Anda telah kosong.'
+            ], 400);
+        }
+
+        $paymentMethodModel = \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
+
+        // Tentukan apakah metode pembayaran adalah Bank Transfer / Manual
+        $isBankTransfer = ($paymentMethodModel && (
+            $paymentMethodModel->isTypeBankTransfer() 
+            || (int)$paymentMethodModel->type === 1 
+            || strtolower((string)$paymentMethodModel->provider) !== 'espay'
+        )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true);
+
+        if ($isBankTransfer && $request->hasFile('payment_proof')) {
             $request->validate([
-                'payment_proof' => 'required|string',
+                'payment_proof' => 'nullable|file|image|max:10240',
             ]);
         }
 
-        $order = $this->getOrderFromIdentifier($orderId);
+        $bufferMeta = $buffer ? ($buffer->meta ?? []) : [];
+        $customerData = $bufferMeta['customer'] ?? [];
+        $shippingAddressData = $bufferMeta['shipping_address'] ?? null;
+        $resolvedItems = $bufferMeta['resolved_items'] ?? [];
+        $appliedVouchers = $bufferMeta['applied_vouchers'] ?? [];
+        $itemNotes = $bufferMeta['item_notes'] ?? [];
 
-        if ($order) {
-            $paymentMethodModel = \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
-            $charge = 0;
-            if ($paymentMethodModel && $paymentMethodModel->has_charge) {
-                $charge = (int) $paymentMethodModel->charge_type === 1 
-                    ? ($order->total * $paymentMethodModel->charge_value / 100) 
-                    : $paymentMethodModel->charge_value;
+        $charge = 0;
+        $baseTotal = $existingOrder ? (float)$existingOrder->total : (float)$buffer->total;
+        if ($paymentMethodModel && $paymentMethodModel->has_charge) {
+            $charge = (int) $paymentMethodModel->charge_type === 1 
+                ? ($baseTotal * $paymentMethodModel->charge_value / 100) 
+                : $paymentMethodModel->charge_value;
+        }
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+
+        try {
+            $order = $existingOrder;
+
+            if (!$order) {
+                // 1. Create or update Customer and Address
+                $userId = session()->get('is_logged_in') 
+                    ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) 
+                    : ($customerData['user_id'] ?? null);
+
+                $customer = null;
+                if ($userId) {
+                    if (!empty($customerData['selected_address_id'])) {
+                        Address::where('id', $customerData['selected_address_id'])->update(['is_primary' => true]);
+                    } elseif (!empty($customerData['sub_district_id'])) {
+                        $subDistrict = SubDistrict::find($customerData['sub_district_id']);
+                        if ($subDistrict) {
+                            Address::create([
+                                'id' => Str::uuid()->toString(),
+                                'user_id' => $userId,
+                                'sub_district_id' => $subDistrict->id,
+                                'city_id' => $subDistrict->city_id,
+                                'label' => 'Rumah',
+                                'recipient_name' => $customerData['name'] ?? '',
+                                'phone' => $customerData['phone'] ?? '',
+                                'address' => $customerData['address'] ?? '',
+                                'postal_code' => $customerData['postal_code'] ?? $subDistrict->postal_code,
+                                'is_primary' => true,
+                            ]);
+                        }
+                    }
+
+                    $customer = Customer::updateOrCreate(
+                        ['user_id' => $userId],
+                        [
+                            'email' => $customerData['email'] ?? '',
+                            'name' => $customerData['name'] ?? '',
+                            'phone' => $customerData['phone'] ?? '',
+                        ]
+                    );
+
+                    $user = session()->get('user', []);
+                    $user['name'] = $customerData['name'] ?? ($user['name'] ?? '');
+                    $user['phone'] = $customerData['phone'] ?? ($user['phone'] ?? '');
+                    session()->put('user', $user);
+                } else {
+                    $customer = Customer::updateOrCreate(
+                        ['email' => $customerData['email'] ?? 'guest@example.com'],
+                        [
+                            'name' => $customerData['name'] ?? 'Pelanggan',
+                            'phone' => $customerData['phone'] ?? '',
+                        ]
+                    );
+                }
+
+                // 2. Prepare Order Metadata
+                $orderMeta = array_merge(
+                    $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
+                    [
+                        'customer' => $customerData,
+                        'platform' => 'website',
+                        'payment_started_at' => now()->toIso8601String(),
+                    ]
+                );
+
+                if ($paymentMethodModel && is_array($paymentMethodModel->instructions)) {
+                    $orderMeta['payment_instructions'] = $paymentMethodModel->instructions;
+                }
+
+                // 3. Create Order
+                $orderNumber = 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
+                $order = Order::create([
+                    'id' => Str::uuid()->toString(),
+                    'order_number' => $orderNumber,
+                    'customer_id' => $customer ? $customer->id : null,
+                    'courier_id' => $buffer->courier_id,
+                    'status' => Order::STATUS_PENDING_APPROVAL,
+                    'payment_method' => $paymentMethod,
+                    'payment_status' => 1,
+                    'subtotal' => $buffer->subtotal,
+                    'tax' => 0,
+                    'discount' => $buffer->discount,
+                    'total' => $buffer->total + $charge,
+                    'notes' => null,
+                    'voucher_id' => $buffer->voucher_id,
+                    'voucher_nominal' => $buffer->voucher_nominal ?? 0,
+                    'shipping_cost' => $buffer->shipping_cost,
+                    'shipping_cost_subsidy' => $buffer->shipping_cost_subsidy ?? 0,
+                    'shipping_addresses_id' => $buffer->shipping_addresses_id,
+                    'transaction_fee' => $charge,
+                    'meta' => $orderMeta,
+                    'creator' => $customer ? $customer->name : 'Customer Web',
+                    'editor' => $customer ? $customer->name : 'Customer Web',
+                ]);
+
+                // 4. Create OrderItems & Allocate Inventory
+                if (!empty($resolvedItems)) {
+                    foreach ($resolvedItems as $resolved) {
+                        $item = $resolved['item'];
+                        $variantId = $resolved['variant_id'];
+                        $originalPrice = $resolved['original_price'] ?? $item['sell_price'];
+                        $originalSubtotal = $resolved['original_subtotal'];
+                        $staticPromoDiscountTotal = $resolved['static_promo_discount'];
+
+                        $productDiscountNominal = $staticPromoDiscountTotal + (float) ($resolved['volume_promo_discount'] ?? 0);
+                        $discountPercent = $originalSubtotal > 0 ? round(($productDiscountNominal / $originalSubtotal) * 100, 2) : 0.0;
+
+                        $itemNotesValue = $item['item_note'] ?? ($itemNotes[$item['id']] ?? '');
+                        if (($item['type'] ?? null) === 'bundle' && ($item['bundle_data'] ?? null)) {
+                            $itemNotesValue = $item['bundle_data'];
+                            $itemName = ($item['bundle_data']['bundle_name'] ?? 'Paket Bundling');
+                        } else {
+                            $itemName = $item['name'];
+                        }
+
+                        $itemMeta = [];
+                        if (!empty($item['color_id'])) {
+                            $itemMeta['color_id'] = $item['color_id'];
+                            $itemMeta['color_name'] = $item['color_name'] ?? null;
+                            $itemMeta['color_code'] = $item['color_code'] ?? null;
+                        }
+
+                        OrderItem::create([
+                            'id' => Str::uuid(),
+                            'order_id' => $order->id,
+                            'product_id' => $item['product_id'],
+                            'product_variant_id' => $variantId,
+                            'name' => $itemName,
+                            'quantity' => $item['quantity'],
+                            'unit_price' => $originalPrice,
+                            'discount_nominal' => $productDiscountNominal,
+                            'discount_percent' => $discountPercent,
+                            'total' => max(0, $originalSubtotal - $productDiscountNominal),
+                            'item_notes' => is_array($itemNotesValue) ? json_encode($itemNotesValue) : $itemNotesValue,
+                            'meta' => !empty($itemMeta) ? $itemMeta : null,
+                        ]);
+
+                        if ($variantId && ($item['type'] ?? null) !== 'bundle') {
+                            \App\Services\InventoryService::recordWebOrder($variantId, (int) $item['quantity']);
+                        }
+
+                        if (($item['type'] ?? null) === 'bundle' && isset($item['bundle_data']['items'])) {
+                            foreach ($item['bundle_data']['items'] as $bItem) {
+                                $bVariantId = $bItem['variant_id'] ?? null;
+                                $bQty = ((int)$bItem['quantity']) * ((int)$item['quantity']);
+
+                                OrderItem::create([
+                                    'id' => Str::uuid(),
+                                    'order_id' => $order->id,
+                                    'product_id' => $bItem['product_id'],
+                                    'product_variant_id' => $bVariantId,
+                                    'name' => ' - ' . ($bItem['product_name'] ?? 'Produk'),
+                                    'quantity' => $bQty,
+                                    'unit_price' => 0,
+                                    'discount_nominal' => 0,
+                                    'discount_percent' => 0,
+                                    'total' => 0,
+                                    'item_notes' => 'Bagian dari paket: ' . ($item['bundle_data']['bundle_name'] ?? 'Bundling'),
+                                    'meta' => json_encode(['is_bundle_item' => true, 'bundle_id' => $item['bundle_data']['bundle_id'] ?? null])
+                                ]);
+
+                                if ($bVariantId) {
+                                    \App\Services\InventoryService::recordWebOrder($bVariantId, $bQty);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    foreach ($cart as $item) {
+                        OrderItem::create([
+                            'id' => Str::uuid(),
+                            'order_id' => $order->id,
+                            'product_id' => $item['product_id'],
+                            'product_variant_id' => $item['variant_id'] ?? null,
+                            'name' => $item['name'],
+                            'quantity' => $item['quantity'],
+                            'unit_price' => $item['sell_price'],
+                            'discount_nominal' => 0,
+                            'discount_percent' => 0,
+                            'total' => $item['sell_price'] * $item['quantity'],
+                            'item_notes' => $item['item_note'] ?? '',
+                        ]);
+                        if (!empty($item['variant_id'])) {
+                            \App\Services\InventoryService::recordWebOrder($item['variant_id'], (int) $item['quantity']);
+                        }
+                    }
+                }
+
+                // 5. Voucher Usage
+                foreach ($appliedVouchers as $appliedVoucher) {
+                    $voucherIdToUse = $appliedVoucher['voucher']['id'] ?? ($appliedVoucher['voucher']->id ?? null);
+                    $appliedVoucherModel = $voucherIdToUse ? \App\Models\Frontend\Promo\Voucher::find($voucherIdToUse) : null;
+                    if ($appliedVoucherModel) {
+                        VoucherUsage::create([
+                            'id' => Str::uuid(),
+                            'voucher_id' => $appliedVoucherModel->id,
+                            'user_id' => $userId,
+                            'order_id' => $order->id,
+                            'discount_amount' => $appliedVoucher['discount'],
+                        ]);
+
+                        if ((int)$appliedVoucherModel->type === 4) {
+                            foreach ($appliedVoucherModel->products as $bp) {
+                                OrderItem::create([
+                                    'id' => Str::uuid(),
+                                    'order_id' => $order->id,
+                                    'product_id' => $bp->id,
+                                    'product_variant_id' => null,
+                                    'name' => $bp->name . ' (Bonus)',
+                                    'quantity' => (int) $appliedVoucherModel->value,
+                                    'unit_price' => 0.0,
+                                    'discount_nominal' => 0.0,
+                                    'discount_percent' => 0.0,
+                                    'total' => 0.0,
+                                    'item_notes' => 'Bonus Voucher: ' . $appliedVoucherModel->code,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            } else {
+                $meta = $order->meta ?? [];
+                $meta['payment_started_at'] = now()->toIso8601String();
+                if ($paymentMethodModel && is_array($paymentMethodModel->instructions)) {
+                    $meta['payment_instructions'] = $paymentMethodModel->instructions;
+                }
+                $order->meta = $meta;
             }
 
             $meta = $order->meta ?? [];
-            $meta['payment_started_at'] = now()->toIso8601String();
-            if ($paymentMethodModel && is_array($paymentMethodModel->instructions)) {
-                $meta['payment_instructions'] = $paymentMethodModel->instructions;
-            }
 
-            if ($paymentMethod === 'transfer_manual') {
+            // 6. Handle Bank Transfer or ESPAY
+            if ($isBankTransfer) {
                 if ($request->hasFile('payment_proof')) {
-                    $proofPath = $request->file('payment_proof')->store('payment_proofs', 's3');
+                    try {
+                        if (config('filesystems.disks.s3.key')) {
+                            $proofPath = $request->file('payment_proof')->store('payment_proofs', 's3');
+                        } else {
+                            $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
+                        }
+                    } catch (\Throwable $e) {
+                        $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
+                    }
                     $meta['payment_proof'] = $proofPath;
-                } elseif ($request->filled('payment_proof')) {
-                    $meta['payment_proof'] = $request->input('payment_proof');
+                    $order->payment_status = 2;
                 }
-            }
-
-            // ------------------- INTEGRASI ESPAY -------------------
-            if ($paymentMethod !== 'transfer_manual') {
-                $amount = number_format((float)($order->total + $charge), 2, '.', '');
+                $order->payment_method = $paymentMethod;
+                $order->transaction_fee = $charge;
+                $order->meta = $meta;
+                $order->save();
+            } elseif ($paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay') {
+                $amount = number_format((float)($order->total), 2, '.', '');
                 $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
-                // Pakai endpoint sendinvoice
                 $espayUrl = str_replace('/rest/merchant', '/rest/merchantpg', $baseUrl) . '/sendinvoice';
-                
+
                 $signatureKey = config('espay.signature_key');
                 $commCode = config('espay.merchant_key');
-                $rqUuid = \Illuminate\Support\Str::uuid()->toString();
+                $rqUuid = Str::uuid()->toString();
                 $rqDatetime = date('Y-m-d H:i:s');
-                $espayOrderId = str_replace('-', '', $order->order_number); // Gunakan order_number tanpa tanda strip
-                
-                // Formula Signature Espay untuk Send Invoice
+                $espayOrderId = str_replace('-', '', $order->order_number);
+
                 $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
                 $signature = hash('sha256', strtoupper($dataToHash));
 
-                // Ambil bankCode asli (e.g. 014) dari database berdasarkan productCode (e.g. BCAATM)
                 $espayBankCode = $paymentMethod;
                 if ($paymentMethodModel && is_array($paymentMethodModel->bank_info) && !empty($paymentMethodModel->bank_info['bank_code'])) {
                     $espayBankCode = $paymentMethodModel->bank_info['bank_code'];
@@ -688,12 +983,12 @@ class CheckoutController extends Controller
                     'amount' => $amount,
                     'ccy' => 'IDR',
                     'comm_code' => $commCode,
-                    'remark1' => $order->customer->phone ?? '00000000000',
-                    'remark2' => $order->customer->name ?? 'Customer',
-                    'remark3' => $order->customer->email ?? '',
+                    'remark1' => $order->customer->phone ?? ($customerData['phone'] ?? '00000000000'),
+                    'remark2' => $order->customer->name ?? ($customerData['name'] ?? 'Customer'),
+                    'remark3' => $order->customer->email ?? ($customerData['email'] ?? ''),
                     'update' => 'N',
                     'bank_code' => $espayBankCode,
-                    'va_expired' => 1440, // Expired VA dalam menit (1440 menit = 24 Jam)
+                    'va_expired' => 1440,
                     'signature' => $signature,
                 ];
 
@@ -702,116 +997,87 @@ class CheckoutController extends Controller
                     $paymentData = $response->json();
 
                     if ($response->successful() && isset($paymentData['error_code']) && $paymentData['error_code'] === '0000') {
-                        // Buat data Settlement (status pending)
                         $settlement = \App\Models\Settlement::create([
                             'reference_id' => $order->order_number,
-                            'gross_amount' => $amount, // total + charge
+                            'gross_amount' => $amount,
                             'fee_amount' => $charge,
-                            'net_amount' => $order->total, // nilai bersih tanpa fee tambahan Espay
+                            'net_amount' => $order->total,
                             'status' => 'pending',
                             'notes' => "Payment via {$paymentMethod}"
                         ]);
 
                         $order->update([
                             'payment_method' => $paymentMethod,
-                            'payment_status' => 1, // Menunggu pembayaran
+                            'payment_status' => 1,
                             'transaction_fee' => $charge,
-                            'total' => $amount,
                             'settlement_id' => $settlement->id,
                             'meta' => array_merge($meta, [
-                                'espay_reference' => $paymentData['reference'] ?? '',
+                                'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
                                 'va_number' => $paymentData['va_number'] ?? ''
                             ])
                         ]);
-                        
-                        $logMessage = "Espay Send Invoice Success\n";
-                        $logMessage .= "Order ID: {$orderId}\n";
-                        $logMessage .= "Payload: \n" . json_encode($payload, JSON_PRETTY_PRINT) . "\n";
-                        $logMessage .= "Response: \n" . json_encode($paymentData, JSON_PRETTY_PRINT);
+
+                        $logMessage = "Espay Send Invoice Success\nOrder ID: {$order->order_number}\nResponse: " . json_encode($paymentData, JSON_PRETTY_PRINT);
                         \Illuminate\Support\Facades\Log::channel('espay')->info($logMessage);
-
-                        // Kirim email notifikasi
-                        try {
-                            $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
-                            if ($customerEmail) {
-                                \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
-                            }
-                        } catch (\Exception $e) {
-                            \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated: ' . $e->getMessage());
-                        }
-
-                        session()->forget('order_data');
-                        session()->forget('selected_voucher_codes');
-                        session()->forget('cart');
-
-                        return response()->json([
-                            'success' => true,
-                            // Jika ada payment_url dari Espay (biasanya e-wallet), redirect ke sana. Jika VA, ke thankyou.
-                            'redirect_url' => $paymentData['payment_url'] ?? route('thankyou', ['order_id' => $order->id])
-                        ]);
                     } else {
-                        $logMessage = "Espay Send Invoice Failed\n";
-                        $logMessage .= "Error Code: " . ($paymentData['error_code'] ?? 'Unknown') . "\n";
-                        $logMessage .= "Error Message: " . ($paymentData['error_message'] ?? 'Unknown') . "\n";
-                        $logMessage .= "Payload: \n" . json_encode($payload, JSON_PRETTY_PRINT) . "\n";
-                        $logMessage .= "Response: \n" . json_encode($paymentData, JSON_PRETTY_PRINT);
-                        
+                        \Illuminate\Support\Facades\DB::rollBack();
+                        $logMessage = "Espay Send Invoice Failed\nResponse: " . json_encode($paymentData, JSON_PRETTY_PRINT);
                         \Illuminate\Support\Facades\Log::channel('espay')->error($logMessage);
-                        
+
                         return response()->json([
                             'success' => false,
                             'message' => 'Gagal mendapatkan data pembayaran dari Espay: ' . ($paymentData['error_message'] ?? 'Unknown error')
                         ]);
                     }
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Exception: " . $e->getMessage() . "\nTrace: " . $e->getTraceAsString());
+                    \Illuminate\Support\Facades\DB::rollBack();
+                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Exception: " . $e->getMessage());
                     return response()->json([
                         'success' => false,
                         'message' => 'Terjadi kesalahan sistem saat menghubungi payment gateway.'
                     ]);
                 }
+            } else {
+                $order->payment_method = $paymentMethod;
+                $order->transaction_fee = $charge;
+                $order->meta = $meta;
+                $order->save();
             }
-            // -------------------------------------------------------
 
-            $order->update([
-                'payment_method' => $paymentMethod,
-                'payment_status' => 2, // Terbayar / Menunggu verifikasi
-                'transaction_fee' => $charge,
-                'total' => $order->total + $charge,
-                'meta' => $meta,
-            ]);
+            \Illuminate\Support\Facades\DB::commit();
 
-            // Kirim email notifikasi
+            // Send notification email
             try {
-                $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
+                $customerEmail = $order->customer->email ?? ($customerData['email'] ?? null);
                 if ($customerEmail) {
                     \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
                 }
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated (Manual): ' . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated: ' . $e->getMessage());
             }
 
-            session()->forget('order_data');
-            session()->forget('selected_voucher_codes');
-            session()->forget('cart'); // CLEAR CART SESSION
-            session()->put('thankyou_order_id', $order->id);
-
-            $buffer = $this->getCurrentBuffer();
+            // Clear Buffer & Session
             if ($buffer) {
                 $buffer->items()->delete();
                 $buffer->delete();
             }
 
+            session()->forget(['order_data', 'checkout_data', 'selected_voucher_codes', 'cart']);
+            session()->put('thankyou_order_id', $order->id);
+
             return response()->json([
                 'success' => true,
                 'redirect_url' => route('thankyou', ['order_id' => $order->id])
             ]);
-        }
 
-        return response()->json([
-            'success' => false,
-            'message' => 'Order tidak ditemukan.'
-        ], 404);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            \Illuminate\Support\Facades\Log::error('Checkout processPayment error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat memproses pesanan: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function uploadPaymentProof(Request $request, string $orderId)
@@ -925,7 +1191,7 @@ class CheckoutController extends Controller
         
         // Try to get order from session ID first, then from URL parameter
         if ($orderId) {
-            $order = Order::with(['customer', 'courier', 'items', 'voucher'])->find($orderId);
+            $order = Order::with(['customer', 'courier', 'items.product', 'voucher'])->find($orderId);
         } elseif ($orderIdFromUrl) {
             $order = $this->getOrderFromIdentifier($orderIdFromUrl);
         } else {
@@ -935,7 +1201,7 @@ class CheckoutController extends Controller
                 $userId = $user['id'] ?? $user['sub'] ?? null;
                 
                 if ($userId) {
-                    $order = Order::with(['customer', 'courier', 'items', 'voucher'])
+                    $order = Order::with(['customer', 'courier', 'items.product', 'voucher'])
                         ->whereHas('customer', function ($q) use ($userId) {
                             $q->where('user_id', $userId);
                         })
@@ -982,10 +1248,11 @@ class CheckoutController extends Controller
         $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
 
         return Voucher::active()
-            ->with(['products', 'categories'])
+            ->where('show_on_web', true)
+            ->with(['categories'])
             ->get()
-            ->filter(function ($voucher) use ($cartProductIds, $cartCategoryIds) {
-                return $this->voucherAppliesToCart($voucher, $cartProductIds, $cartCategoryIds);
+            ->filter(function ($voucher) use ($cartProductIds, $cartCategoryIds, $userId) {
+                return $this->voucherAppliesToCart($voucher, $cartProductIds, $cartCategoryIds, $userId);
             })
             ->map(function ($voucher) use ($userId) {
                 $voucher->is_usable = $voucher->canBeUsedBy($userId);
@@ -994,10 +1261,10 @@ class CheckoutController extends Controller
             ->values();
     }
 
-    private function voucherAppliesToCart(Voucher $voucher, array $cartProductIds, array $cartCategoryIds): bool
+    private function voucherAppliesToCart(Voucher $voucher, array $cartProductIds, array $cartCategoryIds, ?string $userId = null): bool
     {
         if ((int) $voucher->scope === 2) {
-            return $voucher->products()->where('deleted', false)->whereIn('products.id', $cartProductIds)->exists();
+            return $voucher->canBeUsedBy($userId);
         }
 
         if ((int) $voucher->scope === 3) {
@@ -1031,7 +1298,7 @@ class CheckoutController extends Controller
     {
         $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
         $vouchers = Voucher::active()
-            ->with(['products', 'categories'])
+            ->with(['categories'])
             ->where(function ($query) use ($codes) {
                 foreach ($codes as $code) {
                     $query->orWhereRaw('LOWER(code) = ?', [strtolower($code)]);
@@ -1041,8 +1308,8 @@ class CheckoutController extends Controller
             ->keyBy(fn($v) => strtoupper($v->code));
 
         $orderedVouchers = collect($codes)->map(fn($code) => $vouchers->get(strtoupper($code)))->filter()->values();
-        if ($orderedVouchers->count() > 1 && $orderedVouchers->contains(fn($voucher) => !$voucher->isStackable())) {
-            $orderedVouchers = $orderedVouchers->take(-1);
+        if ($orderedVouchers->count() > 1 && !Voucher::validateVoucherCombination($orderedVouchers)) {
+            $orderedVouchers = $orderedVouchers->take(1);
         }
 
         $appliedVouchers = [];
@@ -1075,10 +1342,7 @@ class CheckoutController extends Controller
     private function getVoucherEligibleSubtotal(Voucher $voucher, array $cart): float
     {
         if ((int) $voucher->scope === 2) {
-            $productIds = $voucher->products()->where('deleted', false)->pluck('products.id')->unique()->toArray();
-            return (float) collect($cart)
-                ->filter(fn($item) => in_array($item['product_id'] ?? null, $productIds, true))
-                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
+            return (float) collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
         }
 
         if ((int) $voucher->scope === 3) {
@@ -1227,23 +1491,240 @@ class CheckoutController extends Controller
         return min($value, $itemTotal, $maxDiscount);
     }
 
-    private function getShippingCost(string $courier, string $subDistrictId): int
+    public function calculateCartWeightAndDimensions(array $cart = []): array
     {
-        $courierModel = Courier::whereRaw('LOWER(code) = ?', [strtolower($courier)])->first();
-        if (!$courierModel) {
-            return 0;
+        if (empty($cart)) {
+            $buffer = $this->getCurrentBuffer();
+            $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
         }
 
-        $shipping = ShippingAddress::where('courier_id', $courierModel->id)
-            ->where('sub_district_id', $subDistrictId)
-            ->first();
+        $totalActualWeight = 0.0;
+        $totalVolumetricWeight = 0.0;
+        $totalFixedShippingCost = 0.0;
+        $hasAnyDimensionOrWeight = false;
+        $hasFixedShippingItems = false;
+        $hasDimensionItems = false;
+
+        foreach ($cart as $item) {
+            $quantity = max(1, (int) ($item['quantity'] ?? 1));
+            $isBundle = ($item['type'] ?? null) === 'bundle';
+
+            if ($isBundle && !empty($item['bundle_data']['bundle_id'])) {
+                $bundleModel = \App\Models\Frontend\ProductsCatalog\ProductBundling::with(['items.variant', 'items.product'])->find($item['bundle_data']['bundle_id']);
+                if ($bundleModel && $bundleModel->items->isNotEmpty()) {
+                    foreach ($bundleModel->items as $bItem) {
+                        $bQty = max(1, (int) ($bItem->quantity ?? 1)) * $quantity;
+                        $v = $bItem->variant;
+                        $p = $bItem->product;
+
+                        $isFixed = ($p && $p->shipping_scheme === 'fixed');
+                        if ($isFixed) {
+                            $hasFixedShippingItems = true;
+                            $vShip = (float) ($v?->shipping_cost ?? $p?->shipping_cost ?? 0);
+                            $totalFixedShippingCost += ($vShip * $bQty);
+                        } else {
+                            $hasDimensionItems = true;
+                            $bLen = (float) ($v->length ?? $p->length ?? ($v->attributes['length'] ?? 0));
+                            $bWid = (float) ($v->width ?? $p->width ?? ($v->attributes['width'] ?? 0));
+                            $bHei = (float) ($v->height ?? $p->height ?? ($v->attributes['height'] ?? 0));
+                            $bWei = (float) ($v->weight ?? $p->weight ?? ($v->attributes['weight'] ?? 0));
+
+                            if ($bWei > 0 || ($bLen > 0 && $bWid > 0 && $bHei > 0)) {
+                                $hasAnyDimensionOrWeight = true;
+                            }
+
+                            $totalActualWeight += ($bWei * $bQty);
+                            if ($bLen > 0 && $bWid > 0 && $bHei > 0) {
+                                $totalVolumetricWeight += (($bLen * $bWid * $bHei) / 6000) * $bQty;
+                            }
+                        }
+                    }
+                    continue;
+                }
+            }
+
+            $variantId = $item['variant_id'] ?? (($item['id'] ?? null) !== ($item['product_id'] ?? null) ? ($item['id'] ?? null) : null);
+            $variantModel = $variantId ? \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId) : null;
+            $productModel = !empty($item['product_id']) ? \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']) : null;
+            if (!$productModel && $variantModel) {
+                $productModel = $variantModel->product;
+            }
+
+            $isFixed = ($productModel && $productModel->shipping_scheme === 'fixed');
+            if ($isFixed) {
+                $hasFixedShippingItems = true;
+                $vShip = (float) ($variantModel?->shipping_cost ?? $productModel?->shipping_cost ?? 0);
+                $totalFixedShippingCost += ($vShip * $quantity);
+            } else {
+                $hasDimensionItems = true;
+                $length = 0.0;
+                $width = 0.0;
+                $height = 0.0;
+                $weight = 0.0;
+
+                if ($variantModel) {
+                    $length = (float) ($variantModel->length ?? $productModel->length ?? ($variantModel->attributes['length'] ?? 0));
+                    $width = (float) ($variantModel->width ?? $productModel->width ?? ($variantModel->attributes['width'] ?? 0));
+                    $height = (float) ($variantModel->height ?? $productModel->height ?? ($variantModel->attributes['height'] ?? 0));
+                    $weight = (float) ($variantModel->weight ?? $productModel->weight ?? ($variantModel->attributes['weight'] ?? 0));
+                } elseif ($productModel) {
+                    $length = (float) ($productModel->length ?? 0);
+                    $width = (float) ($productModel->width ?? 0);
+                    $height = (float) ($productModel->height ?? 0);
+                    $weight = (float) ($productModel->weight ?? 0);
+                }
+
+                if (isset($item['dimensions']) && is_array($item['dimensions'])) {
+                    $length = (float) ($item['dimensions']['length'] ?? $length);
+                    $width = (float) ($item['dimensions']['width'] ?? $width);
+                    $height = (float) ($item['dimensions']['height'] ?? $height);
+                    $weight = (float) ($item['dimensions']['weight'] ?? $weight);
+                } else {
+                    if (isset($item['length']) && $item['length'] !== null && $item['length'] !== '') $length = (float) $item['length'];
+                    if (isset($item['width']) && $item['width'] !== null && $item['width'] !== '') $width = (float) $item['width'];
+                    if (isset($item['height']) && $item['height'] !== null && $item['height'] !== '') $height = (float) $item['height'];
+                    if (isset($item['weight']) && $item['weight'] !== null && $item['weight'] !== '') $weight = (float) $item['weight'];
+                }
+
+                if ($weight > 0 || ($length > 0 && $width > 0 && $height > 0)) {
+                    $hasAnyDimensionOrWeight = true;
+                }
+
+                $totalActualWeight += ($weight * $quantity);
+                if ($length > 0 && $width > 0 && $height > 0) {
+                    $totalVolumetricWeight += (($length * $width * $height) / 6000) * $quantity;
+                }
+            }
+        }
+
+        $chargeableWeight = max($totalActualWeight, $totalVolumetricWeight);
+
+        return [
+            'is_calculable' => $hasAnyDimensionOrWeight && $chargeableWeight > 0,
+            'has_fixed_items' => $hasFixedShippingItems,
+            'has_dimension_items' => $hasDimensionItems,
+            'fixed_shipping_cost' => round($totalFixedShippingCost, 2),
+            'actual_weight' => round($totalActualWeight, 2),
+            'volumetric_weight' => round($totalVolumetricWeight, 2),
+            'chargeable_weight' => round($chargeableWeight, 2),
+        ];
+    }
+
+    public function calculateShippingDetails(string $courier, string $subDistrictId = '', array $cart = []): array
+    {
+        if (empty($cart)) {
+            $buffer = $this->getCurrentBuffer();
+            $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
+        }
+
+        $courierModel = Courier::whereRaw('LOWER(code) = ?', [strtolower($courier)])->first();
+        if (!$courierModel) {
+            return [
+                'shipping_cost' => 0,
+                'base_price' => 0,
+                'is_calculated' => false,
+                'billable_weight' => 0,
+                'chargeable_weight' => 0,
+                'actual_weight' => 0,
+                'volumetric_weight' => 0,
+                'has_fixed_items' => false,
+                'has_dimension_items' => false,
+            ];
+        }
+
+        $shipping = null;
+        if (!empty($subDistrictId)) {
+            $shipping = ShippingAddress::where('courier_id', $courierModel->id)
+                ->where('sub_district_id', $subDistrictId)
+                ->first();
+        }
 
         if (!$shipping) {
             $shipping = ShippingAddress::where('courier_id', $courierModel->id)
                 ->first();
         }
 
-        return $shipping ? (int) $shipping->price : 25000;
+        $basePrice = $shipping ? (int) $shipping->price : 25000;
+
+        $weightDetails = $this->calculateCartWeightAndDimensions($cart);
+        $totalChargeableWeight = $weightDetails['chargeable_weight'];
+        $isCalculable = $weightDetails['is_calculable'];
+        $fixedShippingCost = (int) ($weightDetails['fixed_shipping_cost'] ?? 0);
+        $hasDimensionItems = $weightDetails['has_dimension_items'] ?? false;
+        $hasFixedItems = $weightDetails['has_fixed_items'] ?? false;
+
+        $expeditionCost = 0;
+        $billableWeight = 0;
+        $shippingServiceName = null;
+        $shippingEtd = null;
+        $shippingSource = 'internal';
+
+        $biteshipService = app(BiteshipService::class);
+        $biteshipRate = null;
+        if ($biteshipService->isConfigured() && $courierModel->courier_type === 'expedisi' && !empty($subDistrictId)) {
+            $destSubDistrict = SubDistrict::find($subDistrictId);
+            $destPostalCode = $destSubDistrict?->postal_code;
+            if ($destPostalCode) {
+                $biteshipRate = $biteshipService->getBestRateForCourier($courierModel->code, $cart, (string) $destPostalCode);
+            }
+        }
+
+        if ($biteshipRate && isset($biteshipRate['price'])) {
+            $expeditionCost = (int) $biteshipRate['price'];
+            $shippingServiceName = $biteshipRate['service_name'] ?? null;
+            $shippingEtd = $biteshipRate['duration'] ?? null;
+            $shippingSource = 'biteship';
+        } elseif ($hasDimensionItems) {
+            if ($isCalculable && $totalChargeableWeight > 0) {
+                $billableWeight = max(1, (int) ceil($totalChargeableWeight));
+                $expeditionCost = (int) ($basePrice * $billableWeight);
+            } else {
+                $expeditionCost = $basePrice;
+            }
+        } elseif (!$hasFixedItems) {
+            // No fixed items and no dimension items (fallback)
+            $expeditionCost = $basePrice;
+        }
+
+        $totalShippingCost = $fixedShippingCost + $expeditionCost;
+
+        return [
+            'shipping_cost' => $totalShippingCost,
+            'base_price' => $basePrice,
+            'fixed_shipping_cost' => $fixedShippingCost,
+            'expedition_cost' => $expeditionCost,
+            'is_calculated' => ($isCalculable && $totalChargeableWeight > 0) || $hasFixedItems || $biteshipRate !== null,
+            'billable_weight' => $billableWeight,
+            'chargeable_weight' => $totalChargeableWeight,
+            'actual_weight' => $weightDetails['actual_weight'],
+            'volumetric_weight' => $weightDetails['volumetric_weight'],
+            'has_dimension_items' => $hasDimensionItems,
+            'service_name' => $shippingServiceName,
+            'duration' => $shippingEtd,
+            'source' => $shippingSource,
+        ];
+    }
+
+    private function getShippingCost(string $courier, string $subDistrictId, array $cart = []): int
+    {
+        $details = $this->calculateShippingDetails($courier, $subDistrictId, $cart);
+        return (int) ($details['shipping_cost'] ?? 0);
+    }
+
+    public function calculateShippingCostAjax(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $courier = (string) $request->query('courier', '');
+        $subDistrictId = (string) $request->query('sub_district_id', '');
+
+        $buffer = $this->getCurrentBuffer();
+        $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
+
+        $details = $this->calculateShippingDetails($courier, $subDistrictId, $cart);
+
+        return response()->json([
+            'success' => true,
+            'data' => $details,
+        ]);
     }
 
     /**
@@ -1251,7 +1732,7 @@ class CheckoutController extends Controller
      */
     private function getOrderFromIdentifier($identifier): ?Order
     {
-        $query = Order::with(['customer', 'courier', 'items', 'voucher']);
+        $query = Order::with(['customer', 'courier', 'items.product', 'voucher']);
         
         if (\Illuminate\Support\Str::isUuid($identifier)) {
             return $query->where('id', $identifier)->first();
@@ -1270,6 +1751,7 @@ class CheckoutController extends Controller
                 'product_id' => $item->product_id,
                 'variant_id' => $item->product_variant_id,
                 'name' => $item->name,
+                'image' => $item->product?->thumbnail_url ?? '',
                 'sell_price' => (float) $item->unit_price,
                 'quantity' => (int) $item->quantity,
                 'item_note' => $item->item_notes ?? '',
@@ -1345,7 +1827,7 @@ class CheckoutController extends Controller
 
         $customer = null;
         if ($email) {
-            $customer = Customer::where('email', $email)->first();
+            $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
         } elseif ($phone) {
             $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
             if (str_starts_with($cleanPhone, '0')) {
@@ -1395,27 +1877,79 @@ class CheckoutController extends Controller
             'contact' => 'required|string', // Bisa email atau nomor HP untuk security
         ]);
 
-        $orderNumber = $request->input('order_number');
-        $contact = $request->input('contact');
+        $orderNumber = trim((string) $request->input('order_number'));
+        $contact = trim((string) $request->input('contact'));
 
-        // Cari order
+        // Cari order (case-insensitive untuk order_number maupun id UUID)
         $order = \App\Models\Frontend\Order::with(['customer', 'items'])
-            ->where('order_number', $orderNumber)
+            ->where(function ($q) use ($orderNumber) {
+                $q->whereRaw('LOWER(order_number) = ?', [strtolower($orderNumber)])
+                  ->orWhereRaw('LOWER(id::text) = ?', [strtolower($orderNumber)]);
+            })
             ->first();
 
         if (!$order) {
-            return back()->with('error', 'Pesanan tidak ditemukan. Pastikan Nomor Pesanan benar.');
+            return back()->withInput()->with('error', 'Pesanan tidak ditemukan. Pastikan Nomor Pesanan benar.');
         }
 
-        // Verifikasi contact (email atau phone)
+        // Verifikasi contact (email atau phone) secara case-insensitive
         $customer = $order->customer;
         $customerData = $order->meta['customer'] ?? null;
-        
-        $validEmail = ($customer && $customer->email === $contact) || ($customerData && ($customerData['email'] ?? '') === $contact);
-        $validPhone = ($customer && $customer->phone === $contact) || ($customerData && ($customerData['phone'] ?? '') === $contact);
+        $shippingAddressData = $order->meta['shipping_address'] ?? null;
+
+        // 1. Email matching: Case-insensitive & trimmed
+        $inputContactLower = strtolower($contact);
+        $orderEmails = array_filter([
+            $customer?->email,
+            $customerData['email'] ?? null,
+            $shippingAddressData['email'] ?? null,
+        ]);
+
+        $validEmail = false;
+        foreach ($orderEmails as $orderEmail) {
+            if (strtolower(trim((string) $orderEmail)) === $inputContactLower) {
+                $validEmail = true;
+                break;
+            }
+        }
+
+        // 2. Phone matching: Normalized digits comparison
+        $inputPhoneDigits = preg_replace('/[^0-9]/', '', $contact);
+        $orderPhones = array_filter([
+            $customer?->phone,
+            $customerData['phone'] ?? null,
+            $shippingAddressData['phone'] ?? null,
+        ]);
+
+        $validPhone = false;
+        if (!empty($inputPhoneDigits)) {
+            foreach ($orderPhones as $orderPhone) {
+                $orderPhoneDigits = preg_replace('/[^0-9]/', '', (string) $orderPhone);
+                if (!empty($orderPhoneDigits)) {
+                    if (
+                        $orderPhoneDigits === $inputPhoneDigits ||
+                        str_ends_with($orderPhoneDigits, $inputPhoneDigits) ||
+                        str_ends_with($inputPhoneDigits, $orderPhoneDigits)
+                    ) {
+                        $validPhone = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Exact string fallback matching for contact
+        if (!$validPhone) {
+            foreach ($orderPhones as $orderPhone) {
+                if (trim((string) $orderPhone) === $contact) {
+                    $validPhone = true;
+                    break;
+                }
+            }
+        }
 
         if (!$validEmail && !$validPhone) {
-            return back()->with('error', 'Email atau Nomor HP tidak cocok dengan data pesanan.');
+            return back()->withInput()->with('error', 'Email atau Nomor HP tidak cocok dengan data pesanan.');
         }
 
         // Jika cocok, redirect ke tracking detail page
@@ -1424,7 +1958,7 @@ class CheckoutController extends Controller
 
     public function trackOrderDetail(string $orderId)
     {
-        $order = \App\Models\Frontend\Order::with(['customer', 'courier', 'items', 'voucher'])->findOrFail($orderId);
+        $order = \App\Models\Frontend\Order::with(['customer', 'courier', 'items.product', 'voucher'])->findOrFail($orderId);
         return view('frontend.track-order-detail', compact('order'));
     }
 }

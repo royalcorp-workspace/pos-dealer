@@ -17,12 +17,11 @@ class SetLocalization
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (Session::has('locale')) {
-            App::setLocale(Session::get('locale'));
-        } else {
-            // Default language
-            App::setLocale(config('app.locale', 'id'));
+        $locale = Session::get('locale', config('app.locale', 'id'));
+        if (! in_array($locale, ['en', 'id'])) {
+            $locale = config('app.locale', 'id');
         }
+        App::setLocale($locale);
 
         return $next($request);
     }

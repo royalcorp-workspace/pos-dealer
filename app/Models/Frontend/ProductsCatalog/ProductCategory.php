@@ -27,6 +27,8 @@ class ProductCategory extends Model
         'description',
         'banner_web',
         'banner_mobile',
+        'courier_setting_type',
+        'courier_type',
         'sort_order',
         'status',
         'creator',

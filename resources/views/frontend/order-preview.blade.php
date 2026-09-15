@@ -54,10 +54,17 @@
                     <h2 class="font-bold text-brand-dark mb-5">Ringkasan Produk</h2>
                     <div class="space-y-4">
                         @forelse($items as $item)
+                            @php
+                                $itemImage = $item['image'] ?? null;
+                                if (empty($itemImage) && !empty($item['product_id'])) {
+                                    $pModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                                    $itemImage = $pModel?->thumbnail_url;
+                                }
+                            @endphp
                             <div class="flex gap-4 border-b border-brand-muted pb-4 last:border-0 last:pb-0">
                                 <div class="w-16 h-16 rounded-xl bg-brand-light overflow-hidden flex-shrink-0">
-                                    @if(!empty($item['image']))
-                                        <img src="{{ $item['image'] }}" alt="{{ $item['name'] ?? 'Produk' }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
+                                    @if(!empty($itemImage))
+                                        <img src="{{ $itemImage }}" alt="{{ $item['name'] ?? 'Produk' }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                                     @else
                                         <div class="w-full h-full flex items-center justify-center text-brand-gold">
                                             <i class="fa-solid fa-box w-6 h-6"></i>

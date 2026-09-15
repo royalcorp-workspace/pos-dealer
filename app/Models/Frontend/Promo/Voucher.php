@@ -32,6 +32,7 @@ class Voucher extends Model
         'end_date',
         'valid_for_new_customer',
         'is_active',
+        'show_on_web',
         'creator',
         'editor',
         'deleted',
@@ -53,6 +54,7 @@ class Voucher extends Model
             'end_date' => 'datetime',
             'valid_for_new_customer' => 'boolean',
             'is_active' => 'boolean',
+            'show_on_web' => 'boolean',
             'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
@@ -64,26 +66,28 @@ class Voucher extends Model
         parent::boot();
 
         static::addGlobalScope('active', function ($query) {
-            $query->where('is_active', true)
-                ->where('deleted', false)
-                ->where(function ($q) {
-                    $q->whereNull('start_date')->orWhere('start_date', '<=', now());
+            $table = $query->getModel()->getTable();
+            $query->where($table . '.is_active', true)
+                ->where($table . '.deleted', false)
+                ->where(function ($q) use ($table) {
+                    $q->whereNull($table . '.start_date')->orWhere($table . '.start_date', '<=', now());
                 })
-                ->where(function ($q) {
-                    $q->whereNull('end_date')->orWhere('end_date', '>=', now());
+                ->where(function ($q) use ($table) {
+                    $q->whereNull($table . '.end_date')->orWhere($table . '.end_date', '>=', now());
                 });
         });
     }
 
     public function scopeActive($query)
     {
-        return $query->where('is_active', true)
-            ->where('deleted', false)
-            ->where(function ($q) {
-                $q->whereNull('start_date')->orWhere('start_date', '<=', now());
+        $table = $query->getModel()->getTable();
+        return $query->where($table . '.is_active', true)
+            ->where($table . '.deleted', false)
+            ->where(function ($q) use ($table) {
+                $q->whereNull($table . '.start_date')->orWhere($table . '.start_date', '<=', now());
             })
-            ->where(function ($q) {
-                $q->whereNull('end_date')->orWhere('end_date', '>=', now());
+            ->where(function ($q) use ($table) {
+                $q->whereNull($table . '.end_date')->orWhere($table . '.end_date', '>=', now());
             });
     }
 
@@ -115,20 +119,77 @@ class Voucher extends Model
                 ->count();
             if ($userUsages >= $this->usage_limit_per_user) return false;
         }
+        if ((int) $this->scope === 2) {
+            if (!$userId) return false;
+            $hasAccess = $this->customers()
+                ->where(function ($q) use ($userId) {
+                    $q->where('customers.id', $userId)
+                      ->orWhere('customers.user_id', $userId);
+                })
+                ->exists();
+            if (!$hasAccess) return false;
+        }
         return true;
     }
 
     public function isStackable(): bool
     {
-        return (bool) $this->allow_stacking;
+        // Hanya voucher diskon ongkir (type = 3) yang dapat di-stack
+        return (int) $this->type === 3 && (bool) $this->allow_stacking;
+    }
+
+    public function canBeStackedWith(Voucher $other): bool
+    {
+        if (!empty($this->id) && !empty($other->id) && $this->id === $other->id) {
+            return false;
+        }
+
+        $isThisShipping = (int) $this->type === 3;
+        $isOtherShipping = (int) $other->type === 3;
+
+        if (!$isThisShipping && !$isOtherShipping) {
+            return false;
+        }
+
+        if ($isThisShipping && $isOtherShipping) {
+            return false;
+        }
+
+        if ($isThisShipping && !$this->isStackable()) {
+            return false;
+        }
+        if ($isOtherShipping && !$other->isStackable()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public static function validateVoucherCombination(iterable $vouchers): bool
+    {
+        $shippingCount = 0;
+        $nonShippingCount = 0;
+
+        foreach ($vouchers as $voucher) {
+            if ((int) $voucher->type === 3) {
+                if (!$voucher->isStackable()) {
+                    return false;
+                }
+                $shippingCount++;
+            } else {
+                $nonShippingCount++;
+            }
+        }
+
+        return $shippingCount <= 1 && $nonShippingCount <= 1;
     }
 
     public function scopeLabel(): string
     {
         return match ((int) $this->scope) {
-            2 => 'Produk tertentu',
+            2 => 'Customer tertentu',
             3 => 'Kategori tertentu',
-            default => 'Semua produk',
+            default => 'Semua customer',
         };
     }
 
@@ -143,9 +204,9 @@ class Voucher extends Model
         };
     }
 
-    public function products(): BelongsToMany
+    public function customers(): BelongsToMany
     {
-        return $this->belongsToMany(\App\Models\Frontend\ProductsCatalog\Product::class, 'voucher_products', 'voucher_id', 'product_id')
+        return $this->belongsToMany(\App\Models\Frontend\Customer\Customer::class, 'voucher_customers', 'voucher_id', 'customer_id')
             ->withPivot('creator', 'editor', 'deleted');
     }
 

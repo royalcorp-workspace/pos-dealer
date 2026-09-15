@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id" class="h-full">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full">
 <head>
     @php
         $seoTitle = trim($__env->yieldContent('title')) ?: config('seo.title');
@@ -53,7 +53,7 @@
     <link rel="canonical" href="{{ $seoUrl }}">
     <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
     <link rel="shortcut icon" type="image/png" href="{{ asset('images/logo.png') }}">
-    <meta property="og:locale" content="id_ID">
+    <meta property="og:locale" content="{{ app()->getLocale() === 'en' ? 'en_US' : 'id_ID' }}">
     <meta property="og:type" content="{{ $seoType }}">
     <meta property="og:title" content="{{ $seoTitle }}">
     <meta property="og:description" content="{{ $seoDescription }}">
@@ -648,7 +648,9 @@
     </nav>
 
     <!-- Live Chat Widget -->
-    <div x-data="liveChat('{{ isset($product) && request()->routeIs('products.show') ? addslashes($product->name) : '' }}')" class="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[80] font-sans">
+    <div x-data="liveChat('{{ isset($product) && request()->routeIs('products.show') ? addslashes($product->name) : '' }}')" 
+         @open-chat.window="if (!isOpen) toggleChat(); if ($event.detail && $event.detail.message) { newMessage = $event.detail.message; }"
+         class="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-[80] font-sans">
         <!-- Toggle Button -->
         <button 
             @click="toggleChat()"

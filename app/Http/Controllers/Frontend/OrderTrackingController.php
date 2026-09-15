@@ -87,22 +87,32 @@ class OrderTrackingController extends Controller
 
     public function index(Request $request)
     {
-        $queryOrderId = strtoupper((string) $request->input('order_id', ''));
-        $queryEmail = strtolower((string) $request->input('email', ''));
+        $queryOrderId = trim((string) $request->input('order_id', ''));
+        $queryEmail = strtolower(trim((string) $request->input('email', '')));
         $selectedOrder = null;
 
         if ($queryOrderId && $queryEmail) {
             $selectedOrder = Order::query()
                 ->where(function ($q) use ($queryOrderId) {
-                    $q->where('id', $queryOrderId)
-                      ->orWhere('order_number', $queryOrderId);
+                    $q->whereRaw('LOWER(id::text) = ?', [strtolower($queryOrderId)])
+                      ->orWhereRaw('LOWER(order_number) = ?', [strtolower($queryOrderId)]);
                 })
-                ->whereHas('customer', fn($q) => $q->whereRaw('LOWER(email) = ?', [$queryEmail]))
+                ->where(function ($q) use ($queryEmail) {
+                    $q->whereHas('customer', fn($cq) => $cq->whereRaw('LOWER(email) = ?', [$queryEmail]))
+                      ->orWhereRaw("LOWER(meta->'customer'->>'email') = ?", [$queryEmail])
+                      ->orWhereRaw("LOWER(meta->'shipping_address'->>'email') = ?", [$queryEmail]);
+                })
                 ->with(['items.product', 'customer', 'courier'])
                 ->first();
         } elseif (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
-            $customer = Customer::where('email', $user['email'] ?? '')->first();
+            $userEmail = strtolower(trim((string) ($user['email'] ?? '')));
+            $userId = $user['id'] ?? $user['sub'] ?? null;
+
+            $customer = Customer::query()
+                ->when($userId, fn($q) => $q->where('user_id', $userId))
+                ->when($userEmail, fn($q) => $q->orWhereRaw('LOWER(email) = ?', [$userEmail]))
+                ->first();
 
             if ($customer) {
                 $selectedOrder = Order::query()

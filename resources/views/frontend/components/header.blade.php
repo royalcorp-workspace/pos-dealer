@@ -224,7 +224,7 @@
                                 <div class="flex items-center gap-2 mt-0.5 text-xs">
                                     <span class="text-gray-400 font-medium truncate max-w-[120px]" x-text="item.category"></span>
                                     <span class="text-gray-300">•</span>
-                                    <span class="font-extrabold text-brand-dark truncate" x-text="'Rp ' + Number(item.price).toLocaleString('id-ID')"></span>
+                                    <span class="font-extrabold text-brand-dark truncate" x-text="'Rp ' + Number(item.sell_price ?? item.price ?? 0).toLocaleString('id-ID')"></span>
                                 </div>
                             </div>
                         </a>
@@ -769,7 +769,7 @@
                                 <div class="flex items-center gap-2 mt-1 text-xs">
                                     <span class="text-gray-500 font-medium truncate max-w-[120px]" x-text="item.category"></span>
                                     <span class="text-gray-300">•</span>
-                                    <span class="font-bold text-brand-gold-dark truncate" x-text="'Rp ' + Number(item.sell_price).toLocaleString('id-ID')"></span>
+                                    <span class="font-bold text-brand-gold-dark truncate" x-text="'Rp ' + Number(item.sell_price ?? item.price ?? 0).toLocaleString('id-ID')"></span>
                                 </div>
                             </div>
                         </a>

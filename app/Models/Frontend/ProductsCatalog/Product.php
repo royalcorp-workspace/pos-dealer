@@ -60,6 +60,13 @@ class Product extends Model
         'short_description',
         'description',
         'warranty_duration',
+        'courier_type',
+        'shipping_scheme',
+        'shipping_cost',
+        'length',
+        'width',
+        'height',
+        'weight',
         'best_seller',
         'is_new',
         'is_bundle',
@@ -73,6 +80,7 @@ class Product extends Model
     protected function casts(): array
     {
         return [
+            'shipping_cost' => 'decimal:2',
             'best_seller' => 'boolean',
             'is_new' => 'boolean',
             'is_bundle' => 'boolean',
@@ -89,7 +97,7 @@ class Product extends Model
         return 'slug';
     }
 
-    protected $appends = ['thumbnail_url'];
+    protected $appends = ['thumbnail_url', 'courier_type_label'];
 
     public function getThumbnailUrlAttribute(): string
     {
@@ -98,6 +106,15 @@ class Product extends Model
         }
 
         return media_url($this->thumbnail);
+    }
+
+    public function getCourierTypeLabelAttribute(): string
+    {
+        return match($this->courier_type) {
+            'toko' => 'Kurir Dari Toko',
+            'expedisi' => 'Kurir Dari Expedisi',
+            default => 'Dari Keduanya',
+        };
     }
 
     public function brand(): BelongsTo
@@ -123,7 +140,7 @@ class Product extends Model
 
     public function colors(): HasMany
     {
-        return $this->hasMany(ProductColor::class, 'product_id');
+        return $this->hasMany(ProductColor::class, 'product_id')->where('deleted', false);
     }
 
     public function tags(): BelongsToMany

@@ -24,7 +24,7 @@
                 <h4 class="font-bold text-brand-gold mb-6 uppercase tracking-wider text-sm">{{ __('Layanan Konsumen') }}</h4>
                 <ul class="space-y-4">
                     <li><a href="{{ route('help') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Pusat Bantuan') }}</a></li>
-                    <li><a href="{{ route('warranty') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Klaim Garansi') }}</a></li>
+                    <li><a href="https://royalcustomerservice.co.id/" target="_blank" rel="noopener noreferrer" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Klaim Garansi') }}</a></li>
                     <li><a href="{{ route('returns') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Cara Pengembalian') }}</a></li>
                     <li><a href="{{ route('track-order') }}" class="text-brand-light/70 hover:text-brand-gold transition-colors font-medium">{{ __('Lacak Pemesanan') }}</a></li>
                 </ul>

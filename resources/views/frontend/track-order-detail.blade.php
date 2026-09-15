@@ -15,6 +15,14 @@
     $isUnpaid = $paymentStatus == 1;
     $vaNumber = $order->meta['va_number'] ?? null;
     $instructions = $order->meta['payment_instructions'] ?? [];
+    
+    $pmModel = \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
+    $isBankTransfer = ($pmModel && (
+        $pmModel->isTypeBankTransfer() 
+        || (int)$pmModel->type === 1 
+        || strtolower((string)$pmModel->provider) !== 'espay'
+    )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true);
+    $banks = $pmModel && !empty($pmModel->bank_info) ? $pmModel->bank_info : [];
 @endphp
 
 @section('content')
@@ -51,9 +59,64 @@
                                     <p class="font-bold text-sm text-gray-700 mb-2">Cara Pembayaran:</p>
                                     <ul class="text-sm text-gray-600 space-y-1 list-disc pl-5">
                                         @foreach($instructions as $inst)
-                                            <li>{{ $inst }}</li>
+                                            <li>{{ is_array($inst) ? ($inst['title'] ?? json_encode($inst)) : $inst }}</li>
                                         @endforeach
                                     </ul>
+                                </div>
+                            @endif
+                        </div>
+                    @elseif($isBankTransfer)
+                        <div class="bg-white rounded-2xl p-6 border border-amber-200 max-w-lg mx-auto text-left shadow-sm">
+                            <h4 class="font-bold text-brand-dark mb-4 flex items-center gap-2">
+                                <i class="fa-solid fa-building-columns text-brand-gold"></i> Instruksi Transfer Bank
+                            </h4>
+                            @if(!empty($banks) && is_array($banks))
+                                <div class="space-y-3 text-sm">
+                                    @foreach($banks as $b)
+                                        <div class="bg-amber-50/50 p-4 rounded-xl border border-amber-100 space-y-2">
+                                            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                                                <span class="text-gray-500 text-xs">Bank</span>
+                                                <span class="font-bold text-brand-dark">{{ $b['bank_name'] ?? 'BCA' }}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                                                <span class="text-gray-500 text-xs">No. Rekening</span>
+                                                <span class="font-mono font-bold text-brand-dark text-base select-all">{{ $b['account_number'] ?? '-' }}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                                                <span class="text-gray-500 text-xs">Atas Nama</span>
+                                                <span class="font-bold text-brand-dark">{{ $b['account_holder'] ?? '-' }}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-gray-500 text-xs">Total Transfer</span>
+                                                <span class="font-extrabold text-brand-gold-dark text-base">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="space-y-3 text-sm">
+                                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                        <span class="text-gray-500">Bank</span>
+                                        <span class="font-bold text-brand-dark">BCA</span>
+                                    </div>
+                                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                        <span class="text-gray-500">No. Rekening</span>
+                                        <span class="font-mono font-bold text-brand-dark text-base select-all">123-456-7890</span>
+                                    </div>
+                                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                        <span class="text-gray-500">Atas Nama</span>
+                                        <span class="font-bold text-brand-dark">PT IMG</span>
+                                    </div>
+                                    <div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                        <span class="text-gray-500">Total Transfer</span>
+                                        <span class="font-extrabold text-brand-gold-dark text-base">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                                    </div>
+                                </div>
+                            @endif
+
+                            @if(!empty($order->meta['payment_proof']))
+                                <div class="mt-4 pt-4 border-t border-gray-100 text-xs text-green-700 font-medium flex items-center gap-2">
+                                    <i class="fa-solid fa-circle-check"></i> Bukti transfer sudah diunggah dan sedang diverifikasi.
                                 </div>
                             @endif
                         </div>
@@ -84,9 +147,16 @@
                 <div class="p-6 space-y-4">
                     <h3 class="font-bold text-brand-dark mb-4">Item Pesanan</h3>
                     @foreach($items as $item)
+                        @php
+                            $itemImage = $item->product?->thumbnail_url ?? null;
+                        @endphp
                         <div class="flex gap-4 items-start pb-4 border-b border-gray-50 last:border-0 last:pb-0">
-                            <div class="w-20 h-20 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                <i class="fa-solid fa-box text-gray-400 text-2xl"></i>
+                            <div class="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-100">
+                                @if(!empty($itemImage))
+                                    <img src="{{ $itemImage }}" alt="{{ $item->name }}" class="w-full h-full object-cover">
+                                @else
+                                    <i class="fa-solid fa-box text-gray-400 text-2xl"></i>
+                                @endif
                             </div>
                             <div class="flex-1">
                                 <h4 class="font-bold text-gray-800 line-clamp-2 leading-tight mb-1">{{ $item->name }}</h4>

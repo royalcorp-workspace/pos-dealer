@@ -188,8 +188,9 @@ class DashboardController extends Controller
         if ($userId) {
             $customer = Customer::where('user_id', $userId)->first();
         }
-        if (!$customer && $email) {
-            $customer = Customer::where('email', $email)->first();
+        $cleanEmail = strtolower(trim($email));
+        if (!$customer && $cleanEmail) {
+            $customer = Customer::whereRaw('LOWER(email) = ?', [$cleanEmail])->first();
         }
 
         if (!$customer) {

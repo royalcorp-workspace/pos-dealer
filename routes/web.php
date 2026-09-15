@@ -76,6 +76,7 @@ Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
 Route::post('/checkout', [CheckoutController::class, 'store'])->name('checkout.process');
 Route::post('/checkout/check-user', [CheckoutController::class, 'checkUser'])->name('checkout.check-user');
 Route::get('/checkout/search-user', [CheckoutController::class, 'searchUser'])->name('checkout.search-user');
+Route::get('/checkout/calculate-shipping', [CheckoutController::class, 'calculateShippingCostAjax'])->name('checkout.calculate-shipping');
 
 Route::get('/order-preview', [CheckoutController::class, 'orderPreview'])->name('order.preview');
 

@@ -41,6 +41,7 @@ class PageController extends Controller
     public function promos()
     {
         $promos = Voucher::active()
+            ->where('show_on_web', true)
             ->orderByDesc('start_date')
             ->orderByDesc('end_date')
             ->get();
@@ -131,8 +132,60 @@ public function help()
         return response()->view('errors.500', [], 500);
     }
 
-    public function sitemap()
+    private function isCrawlerOrBot(Request $request): bool
     {
+        // Allow testing in browser with ?bot=1
+        if ($request->query('bot') === '1') {
+            return true;
+        }
+
+        $userAgent = strtolower($request->header('User-Agent', ''));
+
+        if (empty($userAgent)) {
+            return false;
+        }
+
+        $botPatterns = [
+            'googlebot',
+            'google-inspectiontool',
+            'mediapartners-google',
+            'adsbot-google',
+            'bingbot',
+            'bingpreview',
+            'slurp',
+            'duckduckbot',
+            'baiduspider',
+            'yandexbot',
+            'sogou',
+            'exabot',
+            'facebot',
+            'facebookexternalhit',
+            'ia_archiver',
+            'crawler',
+            'spider',
+            'robot',
+            'crawling',
+            'bot',
+            'ahrefs',
+            'semrush',
+            'screaming frog',
+        ];
+
+        foreach ($botPatterns as $pattern) {
+            if (str_contains($userAgent, $pattern)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function sitemap(Request $request)
+    {
+        if (! $this->isCrawlerOrBot($request)) {
+            abort(404);
+        }
+
         $urls = [
             [
                 'loc' => route('home'),
@@ -172,12 +225,6 @@ public function help()
             ],
             [
                 'loc' => route('returns'),
-                'lastmod' => now()->toIso8601String(),
-                'changefreq' => 'monthly',
-                'priority' => '0.5',
-            ],
-            [
-                'loc' => route('warranty'),
                 'lastmod' => now()->toIso8601String(),
                 'changefreq' => 'monthly',
                 'priority' => '0.5',
@@ -255,11 +302,17 @@ public function help()
 
         $xml .= '</urlset>' . PHP_EOL;
 
-        return response($xml, 200)->header('Content-Type', 'application/xml; charset=UTF-8');
+        return response($xml, 200)
+            ->header('Content-Type', 'application/xml; charset=UTF-8')
+            ->header('X-Robots-Tag', 'noindex, follow');
     }
 
-    public function robots()
+    public function robots(Request $request)
     {
+        if (! $this->isCrawlerOrBot($request)) {
+            abort(404);
+        }
+
         $robots = "User-agent: *" . PHP_EOL;
         $robots .= "Disallow: /checkout" . PHP_EOL;
         $robots .= "Disallow: /payment" . PHP_EOL;
@@ -272,7 +325,9 @@ public function help()
         $robots .= "Allow: /" . PHP_EOL . PHP_EOL;
         $robots .= "Sitemap: " . url('/sitemap.xml') . PHP_EOL;
 
-        return response($robots, 200)->header('Content-Type', 'text/plain; charset=UTF-8');
+        return response($robots, 200)
+            ->header('Content-Type', 'text/plain; charset=UTF-8')
+            ->header('X-Robots-Tag', 'noindex, follow');
     }
 
     public function about()
@@ -284,9 +339,7 @@ public function help()
 
     public function warranty()
     {
-        $warranty = WarrantyClaim::first();
-
-        return view('frontend.warranty', compact('warranty'));
+        return redirect()->away('https://royalcustomerservice.co.id/');
     }
 
     public function terms()

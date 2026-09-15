@@ -24,6 +24,7 @@ class ProductBundling extends Model
         'description',
         'price',
         'image_url',
+        'banner_image',
         'is_active',
         'event_id',
         'deleted',
@@ -31,14 +32,25 @@ class ProductBundling extends Model
         'editor',
     ];
 
-    protected $appends = ['thumbnail_url'];
+    protected $appends = ['thumbnail_url', 'banner_image_url'];
 
     public function getThumbnailUrlAttribute(): ?string
     {
         if ($this->image_url) {
             return cms_asset($this->image_url);
         }
+        if ($this->banner_image) {
+            return cms_asset($this->banner_image);
+        }
         return $this->items->first()?->product?->thumbnail_url;
+    }
+
+    public function getBannerImageUrlAttribute(): ?string
+    {
+        if ($this->banner_image) {
+            return cms_asset($this->banner_image);
+        }
+        return null;
     }
 
     protected function casts(): array

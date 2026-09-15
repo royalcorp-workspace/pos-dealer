@@ -18,6 +18,7 @@ class Courier extends Model
     protected $fillable = [
         'code',
         'name',
+        'courier_type',
         'type',
         'is_active',
         'sort_order',
@@ -56,5 +57,14 @@ class Courier extends Model
     public function shippingPrices(): HasMany
     {
         return $this->hasMany(ShippingAddress::class, 'courier_id', 'id')->where('type', 1);
+    }
+
+    public function getCourierTypeLabelAttribute(): string
+    {
+        return match($this->courier_type) {
+            'toko' => 'Kurir Toko',
+            'expedisi' => 'Kurir Expedisi',
+            default => 'Kurir Expedisi',
+        };
     }
 }

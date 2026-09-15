@@ -114,6 +114,11 @@ trait BufferCartTrait
                     $bundleNotes = json_decode($item->item_notes, true) ?? [];
                 }
 
+                $itemMeta = is_array($item->meta) ? $item->meta : (json_decode((string) $item->meta, true) ?: []);
+                $colorId = $itemMeta['color_id'] ?? null;
+                $colorName = $itemMeta['color_name'] ?? null;
+                $colorCode = $itemMeta['color_code'] ?? null;
+
                 return [
                     'id' => $item->id,
                     'product_id' => $item->product_id,
@@ -124,6 +129,9 @@ trait BufferCartTrait
                     'sell_price' => (float) $item->unit_price,
                     'quantity' => (int) $item->quantity,
                     'item_note' => $item->item_notes ?? '',
+                    'color_id' => $colorId,
+                    'color_name' => $colorName,
+                    'color_code' => $colorCode,
                     'type' => $isBundle ? 'bundle' : 'product',
                     'bundle_data' => $bundleNotes,
                 ];
@@ -151,5 +159,47 @@ trait BufferCartTrait
             $total += $item['sell_price'] * $item['quantity'];
         }
         return $total;
+    }
+
+    public function rememberLastProductUrl(?string $url): void
+    {
+        if ($url) {
+            session()->put('last_checkout_product_url', $url);
+        }
+    }
+
+    public function getLastProductUrl(): string
+    {
+        $url = session()->get('last_checkout_product_url');
+        if ($url) {
+            return $url;
+        }
+
+        $buffer = $this->getCurrentBuffer();
+        if ($buffer) {
+            $lastItem = $buffer->items()->latest('created_at')->first();
+            if ($lastItem) {
+                if ($lastItem->product_id) {
+                    $prod = Product::find($lastItem->product_id);
+                    if ($prod && !empty($prod->slug)) {
+                        $url = route('products.show', $prod->slug);
+                        session()->put('last_checkout_product_url', $url);
+                        return $url;
+                    }
+                } elseif ($lastItem->item_notes) {
+                    $bundleNotes = json_decode($lastItem->item_notes, true);
+                    if (!empty($bundleNotes['bundle_id'])) {
+                        $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleNotes['bundle_id']);
+                        if ($bundle && !empty($bundle->slug)) {
+                            $url = route('bundling.show', $bundle->slug);
+                            session()->put('last_checkout_product_url', $url);
+                            return $url;
+                        }
+                    }
+                }
+            }
+        }
+
+        return route('products.index');
     }
 }
