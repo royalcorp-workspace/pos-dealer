@@ -129,4 +129,44 @@ class InventoryService
 
         return true;
     }
+
+    public static function rollbackWebOrder(string $variantId, int $quantity): bool
+    {
+        $channelId = self::getWebImgChannelId();
+
+        $inventory = DB::table('inventories')
+            ->where('product_variant_id', $variantId)
+            ->where('store_channel_id', $channelId)
+            ->where('deleted', false)
+            ->first();
+
+        if ($inventory) {
+            $onStock = (int) ($inventory->on_stock ?? 0);
+            $outgoing = (int) ($inventory->outgoing ?? 0);
+            $newOnOrder = max(0, ((int)$inventory->on_order) - $quantity);
+            $newAvailable = max(0, $onStock - $newOnOrder - $outgoing);
+
+            DB::table('inventories')
+                ->where('id', $inventory->id)
+                ->update([
+                    'on_stock' => $onStock,
+                    'on_order' => $newOnOrder,
+                    'available' => $newAvailable,
+                    'quantity' => $newAvailable,
+                    'editor' => 'Web IMG Order Rollback',
+                    'updated_at' => now(),
+                ]);
+
+            $totalAvailable = DB::table('inventories')
+                ->where('product_variant_id', $variantId)
+                ->where('deleted', false)
+                ->sum('available');
+
+            DB::table('product_variants')
+                ->where('id', $variantId)
+                ->update(['stock_quantity' => (int)$totalAvailable]);
+        }
+
+        return true;
+    }
 }

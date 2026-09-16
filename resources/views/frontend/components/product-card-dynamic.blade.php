@@ -1,21 +1,24 @@
 @props(['product'])
 
 @php
-    $validVariants = $product->variants->where('sell_price', '>', 0);
+    $validVariants = $product->variants ? $product->variants->filter(fn($v) => (float)$v->sell_price > 0)->values() : collect([]);
     $isVariable = $validVariants->isNotEmpty();
-    $minPrice = $isVariable ? $validVariants->min('sell_price') : null;
-    $maxPrice = $isVariable ? $validVariants->max('sell_price') : null;
     
-    $minBasePrice = $isVariable ? $validVariants->min('base_price') : null;
-    $maxBasePrice = $isVariable ? $validVariants->max('base_price') : null;
+    $minVariant = $isVariable ? $validVariants->sortBy(fn($v) => (float)$v->sell_price)->first() : null;
+    $maxVariant = $isVariable ? $validVariants->sortByDesc(fn($v) => (float)$v->sell_price)->first() : null;
 
-    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) (0);
-    $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+    $originalMinPrice = $minVariant ? (float)$minVariant->sell_price : (float)($product->price ?? 0);
+    $originalMaxPrice = $maxVariant ? (float)$maxVariant->sell_price : $originalMinPrice;
     
-    $originalMinBasePrice = $isVariable && $minBasePrice ? (float) $minBasePrice : $originalMinPrice;
-    $originalMaxBasePrice = $isVariable && $maxBasePrice ? (float) $maxBasePrice : $originalMaxPrice;
+    $positiveBaseVariants = $validVariants->filter(fn($v) => (float)$v->base_price > 0);
+    $originalMinBasePrice = ($minVariant && (float)$minVariant->base_price > 0)
+        ? (float)$minVariant->base_price
+        : (float)($positiveBaseVariants->min('base_price') ?? $originalMinPrice);
+    $originalMaxBasePrice = ($maxVariant && (float)$maxVariant->base_price > 0)
+        ? (float)$maxVariant->base_price
+        : (float)($positiveBaseVariants->max('base_price') ?? $originalMaxPrice);
 
-    $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+    $hasPriceRange = $isVariable && $originalMinPrice > 0 && $originalMaxPrice > 0 && $originalMinPrice !== $originalMaxPrice;
     
     $hasDefaultDiscount = $originalMinBasePrice > $originalMinPrice;
     $defaultDiscountPct = $hasDefaultDiscount ? round((($originalMinBasePrice - $originalMinPrice) / $originalMinBasePrice) * 100) : 0;
@@ -93,9 +96,19 @@
         
         <!-- Elegant Floating Badges -->
         <div class="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 flex flex-wrap gap-1.5 z-10 max-w-[85%]">
-            @if($staticPromo)
+            @if($defaultDiscountBadge)
+                <span class="bg-red-600 text-white text-[9px] sm:text-[11px] font-bold px-2 py-0.5 sm:py-1 rounded-full shadow-xs tracking-wider uppercase backdrop-blur-xs">
+                    {{ $defaultDiscountBadge }}
+                </span>
+            @elseif($staticPromo)
                 <span class="bg-red-600 text-white text-[9px] sm:text-[11px] font-bold px-2 py-0.5 sm:py-1 rounded-full shadow-xs tracking-wider uppercase backdrop-blur-xs">
                     -{{ $staticPromo['label'] }}
+                </span>
+            @endif
+
+            @if($ppsDiscountBadge)
+                <span class="bg-amber-600 text-white text-[9px] sm:text-[11px] font-bold px-2 py-0.5 sm:py-1 rounded-full shadow-xs tracking-wider uppercase backdrop-blur-xs">
+                    {{ $ppsDiscountBadge }}
                 </span>
             @endif
 
@@ -178,14 +191,14 @@
                 <meta itemprop="priceCurrency" content="IDR" />
                 <meta itemprop="price" content="{{ number_format($price, 0, ',', '.') }}" />
                 <link itemprop="availability" href="{{ $hasStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock' }}" />
-                @if($staticPromo)
+                @if(($hasDefaultDiscount || $staticPromo) && $strikeMinPrice)
                     <span class="text-[10px] text-gray-400 line-through tabular-nums">
-                        Rp {{ number_format($promoOriginalMinPrice, 0, ',', '.') }}
-                        @if($hasPriceRange) - Rp {{ number_format($promoOriginalMaxPrice, 0, ',', '.') }} @endif
+                        Rp {{ number_format($strikeMinPrice, 0, ',', '.') }}
+                        @if($hasPriceRange && $strikeMaxPrice) - Rp {{ number_format($strikeMaxPrice, 0, ',', '.') }} @endif
                     </span>
                 @endif
                 <div class="flex items-baseline justify-between gap-1">
-                    <span class="font-extrabold text-sm sm:text-base {{ $staticPromo ? 'text-red-600' : 'text-brand-dark' }} tracking-tight font-serif tabular-nums leading-tight">
+                    <span class="font-extrabold text-sm sm:text-base {{ ($hasDefaultDiscount || $staticPromo) ? 'text-red-600' : 'text-brand-dark' }} tracking-tight font-serif tabular-nums leading-tight">
                         Rp {{ number_format($price, 0, ',', '.') }}
                         @if($hasPriceRange) - Rp {{ number_format($displayOriginalPrice, 0, ',', '.') }} @endif
                     </span>

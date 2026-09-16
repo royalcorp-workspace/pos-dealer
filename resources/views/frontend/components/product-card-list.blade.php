@@ -1,21 +1,24 @@
 @props(['product'])
 
 @php
-    $validVariants = $product->variants->where('sell_price', '>', 0);
+    $validVariants = $product->variants ? $product->variants->filter(fn($v) => (float)$v->sell_price > 0)->values() : collect([]);
     $isVariable = $validVariants->isNotEmpty();
-    $minPrice = $isVariable ? $validVariants->min('sell_price') : null;
-    $maxPrice = $isVariable ? $validVariants->max('sell_price') : null;
     
-    $minBasePrice = $isVariable ? $validVariants->min('base_price') : null;
-    $maxBasePrice = $isVariable ? $validVariants->max('base_price') : null;
+    $minVariant = $isVariable ? $validVariants->sortBy(fn($v) => (float)$v->sell_price)->first() : null;
+    $maxVariant = $isVariable ? $validVariants->sortByDesc(fn($v) => (float)$v->sell_price)->first() : null;
 
-    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) (0);
-    $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+    $originalMinPrice = $minVariant ? (float)$minVariant->sell_price : (float)($product->price ?? 0);
+    $originalMaxPrice = $maxVariant ? (float)$maxVariant->sell_price : $originalMinPrice;
     
-    $originalMinBasePrice = $isVariable && $minBasePrice ? (float) $minBasePrice : $originalMinPrice;
-    $originalMaxBasePrice = $isVariable && $maxBasePrice ? (float) $maxBasePrice : $originalMaxPrice;
+    $positiveBaseVariants = $validVariants->filter(fn($v) => (float)$v->base_price > 0);
+    $originalMinBasePrice = ($minVariant && (float)$minVariant->base_price > 0)
+        ? (float)$minVariant->base_price
+        : (float)($positiveBaseVariants->min('base_price') ?? $originalMinPrice);
+    $originalMaxBasePrice = ($maxVariant && (float)$maxVariant->base_price > 0)
+        ? (float)$maxVariant->base_price
+        : (float)($positiveBaseVariants->max('base_price') ?? $originalMaxPrice);
 
-    $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+    $hasPriceRange = $isVariable && $originalMinPrice > 0 && $originalMaxPrice > 0 && $originalMinPrice !== $originalMaxPrice;
     
     $hasDefaultDiscount = $originalMinBasePrice > $originalMinPrice;
     $defaultDiscountPct = $hasDefaultDiscount ? round((($originalMinBasePrice - $originalMinPrice) / $originalMinBasePrice) * 100) : 0;
@@ -105,14 +108,16 @@
                 <a href="{{ route('products.show', $product->slug) }}" class="hover:text-brand-gold">{{ $product->name }}</a>
             </h3>
             <div class="mt-2 space-y-1">
-                @if($defaultDiscountBadge)
+                @if(($hasDefaultDiscount || $staticPromo) && $strikeMinPrice)
                     <div class="flex items-center gap-2">
-                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format((float) $listDiscountedPrice, 0, ',', '.') }}</span>
-                        <span class="text-gray-400 text-sm line-through">Rp {{ number_format((float) ($product->price ?? 0), 0, ',', '.') }}</span>
-                        <span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">{{ $listPctBadge }}</span>
+                        <span class="text-red-600 font-bold text-lg">Rp {{ number_format($price, 0, ',', '.') }}@if($hasPriceRange) - Rp {{ number_format($displayOriginalPrice, 0, ',', '.') }}@endif</span>
+                        <span class="text-gray-400 text-sm line-through">Rp {{ number_format($strikeMinPrice, 0, ',', '.') }}@if($hasPriceRange && $strikeMaxPrice) - Rp {{ number_format($strikeMaxPrice, 0, ',', '.') }}@endif</span>
+                        @if($defaultDiscountBadge)
+                            <span class="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">{{ $defaultDiscountBadge }}</span>
+                        @endif
                     </div>
                 @else
-                    <span class="font-bold text-brand-dark text-lg">Rp {{ number_format((float) ($product->price ?? 0), 0, ',', '.') }}</span>
+                    <span class="font-bold text-brand-dark text-lg">Rp {{ number_format($price, 0, ',', '.') }}@if($hasPriceRange) - Rp {{ number_format($displayOriginalPrice, 0, ',', '.') }}@endif</span>
                 @endif
             </div>
         </div>

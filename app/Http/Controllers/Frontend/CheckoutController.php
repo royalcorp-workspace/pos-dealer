@@ -92,15 +92,7 @@ class CheckoutController extends Controller
         $savedAddresses = collect();
         $savedAddressesSafe = collect();
         $checkoutFormData = Session::get('checkout_form_data', []);
-        $subDistricts = \App\Models\Frontend\Location\SubDistrict::with('city')
-            ->orderBy('sub_district')
-            ->get()
-            ->map(fn($sd) => [
-                'id' => $sd->id,
-                'label' => $sd->sub_district . ', ' . ($sd->city->name ?? ''),
-                'postal_code' => $sd->postal_code,
-                'city' => $sd->city->name ?? '',
-            ]);
+        $provinces = \App\Models\Frontend\Location\Province::orderBy('name')->get(['id', 'name']);
 
         if (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
@@ -118,6 +110,8 @@ class CheckoutController extends Controller
                     'address' => $a->address,
                     'postal_code' => $a->postal_code,
                     'sub_district_id' => $a->sub_district_id,
+                    'province_id' => $a->subDistrict->city->province_id ?? ($a->subDistrict->province_id ?? null),
+                    'city_id' => $a->subDistrict->city_id ?? null,
                 ];
             });
         }
@@ -184,14 +178,48 @@ class CheckoutController extends Controller
         $cartTotal = collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']);
 
         $cartWeightDetails = $this->calculateCartWeightAndDimensions($cart);
-        $initialSubDistrictId = $savedAddresses->first()->sub_district_id ?? ($checkoutFormData['sub_district_id'] ?? '');
+        $initialSubDistrictId = $savedAddresses->first()->sub_district_id ?? ($checkoutFormData['sub_district_id'] ?? old('sub_district_id', ''));
+
+        $selectedProvinceId = null;
+        $selectedCityId = null;
+        $selectedSubDistrictId = null;
+        $cities = collect();
+        $subDistricts = collect();
+
+        if (!empty($initialSubDistrictId)) {
+            $initSd = \App\Models\Frontend\Location\SubDistrict::with('city')->find($initialSubDistrictId);
+            if ($initSd) {
+                $selectedSubDistrictId = $initSd->id;
+                $selectedCityId = $initSd->city_id;
+                $selectedProvinceId = $initSd->city->province_id ?? ($initSd->province_id ?? null);
+
+                if ($selectedProvinceId) {
+                    $cities = \App\Models\Frontend\Location\City::where('province_id', $selectedProvinceId)
+                        ->orderBy('name')
+                        ->get(['id', 'name']);
+                }
+                if ($selectedCityId) {
+                    $subDistricts = \App\Models\Frontend\Location\SubDistrict::where('city_id', $selectedCityId)
+                        ->orderBy('sub_district')
+                        ->get(['id', 'district', 'sub_district', 'postal_code'])
+                        ->map(fn($sd) => [
+                            'id' => $sd->id,
+                            'label' => $sd->sub_district . ($sd->district ? ' (Kec. ' . $sd->district . ')' : '') . ($sd->postal_code ? ' - ' . $sd->postal_code : ''),
+                            'postal_code' => $sd->postal_code,
+                            'district' => $sd->district,
+                            'sub_district' => $sd->sub_district,
+                            'city' => $initSd->city->name ?? '',
+                        ]);
+                }
+            }
+        }
 
         $courierPrices = [];
         foreach ($couriers as $courier) {
             $courierPrices[$courier->code] = $this->calculateShippingDetails($courier->code, $initialSubDistrictId ?? '', $cart);
         }
 
-        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'subDistricts', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers', 'enforcedCourierType', 'cartWeightDetails', 'courierPrices'));
+        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'provinces', 'cities', 'subDistricts', 'selectedProvinceId', 'selectedCityId', 'selectedSubDistrictId', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers', 'enforcedCourierType', 'cartWeightDetails', 'courierPrices'));
     }
 
     public function store(Request $request)
@@ -938,11 +966,11 @@ class CheckoutController extends Controller
 
             $meta = $order->meta ?? [];
 
-            // 6. Handle Bank Transfer or ESPAY
+            // 6. Handle Bank Transfer
             if ($isBankTransfer) {
                 if ($request->hasFile('payment_proof')) {
                     try {
-                        if (config('filesystems.disks.s3.key')) {
+                        if (config('filesystems.disks.s3.key') || config('filesystems.disks.s3.bucket')) {
                             $proofPath = $request->file('payment_proof')->store('payment_proofs', 's3');
                         } else {
                             $proofPath = $request->file('payment_proof')->store('payment_proofs', 'public');
@@ -952,124 +980,18 @@ class CheckoutController extends Controller
                     }
                     $meta['payment_proof'] = $proofPath;
                     $order->payment_status = 2;
+                } elseif ($request->filled('payment_proof')) {
+                    $meta['payment_proof'] = $request->input('payment_proof');
+                    $order->payment_status = 2;
                 }
-                $order->payment_method = $paymentMethod;
-                $order->transaction_fee = $charge;
-                $order->meta = $meta;
-                $order->save();
-            } elseif ($paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay') {
-                $amount = number_format((float)($order->total), 2, '.', '');
-                $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
-                $espayUrl = str_replace('/rest/merchant', '/rest/merchantpg', $baseUrl) . '/sendinvoice';
-
-                $signatureKey = config('espay.signature_key');
-                $commCode = config('espay.merchant_key');
-                $rqUuid = Str::uuid()->toString();
-                $rqDatetime = date('Y-m-d H:i:s');
-                $espayOrderId = str_replace('-', '', $order->order_number);
-
-                $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
-                $signature = hash('sha256', strtoupper($dataToHash));
-
-                $espayBankCode = $paymentMethod;
-                if ($paymentMethodModel && is_array($paymentMethodModel->bank_info) && !empty($paymentMethodModel->bank_info['bank_code'])) {
-                    $espayBankCode = $paymentMethodModel->bank_info['bank_code'];
-                }
-
-                $payload = [
-                    'rq_uuid' => $rqUuid,
-                    'rq_datetime' => $rqDatetime,
-                    'order_id' => $espayOrderId,
-                    'amount' => $amount,
-                    'ccy' => 'IDR',
-                    'comm_code' => $commCode,
-                    'remark1' => $order->customer->phone ?? ($customerData['phone'] ?? '00000000000'),
-                    'remark2' => $order->customer->name ?? ($customerData['name'] ?? 'Customer'),
-                    'remark3' => $order->customer->email ?? ($customerData['email'] ?? ''),
-                    'update' => 'N',
-                    'bank_code' => $espayBankCode,
-                    'va_expired' => 1440,
-                    'signature' => $signature,
-                ];
-
-                try {
-                    $response = \Illuminate\Support\Facades\Http::asForm()->post($espayUrl, $payload);
-                    $paymentData = $response->json();
-
-                    if ($response->successful() && isset($paymentData['error_code']) && $paymentData['error_code'] === '0000') {
-                        $settlement = \App\Models\Settlement::create([
-                            'reference_id' => $order->order_number,
-                            'gross_amount' => $amount,
-                            'fee_amount' => $charge,
-                            'net_amount' => $order->total,
-                            'status' => 'pending',
-                            'notes' => "Payment via {$paymentMethod}"
-                        ]);
-
-                        $order->update([
-                            'payment_method' => $paymentMethod,
-                            'payment_status' => 1,
-                            'transaction_fee' => $charge,
-                            'settlement_id' => $settlement->id,
-                            'meta' => array_merge($meta, [
-                                'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
-                                'va_number' => $paymentData['va_number'] ?? ''
-                            ])
-                        ]);
-
-                        $logMessage = "Espay Send Invoice Success\nOrder ID: {$order->order_number}\nResponse: " . json_encode($paymentData, JSON_PRETTY_PRINT);
-                        \Illuminate\Support\Facades\Log::channel('espay')->info($logMessage);
-                    } else {
-                        \Illuminate\Support\Facades\DB::rollBack();
-                        $logMessage = "Espay Send Invoice Failed\nResponse: " . json_encode($paymentData, JSON_PRETTY_PRINT);
-                        \Illuminate\Support\Facades\Log::channel('espay')->error($logMessage);
-
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Gagal mendapatkan data pembayaran dari Espay: ' . ($paymentData['error_message'] ?? 'Unknown error')
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\DB::rollBack();
-                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Exception: " . $e->getMessage());
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Terjadi kesalahan sistem saat menghubungi payment gateway.'
-                    ]);
-                }
-            } else {
-                $order->payment_method = $paymentMethod;
-                $order->transaction_fee = $charge;
-                $order->meta = $meta;
-                $order->save();
             }
+
+            $order->payment_method = $paymentMethod;
+            $order->transaction_fee = $charge;
+            $order->meta = $meta;
+            $order->save();
 
             \Illuminate\Support\Facades\DB::commit();
-
-            // Send notification email
-            try {
-                $customerEmail = $order->customer->email ?? ($customerData['email'] ?? null);
-                if ($customerEmail) {
-                    \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
-                }
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated: ' . $e->getMessage());
-            }
-
-            // Clear Buffer & Session
-            if ($buffer) {
-                $buffer->items()->delete();
-                $buffer->delete();
-            }
-
-            session()->forget(['order_data', 'checkout_data', 'selected_voucher_codes', 'cart']);
-            session()->put('thankyou_order_id', $order->id);
-
-            return response()->json([
-                'success' => true,
-                'redirect_url' => route('thankyou', ['order_id' => $order->id])
-            ]);
-
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\DB::rollBack();
             \Illuminate\Support\Facades\Log::error('Checkout processPayment error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
@@ -1078,6 +1000,117 @@ class CheckoutController extends Controller
                 'message' => 'Terjadi kesalahan saat memproses pesanan: ' . $e->getMessage()
             ], 500);
         }
+
+        $isEspay = $paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay';
+        if ($isEspay) {
+            $amount = number_format((float)($order->total), 2, '.', '');
+            $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
+            $espayUrl = str_replace('/rest/merchant', '/rest/merchantpg', $baseUrl) . '/sendinvoice';
+
+            $signatureKey = config('espay.signature_key');
+            $commCode = config('espay.merchant_key');
+            $rqUuid = Str::uuid()->toString();
+            $rqDatetime = date('Y-m-d H:i:s');
+            $espayOrderId = str_replace('-', '', $order->order_number);
+
+            $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
+            $signature = hash('sha256', strtoupper($dataToHash));
+
+            $espayBankCode = $paymentMethod;
+            if ($paymentMethodModel && is_array($paymentMethodModel->bank_info) && !empty($paymentMethodModel->bank_info['bank_code'])) {
+                $espayBankCode = $paymentMethodModel->bank_info['bank_code'];
+            }
+
+            $payload = [
+                'rq_uuid' => $rqUuid,
+                'rq_datetime' => $rqDatetime,
+                'order_id' => $espayOrderId,
+                'amount' => $amount,
+                'ccy' => 'IDR',
+                'comm_code' => $commCode,
+                'remark1' => $order->customer->phone ?? ($customerData['phone'] ?? '00000000000'),
+                'remark2' => $order->customer->name ?? ($customerData['name'] ?? 'Customer'),
+                'remark3' => $order->customer->email ?? ($customerData['email'] ?? ''),
+                'update' => 'N',
+                'bank_code' => $espayBankCode,
+                'va_expired' => 1440,
+                'signature' => $signature,
+            ];
+
+            try {
+                $response = \Illuminate\Support\Facades\Http::timeout(30)->asForm()->post($espayUrl, $payload);
+                $paymentData = $response->json();
+
+                if ($response->successful() && isset($paymentData['error_code']) && $paymentData['error_code'] === '0000') {
+                    $settlement = \App\Models\Settlement::create([
+                        'reference_id' => $order->order_number,
+                        'gross_amount' => $amount,
+                        'fee_amount' => $charge,
+                        'net_amount' => $order->total,
+                        'status' => 'pending',
+                        'notes' => "Payment via {$paymentMethod}"
+                    ]);
+
+                    $order->update([
+                        'settlement_id' => $settlement->id,
+                        'meta' => array_merge($order->meta ?? [], [
+                            'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
+                            'va_number' => $paymentData['va_number'] ?? ''
+                        ])
+                    ]);
+
+                    $logMessage = "Espay Send Invoice Success\nOrder ID: {$order->order_number}\nResponse: " . json_encode($paymentData, JSON_PRETTY_PRINT);
+                    \Illuminate\Support\Facades\Log::channel('espay')->info($logMessage);
+                } else {
+                    $logMessage = "Espay Send Invoice Failed\nResponse: " . json_encode($paymentData, JSON_PRETTY_PRINT);
+                    \Illuminate\Support\Facades\Log::channel('espay')->error($logMessage);
+
+                    if (!$existingOrder) {
+                        $this->rollbackFailedOrder($order);
+                    }
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Gagal mendapatkan data pembayaran dari Espay: ' . ($paymentData['error_message'] ?? 'Unknown error')
+                    ]);
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Exception: " . $e->getMessage());
+
+                if (!$existingOrder) {
+                    $this->rollbackFailedOrder($order);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Terjadi kesalahan sistem saat menghubungi payment gateway.'
+                ]);
+            }
+        }
+
+        // Send notification email
+        try {
+            $customerEmail = $order->customer->email ?? ($customerData['email'] ?? null);
+            if ($customerEmail) {
+                \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated: ' . $e->getMessage());
+        }
+
+        // Clear Buffer & Session
+        if ($buffer) {
+            $buffer->items()->delete();
+            $buffer->delete();
+        }
+
+        session()->forget(['order_data', 'checkout_data', 'selected_voucher_codes', 'cart']);
+        session()->put('thankyou_order_id', $order->id);
+
+        return response()->json([
+            'success' => true,
+            'redirect_url' => route('thankyou', ['order_id' => $order->id])
+        ]);
     }
 
     public function uploadPaymentProof(Request $request, string $orderId)
@@ -1095,7 +1128,9 @@ class CheckoutController extends Controller
         }
 
         $request->validate([
-            'payment_proof' => 'required|string',
+            'payment_proof' => $request->hasFile('payment_proof')
+                ? 'required|image|mimes:jpeg,png,jpg,webp|max:5120'
+                : 'required|string',
         ]);
 
         $proofPath = null;
@@ -1711,6 +1746,37 @@ class CheckoutController extends Controller
         return (int) ($details['shipping_cost'] ?? 0);
     }
 
+    public function getCitiesAjax(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $provinceId = (string) $request->query('province_id', '');
+        if (!$provinceId) {
+            return response()->json([]);
+        }
+        $cities = \App\Models\Frontend\Location\City::where('province_id', $provinceId)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+        return response()->json($cities);
+    }
+
+    public function getSubDistrictsAjax(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $cityId = (string) $request->query('city_id', '');
+        if (!$cityId) {
+            return response()->json([]);
+        }
+        $subDistricts = \App\Models\Frontend\Location\SubDistrict::where('city_id', $cityId)
+            ->orderBy('sub_district')
+            ->get(['id', 'district', 'sub_district', 'postal_code'])
+            ->map(fn($sd) => [
+                'id' => $sd->id,
+                'label' => $sd->sub_district . ($sd->district ? ' (Kec. ' . $sd->district . ')' : '') . ($sd->postal_code ? ' - ' . $sd->postal_code : ''),
+                'district' => $sd->district,
+                'sub_district' => $sd->sub_district,
+                'postal_code' => $sd->postal_code,
+            ]);
+        return response()->json($subDistricts);
+    }
+
     public function calculateShippingCostAjax(Request $request): \Illuminate\Http\JsonResponse
     {
         $courier = (string) $request->query('courier', '');
@@ -1725,6 +1791,26 @@ class CheckoutController extends Controller
             'success' => true,
             'data' => $details,
         ]);
+    }
+
+    /**
+     * Rollback order items, inventory and voucher usage if payment gateway call fails
+     */
+    private function rollbackFailedOrder(Order $order): void
+    {
+        try {
+            $order->loadMissing('items');
+            foreach ($order->items as $item) {
+                if ($item->product_variant_id) {
+                    \App\Services\InventoryService::rollbackWebOrder($item->product_variant_id, (int)$item->quantity);
+                }
+            }
+            $order->items()->delete();
+            \App\Models\Frontend\Promo\VoucherUsage::where('order_id', $order->id)->delete();
+            $order->delete();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error rolling back failed order: ' . $e->getMessage());
+        }
     }
 
     /**

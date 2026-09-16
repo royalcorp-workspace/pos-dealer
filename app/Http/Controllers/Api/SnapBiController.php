@@ -15,12 +15,16 @@ class SnapBiController extends Controller
         $logMessage .= "Payload: \n" . json_encode($request->all(), JSON_PRETTY_PRINT);
         Log::channel('espay')->info($logMessage);
 
-        // virtualAccountNo dari Espay akan berisi order_number (contoh: ORDER0001)
+        // virtualAccountNo dari Espay akan berisi order_number (contoh: ORDER0001 / ORD202609155512)
         $virtualAccountNo = $request->input('virtualAccountNo');
+        $cleanVa = trim((string)$virtualAccountNo);
         
-        // Karena tanda strip (-) dihilangkan saat sendinvoice, kita cocokkan order_number tanpa strip
+        // Karena tanda strip (-) dihilangkan saat sendinvoice, kita cocokkan order_number tanpa strip atau dengan strip
         $order = Order::with('customer')
-            ->whereRaw("REPLACE(order_number, '-', '') = ?", [$virtualAccountNo])
+            ->where(function ($q) use ($cleanVa) {
+                $q->whereRaw("LOWER(REPLACE(order_number, '-', '')) = LOWER(?)", [$cleanVa])
+                  ->orWhereRaw("LOWER(order_number) = LOWER(?)", [$cleanVa]);
+            })
             ->first();
 
         if (!$order) {
@@ -35,6 +39,10 @@ class SnapBiController extends Controller
         }
 
         $amount = number_format((float)$order->total, 2, '.', '');
+        $customerName = $order->customer->name ?? ($order->meta['customer']['name'] ?? 'Customer');
+        $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? 'no-email@domain.com');
+        $customerPhone = $order->customer->phone ?? ($order->meta['customer']['phone'] ?? '0000000000');
+        $customerAddress = $order->meta['shipping_address']['address'] ?? ($order->meta['customer']['address'] ?? ($order->customer->address ?? 'Alamat'));
 
         $responseData = [
             'responseCode' => '2002400',
@@ -43,9 +51,9 @@ class SnapBiController extends Controller
                 'partnerServiceId' => $request->input('partnerServiceId', ''),
                 'customerNo' => $request->input('customerNo', ''),
                 'virtualAccountNo' => $virtualAccountNo,
-                'virtualAccountName' => $order->customer->name ?? 'Customer',
-                'virtualAccountEmail' => $order->customer->email ?? 'no-email@domain.com',
-                'virtualAccountPhone' => $order->customer->phone ?? '0000000000',
+                'virtualAccountName' => $customerName,
+                'virtualAccountEmail' => $customerEmail,
+                'virtualAccountPhone' => $customerPhone,
                 'inquiryRequestId' => $request->input('inquiryRequestId', \Illuminate\Support\Str::uuid()->toString()),
                 'totalAmount' => [
                     'value' => $amount,
@@ -61,12 +69,12 @@ class SnapBiController extends Controller
                 ],
                 'additionalInfo' => [
                     'shippingAddress' => [
-                        'firstName' => $order->customer->name ?? 'Customer',
+                        'firstName' => $customerName,
                         'lastName' => '',
-                        'address' => $order->customer->address ?? 'Alamat',
-                        'city' => '-',
-                        'postalCode' => '-',
-                        'phoneNumber' => $order->customer->phone ?? '0000000',
+                        'address' => $customerAddress,
+                        'city' => $order->meta['shipping_address']['city'] ?? '-',
+                        'postalCode' => $order->meta['shipping_address']['postal_code'] ?? '-',
+                        'phoneNumber' => $customerPhone,
                         'countryCode' => 'IDN'
                     ]
                 ]
@@ -85,9 +93,13 @@ class SnapBiController extends Controller
         $logMessage .= "Payload: \n" . json_encode($request->all(), JSON_PRETTY_PRINT);
 
         $virtualAccountNo = $request->input('virtualAccountNo');
+        $cleanVa = trim((string)$virtualAccountNo);
         
-        // Karena tanda strip (-) dihilangkan saat sendinvoice, kita cocokkan order_number tanpa strip
-        $order = Order::whereRaw("REPLACE(order_number, '-', '') = ?", [$virtualAccountNo])->first();
+        // Karena tanda strip (-) dihilangkan saat sendinvoice, kita cocokkan order_number tanpa strip atau dengan strip
+        $order = Order::where(function ($q) use ($cleanVa) {
+            $q->whereRaw("LOWER(REPLACE(order_number, '-', '')) = LOWER(?)", [$cleanVa])
+              ->orWhereRaw("LOWER(order_number) = LOWER(?)", [$cleanVa]);
+        })->first();
 
         if (!$order) {
             $errResponse = [

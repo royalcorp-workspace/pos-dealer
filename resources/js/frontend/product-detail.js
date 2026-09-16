@@ -71,10 +71,10 @@ function selectAttribute(el) {
     // Immediately trigger main stage image update if an image matches this option (Shopee UX)
     if (window.productVariants) {
         const optionWithImg = window.productVariants.find(v => {
-            return v.attributes && v.attributes[groupName] === value && v.image_url;
+            return v.attributes && v.attributes[groupName] === value && (v.image_url || (v.images && v.images.length > 0));
         });
-        if (optionWithImg && optionWithImg.image_url) {
-            window.dispatchEvent(new CustomEvent('set-main-image', { detail: optionWithImg.image_url }));
+        if (optionWithImg && (optionWithImg.image_url || (optionWithImg.images && optionWithImg.images.length > 0))) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: optionWithImg.image_url, images: optionWithImg.images } }));
         }
     }
     
@@ -101,8 +101,8 @@ function findMatchingVariant() {
         if (matchedVariant) {
             if (variantInput) variantInput.value = matchedVariant.id;
 
-            if (matchedVariant.image_url) {
-                window.dispatchEvent(new CustomEvent('set-main-image', { detail: matchedVariant.image_url }));
+            if (matchedVariant.image_url || (matchedVariant.images && matchedVariant.images.length > 0)) {
+                window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: matchedVariant.image_url, images: matchedVariant.images } }));
             }
             
             const priceEl = document.getElementById('product-price');
@@ -148,10 +148,11 @@ function findMatchingVariant() {
             if (priceEl) {
                 priceEl.textContent = 'Rp ' + Number(finalPrice).toLocaleString('id-ID');
                 
-                if (defaultBadge || ppsBadge) {
+                if (defaultBadge || ppsBadge || (strikePrice && strikePrice > finalPrice)) {
                     priceEl.classList.remove('text-brand-dark');
                     priceEl.classList.add('text-red-600');
-                    document.getElementById('product-discount-container').style.display = 'flex';
+                    const dc = document.getElementById('product-discount-container');
+                    if (dc) dc.style.display = 'flex';
                     
                     const strikeEl = document.getElementById('product-strike-price');
                     if (strikeEl && strikePrice) strikeEl.textContent = 'Rp ' + Number(strikePrice).toLocaleString('id-ID');
@@ -159,13 +160,13 @@ function findMatchingVariant() {
                     const dbEl = document.getElementById('product-default-badge');
                     if (dbEl) {
                         dbEl.textContent = defaultBadge || '';
-                        dbEl.style.display = defaultBadge ? 'inline' : 'none';
+                        dbEl.style.display = defaultBadge ? 'inline-block' : 'none';
                     }
                     
                     const ppsEl = document.getElementById('product-pps-badge');
                     if (ppsEl) {
                         ppsEl.textContent = ppsBadge || '';
-                        ppsEl.style.display = ppsBadge ? 'inline' : 'none';
+                        ppsEl.style.display = ppsBadge ? 'inline-block' : 'none';
                     }
                 } else {
                     priceEl.classList.remove('text-red-600');
@@ -226,8 +227,8 @@ function selectVariant(el) {
 
     if (window.productVariants) {
         const vObj = window.productVariants.find(v => String(v.id) === String(el.dataset.variantId));
-        if (vObj && vObj.image_url) {
-            window.dispatchEvent(new CustomEvent('set-main-image', { detail: vObj.image_url }));
+        if (vObj && (vObj.image_url || (vObj.images && vObj.images.length > 0))) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: vObj.image_url, images: vObj.images } }));
         }
     }
     

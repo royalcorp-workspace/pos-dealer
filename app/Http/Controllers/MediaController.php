@@ -12,26 +12,61 @@ class MediaController extends Controller
     {
         // Whitelist validasi tipe file 
         $request->validate([
-            'mime_type' => 'required|in:image/jpeg,image/png,|/webp',
-            'extension' => 'required|in:jpg,jpeg,png,webp',
+            'mime_type' => 'required|string',
+            'extension' => 'required|string',
+            'folder'    => 'nullable|string|max:50',
         ]);
 
-        $filePath = 'products/' . date('Y/m/') . Str::uuid() . '.' . $request->extension;
+        $rawMime = strtolower(trim(explode(';', (string) $request->mime_type)[0]));
+        $rawExt = strtolower(ltrim(trim((string) $request->extension), '.'));
+
+        $allowedMimes = [
+            'image/jpeg',
+            'image/jpg',
+            'image/pjpeg',
+            'image/png',
+            'image/x-png',
+            'image/webp',
+            'image/gif',
+            'image/svg+xml',
+            'image/avif',
+            'image/x-icon',
+            'image/vnd.microsoft.icon',
+        ];
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'avif', 'ico'];
+
+        if (!in_array($rawMime, $allowedMimes) || !in_array($rawExt, $allowedExtensions)) {
+            return response()->json([
+                'message' => 'Format file tidak didukung.',
+                'errors'  => ['mime_type' => ['Format file tidak valid.']]
+            ], 422);
+        }
+
+        // Sanitize and normalize folder (default: products)
+        $folder = preg_replace('/[^a-zA-Z0-9_\-]/', '', (string) $request->input('folder', 'products'));
+        if (empty($folder)) {
+            $folder = 'products';
+        }
+
+        $filePath = $folder . '/' . date('Y/m/') . Str::uuid() . '.' . $rawExt;
+        $bucket = config('filesystems.disks.s3.bucket') ?? env('AWS_BUCKET');
         $client = Storage::disk('s3')->getClient();
         
         $command = $client->getCommand('PutObject', [
-            'Bucket'      => env('AWS_BUCKET'),
+            'Bucket'      => $bucket,
             'Key'         => $filePath,
-            'ContentType' => $request->mime_type,
+            'ContentType' => $rawMime,
         ]);
 
         // URL bertanda tangan, valid untuk 5 menit
         $signedRequest = $client->createPresignedRequest($command, '+5 minutes');
+        $s3Url = rtrim((string) (config('filesystems.disks.s3.url') ?? env('AWS_URL', '')), '/');
+        $publicUrl = $s3Url ? ($s3Url . '/' . $filePath) : $filePath;
 
         return response()->json([
             'upload_url' => (string) $signedRequest->getUri(),
             'file_path'  => $filePath,
-            'public_url' => env('AWS_URL') . '/' . $filePath,
+            'public_url' => $publicUrl,
         ]);
     }
 
