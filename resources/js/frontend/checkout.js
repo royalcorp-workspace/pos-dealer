@@ -351,38 +351,157 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 document.addEventListener('DOMContentLoaded', function() {
-    var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
+    var provinceSelect = document.getElementById('checkout-province') || document.querySelector('select[name="province_id"]');
+    var citySelect = document.getElementById('checkout-city') || document.querySelector('select[name="city_id"]');
+    var subDistrictSelect = document.getElementById('checkout-sub-district') || document.querySelector('select[name="sub_district_id"]');
     var cityInput = document.getElementById('city-display') || document.querySelector('input[name="city"]');
     var postalInput = document.querySelector('input[name="postal_code"]');
     
     var subDistrictMapEl = document.getElementById('checkout-subdistrict-map');
     var subDistrictMap = subDistrictMapEl ? JSON.parse(subDistrictMapEl.textContent || '{}') : {};
 
-    if (subDistrictSelect && cityInput) {
+    function loadCities(provinceId, selectedCityId, callback) {
+        if (!citySelect) return;
+        citySelect.innerHTML = '<option value="">Memuat kota/kabupaten...</option>';
+        citySelect.disabled = true;
+        if (subDistrictSelect) {
+            subDistrictSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
+            subDistrictSelect.disabled = true;
+        }
+
+        if (!provinceId) {
+            citySelect.innerHTML = '<option value="">Pilih Provinsi Terlebih Dahulu</option>';
+            citySelect.disabled = true;
+            if (callback) callback();
+            return;
+        }
+
+        fetch('/checkout/cities?province_id=' + encodeURIComponent(provinceId))
+            .then(function(res) { return res.json(); })
+            .then(function(cities) {
+                var html = '<option value="">Pilih Kota/Kabupaten</option>';
+                cities.forEach(function(c) {
+                    var sel = (selectedCityId && String(c.id) === String(selectedCityId)) ? ' selected' : '';
+                    html += '<option value="' + c.id + '"' + sel + '>' + c.name + '</option>';
+                });
+                citySelect.innerHTML = html;
+                citySelect.disabled = false;
+                if (callback) callback();
+            })
+            .catch(function(err) {
+                console.error('Error loading cities:', err);
+                citySelect.innerHTML = '<option value="">Gagal memuat kota</option>';
+                citySelect.disabled = false;
+            });
+    }
+
+    function loadSubDistricts(cityId, selectedSubDistrictId, callback) {
+        if (!subDistrictSelect) return;
+        subDistrictSelect.innerHTML = '<option value="">Memuat kecamatan/kelurahan...</option>';
+        subDistrictSelect.disabled = true;
+
+        if (!cityId) {
+            subDistrictSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
+            subDistrictSelect.disabled = true;
+            if (callback) callback();
+            return;
+        }
+
+        fetch('/checkout/sub-districts?city_id=' + encodeURIComponent(cityId))
+            .then(function(res) { return res.json(); })
+            .then(function(subDistricts) {
+                var html = '<option value="">Pilih Kecamatan/Kelurahan</option>';
+                subDistricts.forEach(function(sd) {
+                    var sel = (selectedSubDistrictId && String(sd.id) === String(selectedSubDistrictId)) ? ' selected' : '';
+                    var label = sd.label || (sd.sub_district + (sd.district ? ' (Kec. ' + sd.district + ')' : '') + (sd.postal_code ? ' - ' + sd.postal_code : ''));
+                    html += '<option value="' + sd.id + '" data-postal="' + (sd.postal_code || '') + '"' + sel + '>' + label + '</option>';
+                });
+                subDistrictSelect.innerHTML = html;
+                subDistrictSelect.disabled = false;
+                if (callback) callback();
+            })
+            .catch(function(err) {
+                console.error('Error loading sub-districts:', err);
+                subDistrictSelect.innerHTML = '<option value="">Gagal memuat kecamatan/kelurahan</option>';
+                subDistrictSelect.disabled = false;
+            });
+    }
+
+    if (provinceSelect) {
+        provinceSelect.addEventListener('change', function() {
+            var provId = this.value;
+            loadCities(provId, null);
+        });
+    }
+
+    if (citySelect) {
+        citySelect.addEventListener('change', function() {
+            var cId = this.value;
+            var selOpt = citySelect.options[citySelect.selectedIndex];
+            if (cityInput && selOpt && selOpt.value) {
+                cityInput.value = selOpt.textContent.trim();
+            }
+            loadSubDistricts(cId, null);
+        });
+    }
+
+    if (subDistrictSelect) {
         subDistrictSelect.addEventListener('change', function() {
+            var selOpt = this.options[this.selectedIndex];
+            if (selOpt && postalInput) {
+                var postal = selOpt.getAttribute('data-postal');
+                if (postal) postalInput.value = postal;
+            }
             var data = subDistrictMap[this.value];
             if (data) {
-                cityInput.value = data.city;
-                if (postalInput) postalInput.value = data.postal_code || '';
+                if (cityInput && !cityInput.value && data.city) cityInput.value = data.city;
+                if (postalInput && !postalInput.value && data.postal_code) postalInput.value = data.postal_code;
+            }
+            if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                window.fetchAndUpdateShippingCost();
             }
         });
     }
+
+    window.loadCities = loadCities;
+    window.loadSubDistricts = loadSubDistricts;
 
     var originalFillAddress = window.fillAddress;
     window.fillAddress = function(el) {
         if (originalFillAddress) originalFillAddress(el);
         var savedAddressesEl = document.getElementById('checkout-saved-addresses');
         var addresses = savedAddressesEl ? JSON.parse(savedAddressesEl.textContent || '[]') : [];
-        var selected = addresses.find(function(a) { return a.id == el.value; });
+        var selected = addresses.find(function(a) { return String(a.id) === String(el.value); });
         if (selected) {
-            if (subDistrictSelect && selected.sub_district_id) {
+            if (selected.province_id && provinceSelect) {
+                provinceSelect.value = selected.province_id;
+                loadCities(selected.province_id, selected.city_id, function() {
+                    if (selected.city_id) {
+                        loadSubDistricts(selected.city_id, selected.sub_district_id, function() {
+                            if (subDistrictSelect && selected.sub_district_id) {
+                                subDistrictSelect.value = selected.sub_district_id;
+                                subDistrictSelect.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    }
+                });
+            } else if (selected.sub_district_id && subDistrictSelect) {
                 subDistrictSelect.value = selected.sub_district_id;
-                var data = subDistrictMap[selected.sub_district_id];
-                if (data && cityInput) cityInput.value = data.city;
-                if (data && postalInput) postalInput.value = data.postal_code || '';
+                subDistrictSelect.dispatchEvent(new Event('change'));
+            }
+
+            if (postalInput && selected.postal_code) {
+                postalInput.value = selected.postal_code;
+            }
+            if (cityInput && selected.city) {
+                cityInput.value = selected.city;
             }
             var addressSelector = document.getElementById('address-selector');
             if (addressSelector) addressSelector.classList.add('hidden');
+
+            if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                window.fetchAndUpdateShippingCost();
+            }
         }
     };
 });

@@ -167,12 +167,38 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-city text-brand-gold text-[11px]"></i> Kecamatan / Kelurahan <span class="text-red-500">*</span>
+                                    <i class="fa-solid fa-map-location-dot text-brand-gold text-[11px]"></i> Provinsi <span class="text-red-500">*</span>
                                 </label>
-                                <select name="sub_district_id" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
-                                    <option value="">Pilih Kecamatan/Kelurahan</option>
+                                <select name="province_id" id="checkout-province" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
+                                    <option value="">Pilih Provinsi</option>
+                                    @foreach($provinces as $prov)
+                                        <option value="{{ $prov->id }}" {{ (old('province_id', $selectedProvinceId ?? '') == $prov->id) ? 'selected' : '' }}>
+                                            {{ $prov->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-city text-brand-gold text-[11px]"></i> Kota / Kabupaten <span class="text-red-500">*</span>
+                                </label>
+                                <select name="city_id" id="checkout-city" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" {{ empty($cities) || $cities->isEmpty() ? 'disabled' : '' }}>
+                                    <option value="">{{ empty($cities) || $cities->isEmpty() ? 'Pilih Provinsi Terlebih Dahulu' : 'Pilih Kota/Kabupaten' }}</option>
+                                    @foreach($cities as $c)
+                                        <option value="{{ $c->id }}" {{ (old('city_id', $selectedCityId ?? '') == $c->id) ? 'selected' : '' }}>
+                                            {{ $c->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-building text-brand-gold text-[11px]"></i> Kecamatan / Kelurahan <span class="text-red-500">*</span>
+                                </label>
+                                <select name="sub_district_id" id="checkout-sub-district" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" {{ empty($subDistricts) || $subDistricts->isEmpty() ? 'disabled' : '' }}>
+                                    <option value="">{{ empty($subDistricts) || $subDistricts->isEmpty() ? 'Pilih Kota Terlebih Dahulu' : 'Pilih Kecamatan/Kelurahan' }}</option>
                                     @foreach($subDistricts as $sd)
-                                        <option value="{{ $sd['id'] }}" {{ (old('sub_district_id', $form['sub_district_id'] ?? $defaultAddress?->subDistrict->id ?? '') == $sd['id']) ? 'selected' : '' }}>
+                                        <option value="{{ $sd['id'] }}" data-postal="{{ $sd['postal_code'] ?? '' }}" {{ (old('sub_district_id', $form['sub_district_id'] ?? $selectedSubDistrictId ?? '') == $sd['id']) ? 'selected' : '' }}>
                                             {{ $sd['label'] }}
                                         </option>
                                     @endforeach
@@ -656,7 +682,7 @@
     </div>
     
     <script id="checkout-subdistrict-map" type="application/json">
-        @json($subDistricts->map(fn($sd) => ['city' => $sd['city'], 'postal_code' => $sd['postal_code']]))
+        @json($subDistricts->mapWithKeys(fn($sd) => [$sd['id'] => ['city' => $sd['city'] ?? '', 'postal_code' => $sd['postal_code'] ?? '']]))
     </script>
     <script id="checkout-saved-addresses" type="application/json">
         @json($savedAddressesSafe)
@@ -717,11 +743,29 @@
                                     if(postalInput && postalInput.value === '') { postalInput.value = customer.postal_code; postalInput.dispatchEvent(new Event('input')); }
                                 }
                                 if (customer.sub_district_id) {
-                                    const subSelect = document.querySelector('select[name="sub_district_id"]');
-                                    if(subSelect && subSelect.value === '') {
-                                        subSelect.value = customer.sub_district_id;
-                                        subSelect.dispatchEvent(new Event('change'));
-                                        subSelect.dispatchEvent(new Event('input'));
+                                    if (customer.province_id && typeof window.loadCities === 'function') {
+                                        const provSelect = document.getElementById('checkout-province');
+                                        if (provSelect) {
+                                            provSelect.value = customer.province_id;
+                                            window.loadCities(customer.province_id, customer.city_id, function() {
+                                                if (customer.city_id) {
+                                                    window.loadSubDistricts(customer.city_id, customer.sub_district_id, function() {
+                                                        const subSelect = document.getElementById('checkout-sub-district');
+                                                        if (subSelect) {
+                                                            subSelect.value = customer.sub_district_id;
+                                                            subSelect.dispatchEvent(new Event('change'));
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    } else {
+                                        const subSelect = document.getElementById('checkout-sub-district') || document.querySelector('select[name="sub_district_id"]');
+                                        if(subSelect && subSelect.value === '') {
+                                            subSelect.value = customer.sub_district_id;
+                                            subSelect.dispatchEvent(new Event('change'));
+                                            subSelect.dispatchEvent(new Event('input'));
+                                        }
                                     }
                                 }
                             }
@@ -737,7 +781,7 @@
             if (phoneInput) {
                 phoneInput.addEventListener('change', handleCustomerSearch);
             }
-            const formInputs = document.querySelectorAll('input[name="email"], input[name="name"], input[name="phone"], textarea[name="address"], input[name="postal_code"], select[name="sub_district_id"]');
+            const formInputs = document.querySelectorAll('input[name="email"], input[name="name"], input[name="phone"], select[name="province_id"], select[name="city_id"], select[name="sub_district_id"], textarea[name="address"], input[name="postal_code"]');
             
             // 1. Muat ulang data dari sessionStorage jika ada (kecuali jika ada error validasi dari server)
             const savedFormData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');
@@ -745,17 +789,19 @@
                 // Jika input kosong (artinya bukan kembalian error dari server) dan ada data tersimpan
                 if (!input.value && savedFormData[input.name]) {
                     input.value = savedFormData[input.name];
-                    if (input.name === 'sub_district_id') {
-                        input.dispatchEvent(new Event('change')); // Memicu event change untuk select
+                    if (input.name === 'sub_district_id' || input.name === 'province_id' || input.name === 'city_id') {
+                        input.dispatchEvent(new Event('change'));
                     }
                 }
                 
                 // 2. Simpan setiap perubahan ke sessionStorage
-                input.addEventListener('input', (e) => {
+                const saveChange = (e) => {
                     const currentData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');
                     currentData[e.target.name] = e.target.value;
                     sessionStorage.setItem('checkout_form_data', JSON.stringify(currentData));
-                });
+                };
+                input.addEventListener('input', saveChange);
+                input.addEventListener('change', saveChange);
             });
 
             // 3. Bersihkan memori saat form sukses di-submit (opsional, ditaruh di event submit)

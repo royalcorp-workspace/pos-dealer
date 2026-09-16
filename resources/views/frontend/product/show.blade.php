@@ -141,12 +141,16 @@
             
             <!-- Left Column: Sticky Product Media Gallery (Luxury Studio Viewer) -->
             @php
-                $dbImages = $product->images->isNotEmpty() 
-                    ? $product->images->map(fn($i) => $i->image_url ?? ($i->image ? media_url($i->image) : null))->filter()->values()->toArray()
+                $headerImages = $product->images->whereNull('variant_id');
+                $dbImages = $headerImages->isNotEmpty() 
+                    ? $headerImages->map(fn($i) => $i->image_url ?? ($i->image ? media_url($i->image) : null))->filter()->values()->toArray()
                     : [];
 
                 $allImages = collect([$product->thumbnail_url ?: asset('images/dummy/header.jpg')])
                     ->merge($dbImages)
+                    ->unique()
+                    ->filter()
+                    ->values()
                     ->toArray();
 
                 // If only 1 image exists in database, supply curated studio perspective angles
@@ -167,8 +171,11 @@
                     get currentImage() { return this.images[this.currentIndex] || this.images[0]; },
                     nextImage() { this.currentIndex = (this.currentIndex + 1) % this.images.length; },
                     prevImage() { this.currentIndex = (this.currentIndex - 1 + this.images.length) % this.images.length; },
-                    setMainImage(url) {
+                    setMainImage(detail) {
+                        if (!detail) return;
+                        let url = (typeof detail === 'string') ? detail : (detail.url || (detail.images && detail.images[0]));
                         if (!url) return;
+
                         let idx = this.images.indexOf(url);
                         if (idx === -1) {
                             this.images.unshift(url);
@@ -278,20 +285,28 @@
                         $firstVariantName = $hasVariants ? $validVariants->first()->variant_name : '';
                     @endphp
                     
-                    @if($staticPromo)
-                        <div class="flex items-center gap-2 mb-1.5">
-                            <span class="text-xs sm:text-sm text-gray-400 line-through">
-                                Rp {{ number_format($promoOriginalPrice, 0, ',', '.') }}
-                                @if($hasMultiplePrices) - Rp {{ number_format($promoOriginalMaxPrice, 0, ',', '.') }} @endif
-                            </span>
+                    <div id="product-discount-container" class="flex items-center gap-2 mb-1.5" style="display: {{ ($hasDefaultDiscount || $staticPromo) ? 'flex' : 'none' }};">
+                        <span id="product-strike-price" class="text-xs sm:text-sm text-gray-400 line-through">
+                            Rp {{ number_format($strikeMinPrice ?: $promoOriginalPrice, 0, ',', '.') }}
+                            @if($hasMultiplePrices && ($strikeMaxPrice || $promoOriginalMaxPrice))
+                                - Rp {{ number_format($strikeMaxPrice ?: $promoOriginalMaxPrice, 0, ',', '.') }}
+                            @endif
+                        </span>
+                        <span id="product-default-badge" class="text-[11px] font-extrabold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200" style="display: {{ $defaultDiscountBadge ? 'inline-block' : 'none' }};">
+                            {{ $defaultDiscountBadge }}
+                        </span>
+                        <span id="product-pps-badge" class="text-[11px] font-extrabold text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200" style="display: {{ $ppsDiscountBadge ? 'inline-block' : 'none' }};">
+                            {{ $ppsDiscountBadge }}
+                        </span>
+                        @if($staticPromo && !$defaultDiscountBadge && !$ppsDiscountBadge)
                             <span class="text-[11px] font-extrabold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">
                                 {{ __('Hemat') }} {{ $staticPromo['label'] }}
                             </span>
-                        </div>
-                    @endif
+                        @endif
+                    </div>
 
                     <div class="flex flex-col">
-                        <span class="text-3xl sm:text-4xl font-extrabold text-brand-dark tracking-tight font-sans" id="product-price">
+                        <span class="text-3xl sm:text-4xl font-extrabold {{ ($hasDefaultDiscount || $staticPromo) ? 'text-red-600' : 'text-brand-dark' }} tracking-tight font-sans" id="product-price">
                             Rp {{ number_format($price, 0, ',', '.') }}@if($hasMultiplePrices) - Rp {{ number_format($displayMaxPrice, 0, ',', '.') }}@endif
                         </span>
                         <span class="text-xs font-semibold text-brand-gold-dark mt-1.5" id="price-label">
@@ -326,9 +341,8 @@
                                                     $rawAttr = $vv->getRawOriginal('attributes');
                                                     $vAttrs = $rawAttr ? (is_string($rawAttr) ? json_decode($rawAttr, true) : $rawAttr) : [];
                                                     if (is_array($vAttrs) && isset($vAttrs[$groupName]) && (string)$vAttrs[$groupName] === (string)$option) {
-                                                        $firstImg = $vv->images->first();
-                                                        if ($firstImg && $firstImg->image) {
-                                                            $optionImage = $firstImg->image_url ?? media_url($firstImg->image);
+                                                        if ($vv->image_url) {
+                                                            $optionImage = $vv->image_url;
                                                             break;
                                                         }
                                                     }
@@ -749,16 +763,17 @@
                 }
             }
         }
-        $vImg = $v->images->first()?->image ?? null;
-        $vImgUrl = $vImg ? media_url($vImg) : null;
+        $vImgUrl = $v->image_url ?? ($v->images->first()?->image_url ?? ($v->images->first()?->image ? media_url($v->images->first()->image) : null));
+        $vImages = $v->images->map(fn($img) => $img->image_url ?? media_url($img->image))->filter()->values()->all();
 
         return [
             'id' => $v->id,
-            'price' => $v->sell_price,
-            'base_price' => $v->base_price,
+            'price' => (float)$v->sell_price,
+            'base_price' => (float)$v->base_price,
             'variant_name' => $v->variant_name,
             'attributes' => $parsedAttrs,
-            'image_url' => $vImgUrl
+            'image_url' => $vImgUrl,
+            'images' => $vImages,
         ];
     })->values()->all();
 @endphp

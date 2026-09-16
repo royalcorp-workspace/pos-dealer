@@ -1,11 +1,52 @@
+const ALLOWED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'avif', 'ico'];
+
+function isImageFile(file) {
+    if (!file) return false;
+    if (file.type && file.type.startsWith('image/')) return true;
+    const ext = file.name.split('.').pop().toLowerCase();
+    return ALLOWED_IMAGE_EXTENSIONS.includes(ext);
+}
+
+function resolveUploadFolder(input, form) {
+    // 1. Explicit data-folder on input
+    if (input.dataset.folder) return input.dataset.folder;
+    if (input.dataset.uploadFolder) return input.dataset.uploadFolder;
+    
+    // 2. Explicit data-folder on form
+    if (form.dataset.folder) return form.dataset.folder;
+    if (form.dataset.uploadFolder) return form.dataset.uploadFolder;
+
+    // 3. Inspect input name
+    const inputName = (input.name || '').toLowerCase();
+    if (inputName.includes('proof')) return 'payment_proofs';
+    if (inputName.includes('review')) return 'reviews';
+    if (inputName.includes('avatar')) return 'users';
+
+    // 4. Inspect form action URL or window.location.pathname
+    const actionUrl = (form.getAttribute('action') || window.location.pathname || '').toLowerCase();
+    if (actionUrl.includes('checkout') || actionUrl.includes('order') || actionUrl.includes('payment')) return 'payment_proofs';
+    if (actionUrl.includes('review')) return 'reviews';
+    if (actionUrl.includes('product')) return 'products';
+    if (actionUrl.includes('user') || actionUrl.includes('profile')) return 'users';
+
+    return 'products';
+}
+
 document.addEventListener('submit', async function(e) {
     const form = e.target;
-    if (form.hasAttribute('data-direct-upload-handled')) return;
+    if (!form || !(form instanceof HTMLFormElement)) return;
+    if (form.hasAttribute('data-direct-upload-handled') || form.id === 'productForm' || form.hasAttribute('data-no-direct-upload')) return;
     
-    // Temukan semua input type file yang berisi file
-    const fileInputs = Array.from(form.querySelectorAll('input[type="file"]')).filter(input => input.files.length > 0);
-    
-    if (fileInputs.length === 0) return;
+    // Temukan semua input type file yang berisi file gambar
+    const allFileInputs = Array.from(form.querySelectorAll('input[type="file"]')).filter(input => !input.disabled && input.files.length > 0);
+    if (allFileInputs.length === 0) return;
+
+    // Filter hanya input yang berisi file gambar (lewati dokumen/excel/csv)
+    const imageInputs = allFileInputs.filter(input => {
+        return Array.from(input.files).some(file => isImageFile(file));
+    });
+
+    if (imageInputs.length === 0) return;
 
     e.preventDefault();
     
@@ -18,23 +59,43 @@ document.addEventListener('submit', async function(e) {
     }
 
     try {
-        for (let input of fileInputs) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content 
+            || form.querySelector('input[name="_token"]')?.value 
+            || '';
+
+        for (let input of imageInputs) {
+            const folder = resolveUploadFolder(input, form);
+
             for (let file of input.files) {
+                if (!isImageFile(file)) continue;
+
                 const extension = file.name.split('.').pop().toLowerCase();
-                const mimeType = file.type || 'application/octet-stream';
+                let mimeType = file.type;
+                if (!mimeType) {
+                    if (extension === 'png') mimeType = 'image/png';
+                    else if (extension === 'webp') mimeType = 'image/webp';
+                    else if (extension === 'gif') mimeType = 'image/gif';
+                    else if (extension === 'svg') mimeType = 'image/svg+xml';
+                    else if (extension === 'avif') mimeType = 'image/avif';
+                    else mimeType = 'image/jpeg';
+                }
 
                 const authRes = await fetch('/api/media/upload-url', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                        'X-CSRF-TOKEN': csrfToken
                     },
-                    body: JSON.stringify({ mime_type: mimeType, extension })
+                    body: JSON.stringify({ mime_type: mimeType, extension, folder })
                 });
 
-                if (!authRes.ok) throw new Error('Gagal mendapatkan pre-signed URL');
-                const { upload_url, file_path, public_url } = await authRes.json();
+                if (!authRes.ok) {
+                    const errData = await authRes.json().catch(() => ({}));
+                    throw new Error(errData.message || 'Gagal mendapatkan pre-signed URL');
+                }
+
+                const { upload_url, file_path } = await authRes.json();
 
                 const uploadRes = await fetch(upload_url, {
                     method: 'PUT',
@@ -58,6 +119,6 @@ document.addEventListener('submit', async function(e) {
     } catch (err) {
         alert('Upload Error: ' + err.message);
         if (loader) loader.classList.add('hidden');
-        fileInputs.forEach(input => input.disabled = false);
+        imageInputs.forEach(input => input.disabled = false);
     }
 });

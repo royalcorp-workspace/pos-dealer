@@ -60,7 +60,27 @@ class ProductVariant extends Model
 
     public function images(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(ProductImage::class, 'variant_id');
+        return $this->hasMany(ProductImage::class, 'variant_id')->orderBy('sort_order');
+    }
+
+    public function image(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ProductImage::class, 'variant_id')->orderBy('sort_order');
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if ($this->relationLoaded('image') && $this->image) {
+            return $this->image->image_url ?? media_url($this->image->image);
+        }
+        $firstImg = $this->images->first();
+        if ($firstImg) {
+            return $firstImg->image_url ?? media_url($firstImg->image);
+        }
+        $rawAttrs = $this->getRawOriginal('attributes');
+        $attrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : ($rawAttrs ?: []);
+        $attrImg = $attrs['image'] ?? $attrs['image_url'] ?? null;
+        return $attrImg ? media_url($attrImg) : null;
     }
 
     public function getPriceAttribute()

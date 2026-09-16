@@ -1,21 +1,24 @@
 @props(['product'])
 
 @php
-    $validVariants = $product->variants->where('sell_price', '>', 0);
+    $validVariants = $product->variants ? $product->variants->filter(fn($v) => (float)$v->sell_price > 0)->values() : collect([]);
     $isVariable = $validVariants->isNotEmpty();
-    $minPrice = $isVariable ? $validVariants->min('sell_price') : null;
-    $maxPrice = $isVariable ? $validVariants->max('sell_price') : null;
     
-    $minBasePrice = $isVariable ? $validVariants->min('base_price') : null;
-    $maxBasePrice = $isVariable ? $validVariants->max('base_price') : null;
+    $minVariant = $isVariable ? $validVariants->sortBy(fn($v) => (float)$v->sell_price)->first() : null;
+    $maxVariant = $isVariable ? $validVariants->sortByDesc(fn($v) => (float)$v->sell_price)->first() : null;
 
-    $originalMinPrice = $isVariable && $minPrice ? (float) $minPrice : (float) (0);
-    $originalMaxPrice = $isVariable && $maxPrice ? (float) $maxPrice : $originalMinPrice;
+    $originalMinPrice = $minVariant ? (float)$minVariant->sell_price : (float)($product->price ?? 0);
+    $originalMaxPrice = $maxVariant ? (float)$maxVariant->sell_price : $originalMinPrice;
     
-    $originalMinBasePrice = $isVariable && $minBasePrice ? (float) $minBasePrice : $originalMinPrice;
-    $originalMaxBasePrice = $isVariable && $maxBasePrice ? (float) $maxBasePrice : $originalMaxPrice;
+    $positiveBaseVariants = $validVariants->filter(fn($v) => (float)$v->base_price > 0);
+    $originalMinBasePrice = ($minVariant && (float)$minVariant->base_price > 0)
+        ? (float)$minVariant->base_price
+        : (float)($positiveBaseVariants->min('base_price') ?? $originalMinPrice);
+    $originalMaxBasePrice = ($maxVariant && (float)$maxVariant->base_price > 0)
+        ? (float)$maxVariant->base_price
+        : (float)($positiveBaseVariants->max('base_price') ?? $originalMaxPrice);
 
-    $hasPriceRange = $isVariable && $minPrice && $maxPrice && $minPrice !== $maxPrice;
+    $hasPriceRange = $isVariable && $originalMinPrice > 0 && $originalMaxPrice > 0 && $originalMinPrice !== $originalMaxPrice;
     
     $hasDefaultDiscount = $originalMinBasePrice > $originalMinPrice;
     $defaultDiscountPct = $hasDefaultDiscount ? round((($originalMinBasePrice - $originalMinPrice) / $originalMinBasePrice) * 100) : 0;
@@ -86,9 +89,9 @@
         
         <!-- Badges -->
         <div class="absolute top-3 left-3 flex flex-col gap-2">
-            @if(isset($product['discountBadge']) && !$isSoldOut)
-                <span class="bg-brand-dark text-white text-[11px] font-bold px-2.5 py-1 rounded-sm shadow-sm tracking-wider uppercase">
-                    {{ $product['discountBadge'] }}
+            @if(($defaultDiscountBadge || isset($product['discountBadge'])) && !$isSoldOut)
+                <span class="bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-sm shadow-sm tracking-wider uppercase">
+                    {{ $defaultDiscountBadge ?? $product['discountBadge'] }}
                 </span>
             @endif
             @if($isSoldOut)
