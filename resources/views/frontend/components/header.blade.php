@@ -448,7 +448,7 @@
                     @mouseleave="activeMegaMenu = null"
                 >
                     <a href="{{ route('categories') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1.5 focus:outline-hidden py-2 {{ request()->routeIs('categories*') || request()->routeIs('category.*') ? 'text-brand-gold-dark font-bold' : '' }}">
-                        {{ __('Kasur & Kategori') }} 
+                        {{ __('Produk Kategori') }} 
                         <svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-200" :class="activeMegaMenu === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
 
@@ -617,7 +617,7 @@
                 >
                     <span class="flex items-center gap-2">
                         <svg class="w-4 h-4 text-brand-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3v4M8 3v4"/></svg>
-                        {{ __('Kasur & Kategori') }}
+                        {{ __('Produk Kategori') }}
                     </span>
                     <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
