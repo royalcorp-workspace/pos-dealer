@@ -780,6 +780,7 @@
 <script>
     window.productVariants = @json($mappedVariants);
     window.staticPromo = @json($staticPromo ?? null);
+    window.productBasePrice = {{ (float) ($product->base_price ?? 0) }};
 </script>
 <script src="{{ asset('js/frontend/product-detail.js') }}?v={{ filemtime(public_path('js/frontend/product-detail.js')) }}"></script>
 @endpush

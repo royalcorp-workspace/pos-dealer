@@ -47,16 +47,34 @@ class CartController extends Controller
             return redirect()->back()->with('error', 'Silakan pilih warna terlebih dahulu.');
         }
 
-        $price = ($product->variants->where('status', true)->min('sell_price') ?? 0);
+        $basePrice = 0.0;
+        $sellPrice = 0.0;
         if ($variantId) {
             $variant = ProductVariant::where('id', $variantId)->first();
             if ($variant) {
-                $price = $variant->sell_price;
+                $basePrice = (float) ($variant->base_price > 0 ? $variant->base_price : $variant->sell_price);
+                $sellPrice = (float) $variant->sell_price;
             }
+        }
+        if ($basePrice <= 0.0) {
+            $minBase = (float) ($product->variants->where('status', true)->min('base_price') ?? 0);
+            $minSell = (float) ($product->variants->where('status', true)->min('sell_price') ?? 0);
+            $basePrice = $minBase > 0 ? $minBase : $minSell;
+            $sellPrice = $minSell;
+        }
+        if ($sellPrice <= 0.0) {
+            $sellPrice = $basePrice;
+        }
+        if ($basePrice < $sellPrice) {
+            $basePrice = $sellPrice;
         }
 
         $staticPromo = \App\Services\StaticPromoService::forProduct($product);
-        $price = \App\Services\StaticPromoService::discountedPrice((float) $price, $staticPromo);
+        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice((float) $sellPrice, $staticPromo);
+
+        $unitDiscount = max(0.0, $basePrice - $promotionalPrice);
+        $discountNominal = $unitDiscount * $quantity;
+        $discountPercent = $basePrice > 0 ? round(($unitDiscount / $basePrice) * 100, 2) : 0.0;
 
         $buffer = $this->findOrCreateBuffer();
 
@@ -71,6 +89,12 @@ class CartController extends Controller
             $meta['color_name'] = $colorName;
             $meta['color_code'] = $colorCode;
         }
+        $meta['base_price'] = $basePrice;
+        $meta['original_price'] = $basePrice;
+        $meta['sell_price'] = $promotionalPrice;
+        $meta['after_disc_price'] = $promotionalPrice;
+        $meta['discount_nominal'] = $discountNominal;
+        $meta['discount_percent'] = $discountPercent;
 
         $existingItemQuery = BufferItem::where('buffer_id', $buffer->id)
             ->where('product_id', $productId);
@@ -92,8 +116,19 @@ class CartController extends Controller
         $existingItem = $existingItemQuery->first();
 
         if ($existingItem) {
+            $newQty = $existingItem->quantity + $quantity;
+            $existingMeta = is_array($existingItem->meta) ? $existingItem->meta : (json_decode((string) $existingItem->meta, true) ?: []);
+            $uBasePrice = (float) ($existingMeta['base_price'] ?? $existingItem->unit_price);
+            $uSellPrice = (float) ($existingMeta['sell_price'] ?? $existingMeta['after_disc_price'] ?? $promotionalPrice);
+            $uDiscountNominal = max(0.0, $uBasePrice - $uSellPrice) * $newQty;
+            $existingMeta['discount_nominal'] = $uDiscountNominal;
+
             $existingItem->update([
-                'quantity' => $existingItem->quantity + $quantity,
+                'quantity' => $newQty,
+                'unit_price' => $uBasePrice,
+                'total' => $uSellPrice * $newQty,
+                'discount_nominal' => $uDiscountNominal,
+                'meta' => $existingMeta,
             ]);
             $item = $existingItem;
         } else {
@@ -112,12 +147,12 @@ class CartController extends Controller
                 'product_variant_id' => $variantId,
                 'name' => $itemName,
                 'quantity' => $quantity,
-                'unit_price' => (float) $price,
-                'total' => (float) $price * $quantity,
-                'discount_nominal' => 0,
-                'discount_percent' => 0,
+                'unit_price' => (float) $basePrice,
+                'total' => (float) $promotionalPrice * $quantity,
+                'discount_nominal' => $discountNominal,
+                'discount_percent' => $discountPercent,
                 'item_notes' => '',
-                'meta' => !empty($meta) ? $meta : null,
+                'meta' => $meta,
             ]);
         }
 
@@ -174,7 +209,19 @@ class CartController extends Controller
             }
             $item->delete();
         } else {
-            $item->update(['quantity' => $quantity]);
+            $itemMeta = is_array($item->meta) ? $item->meta : (json_decode((string) $item->meta, true) ?: []);
+            $uBasePrice = (float) ($itemMeta['base_price'] ?? $item->unit_price);
+            $uSellPrice = (float) ($itemMeta['sell_price'] ?? $itemMeta['after_disc_price'] ?? ($item->total > 0 && $item->quantity > 0 ? ($item->total / $item->quantity) : $item->unit_price));
+            $uDiscNominal = max(0.0, $uBasePrice - $uSellPrice) * $quantity;
+            $itemMeta['discount_nominal'] = $uDiscNominal;
+
+            $item->update([
+                'quantity' => $quantity,
+                'unit_price' => $uBasePrice,
+                'total' => $uSellPrice * $quantity,
+                'discount_nominal' => $uDiscNominal,
+                'meta' => $itemMeta,
+            ]);
         }
 
         $this->recalculateBuffer($buffer);

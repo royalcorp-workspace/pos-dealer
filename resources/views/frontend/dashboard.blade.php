@@ -215,19 +215,39 @@
 
                                         <div class="space-y-2 text-sm text-brand-dark">
                                             @forelse($order->items as $item)
+                                                @php
+                                                    $itemMeta = is_array($item->meta) ? $item->meta : (json_decode($item->meta ?? '[]', true) ?: []);
+                                                    $unitPrice = (float) ($item->unit_price ?? $itemMeta['original_price'] ?? 0);
+                                                    $discNom = (float) ($item->discount_nominal ?? $itemMeta['discount_nominal'] ?? 0);
+                                                    $discPct = (float) ($item->discount_percent ?? $itemMeta['discount_percent'] ?? 0);
+                                                    $subtotalAsli = $unitPrice * (int) $item->quantity;
+                                                    if ($discPct > 0 && $discNom <= 0) {
+                                                        $discNom = ($subtotalAsli * $discPct) / 100;
+                                                    }
+                                                    if ($discNom > 0 && $discPct <= 0 && $subtotalAsli > 0) {
+                                                        $discPct = round(($discNom / $subtotalAsli) * 100, 1);
+                                                    }
+                                                @endphp
                                                 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
                                                     <div class="min-w-0 flex-1">
-                                                        <span class="truncate block">{{ $item->quantity }}x {{ $item->name }}</span>
-                                                        <span class="text-xs text-gray-500">{{ $formatRupiah($item->unit_price ?? 0) }} / item</span>
+                                                        <span class="truncate block font-semibold text-brand-dark">{{ $item->quantity }}x {{ $item->name }}</span>
+                                                        <span class="text-xs text-gray-500">Harga Asli: {{ $formatRupiah($unitPrice) }} / item</span>
                                                     </div>
                                                     <div class="text-left sm:text-right">
-                                                        @if(($item->discount_percent ?? 0) > 0)
-                                                            <span class="text-xs text-red-500 block">Diskon {{ $item->discount_percent }}%</span>
+                                                        @if($discNom > 0)
+                                                            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                                                @if($discPct > 0)
+                                                                    <span>Diskon {{ (float) $discPct }}%</span>
+                                                                @endif
+                                                                <span>(-{{ $formatRupiah($discNom) }})</span>
+                                                            </span>
                                                         @endif
-                                                        @if(($item->discount_nominal ?? 0) > 0)
-                                                            <span class="text-xs text-red-500 block">-{{ $formatRupiah($item->discount_nominal) }}</span>
-                                                        @endif
-                                                        <span class="text-gray-700 font-medium">{{ $formatRupiah(max(0, ($item->total ?? 0) - (($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) - ($item->discount_nominal ?? 0))) }}</span>
+                                                        <div class="mt-0.5">
+                                                            @if($discNom > 0 && $subtotalAsli > $item->total)
+                                                                <span class="text-xs text-gray-400 line-through mr-1">{{ $formatRupiah($subtotalAsli) }}</span>
+                                                            @endif
+                                                            <span class="text-brand-dark font-bold">{{ $formatRupiah($item->total ?? 0) }}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             @empty

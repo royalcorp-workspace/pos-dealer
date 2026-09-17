@@ -33,6 +33,46 @@ class CheckoutController extends Controller
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
         if (empty($cart)) {
+            $sessionCart = session()->get('cart', []);
+            if (!empty($sessionCart) && is_array($sessionCart)) {
+                $buffer = $this->findOrCreateBuffer();
+                foreach ($sessionCart as $sItem) {
+                    if (empty($sItem['product_id']) && empty($sItem['bundle_data']['bundle_id'])) continue;
+                    $pId = $sItem['product_id'] ?? null;
+                    $vId = $sItem['variant_id'] ?? null;
+                    $qty = max(1, (int) ($sItem['quantity'] ?? 1));
+                    $price = (float) ($sItem['sell_price'] ?? ($sItem['unit_price'] ?? 0));
+                    $meta = [];
+                    if (!empty($sItem['color_id'])) {
+                        $meta['color_id'] = $sItem['color_id'];
+                        $meta['color_name'] = $sItem['color_name'] ?? null;
+                        $meta['color_code'] = $sItem['color_code'] ?? null;
+                    }
+                    $meta['base_price'] = (float) ($sItem['base_price'] ?? $price);
+                    $meta['sell_price'] = $price;
+                    $notes = !empty($sItem['bundle_data']) ? json_encode($sItem['bundle_data']) : ($sItem['item_note'] ?? '');
+
+                    \App\Models\Frontend\Buffer\BufferItem::create([
+                        'id' => \Illuminate\Support\Str::uuid()->toString(),
+                        'buffer_id' => $buffer->id,
+                        'product_id' => $pId,
+                        'product_variant_id' => $vId,
+                        'name' => $sItem['name'] ?? 'Produk',
+                        'quantity' => $qty,
+                        'unit_price' => $price,
+                        'total' => $price * $qty,
+                        'discount_nominal' => (float) ($sItem['discount_nominal'] ?? 0),
+                        'discount_percent' => (float) ($sItem['discount_percent'] ?? 0),
+                        'item_notes' => $notes,
+                        'meta' => $meta,
+                    ]);
+                }
+                $this->recalculateBuffer($buffer);
+                $cart = $this->getBufferCartArray($buffer);
+            }
+        }
+
+        if (empty($cart)) {
             $lastProductUrl = $this->getLastProductUrl();
             return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda kosong.');
         }
@@ -94,13 +134,40 @@ class CheckoutController extends Controller
         $checkoutFormData = Session::get('checkout_form_data', []);
         $provinces = \App\Models\Frontend\Location\Province::orderBy('name')->get(['id', 'name']);
 
+        $defaultCustomerAddr = null;
         if (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
             $userId = $user['id'] ?? $user['sub'] ?? null;
-            $savedAddresses = Address::where('user_id', $userId)
-                ->with('subDistrict.city')
-                ->orderByDesc('is_primary')
-                ->get();
+            $userEmail = strtolower(trim($user['email'] ?? ''));
+
+            $customer = null;
+            if ($userId) {
+                $customer = Customer::where('user_id', $userId)->first();
+            }
+            if (!$customer && !empty($userEmail)) {
+                $customer = Customer::whereRaw('LOWER(email) = ?', [$userEmail])->first();
+                if ($customer && $userId && empty($customer->user_id)) {
+                    $customer->update(['user_id' => $userId]);
+                }
+            }
+
+            $savedAddresses = Address::where(function ($q) use ($userId, $customer) {
+                if ($userId) {
+                    $q->where('user_id', $userId);
+                }
+                if ($customer) {
+                    $q->orWhere('customer_id', $customer->id);
+                }
+            })
+            ->where('deleted', false)
+            ->with('subDistrict.city')
+            ->orderByDesc('is_primary')
+            ->get();
+
+            if ($savedAddresses->isEmpty() && $customer) {
+                $defaultCustomerAddr = $this->resolveCustomerAddressData($customer);
+            }
+
             $savedAddressesSafe = $savedAddresses->map(function ($a) {
                 return [
                     'id' => $a->id,
@@ -127,58 +194,85 @@ class CheckoutController extends Controller
             $quantity = (int) $item['quantity'];
 
             if ($isBundle && $bundleData) {
-                $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
-                $cart[$key]['original_price'] ?? $item['sell_price'] = $originalPrice;
-                $originalCartTotal += ($originalPrice * $quantity);
-                
-                $promotionalPrice = $originalPrice;
-                $staticDiscount = 0.0;
+                $bundlePrice = (float) ($bundleData['bundle_price'] ?? 0);
                 $bundleModel = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleData['bundle_id'] ?? '');
+                $basePrice = (float) ($bundleModel->base_price ?? ($bundleData['original_price'] ?? $bundlePrice));
+                if ($basePrice <= 0) {
+                    $basePrice = $bundlePrice;
+                }
+                
+                $promotionalPrice = $bundlePrice;
                 if ($bundleModel) {
-                    $ppsPromo = \App\Services\StaticPromoService::forBundling($bundleModel, $originalPrice);
+                    $ppsPromo = \App\Services\StaticPromoService::forBundling($bundleModel, $bundlePrice);
                     if ($ppsPromo) {
-                        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $ppsPromo);
-                        $staticDiscount = ($originalPrice - $promotionalPrice) * $quantity;
+                        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
                     }
                 }
-                $totalPercentDiscount += $staticDiscount;
+
+                $itemSubtotal = $basePrice * $quantity;
+                $originalCartTotal += $itemSubtotal;
+
+                $itemDiscount = max(0.0, $itemSubtotal - ($promotionalPrice * $quantity));
+                $totalPercentDiscount += $itemDiscount;
+
+                $cart[$key]['base_price'] = $basePrice;
+                $cart[$key]['original_price'] = $basePrice;
                 $cart[$key]['sell_price'] = $promotionalPrice;
                 continue;
             }
 
             $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
-            $originalPrice = 0.0;
+            $basePrice = 0.0;
+            $sellPrice = 0.0;
             if ($variantId) {
                 $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                 if ($variantModel) {
-                    $originalPrice = (float) $variantModel->sell_price;
+                    $basePrice = (float) ($variantModel->base_price > 0 ? $variantModel->base_price : $variantModel->sell_price);
+                    $sellPrice = (float) $variantModel->sell_price;
                 }
             }
-            if ($originalPrice <= 0.0) {
+            if ($basePrice <= 0.0) {
                 $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                 if ($productModel) {
-                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
+                    $minBase = (float) ($productModel->variants->where('status', true)->min('base_price') ?? 0);
+                    $minSell = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
+                    $basePrice = $minBase > 0 ? $minBase : $minSell;
+                    $sellPrice = $minSell;
                 }
             }
-            if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['sell_price'];
+            if ($basePrice <= 0.0) {
+                $basePrice = (float) ($item['base_price'] ?? ($item['unit_price'] ?? $item['sell_price'] ?? 0));
+                $sellPrice = (float) ($item['sell_price'] ?? $basePrice);
             }
-            $cart[$key]['original_price'] ?? $item['sell_price'] = $originalPrice;
+            if ($sellPrice <= 0.0) {
+                $sellPrice = $basePrice;
+            }
+            if ($basePrice < $sellPrice) {
+                $basePrice = $sellPrice;
+            }
 
-            $itemSubtotal = $originalPrice * $quantity;
+            $itemSubtotal = $basePrice * $quantity;
             $originalCartTotal += $itemSubtotal;
 
-            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, $quantity, $originalPrice);
-            $totalPercentDiscount += $res['static_discount'];
-            $priceProductSettingDiscount += $res['volume_discount'];
+            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, $quantity, $sellPrice);
+            $promotionalPrice = (float) ($res['promotional_price'] ?? $sellPrice);
+            $itemVolumeDiscount = (float) ($res['volume_discount'] ?? 0);
 
-            $cart[$key]['sell_price'] = $res['promotional_price'];
+            $itemDiscount = max(0.0, $itemSubtotal - ($promotionalPrice * $quantity));
+            $itemStaticDiscount = max(0.0, $itemDiscount - $itemVolumeDiscount);
+            $totalPercentDiscount += $itemStaticDiscount;
+            $priceProductSettingDiscount += $itemVolumeDiscount;
+
+            $cart[$key]['base_price'] = $basePrice;
+            $cart[$key]['original_price'] = $basePrice;
+            $cart[$key]['sell_price'] = $promotionalPrice;
         }
 
         $cartTotal = collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']);
 
         $cartWeightDetails = $this->calculateCartWeightAndDimensions($cart);
-        $initialSubDistrictId = $savedAddresses->first()->sub_district_id ?? ($checkoutFormData['sub_district_id'] ?? old('sub_district_id', ''));
+        $initialSubDistrictId = $savedAddresses->first()->sub_district_id 
+            ?? ($defaultCustomerAddr['sub_district_id'] ?? ($checkoutFormData['sub_district_id'] ?? old('sub_district_id', '')));
 
         $selectedProvinceId = null;
         $selectedCityId = null;
@@ -187,7 +281,8 @@ class CheckoutController extends Controller
         $subDistricts = collect();
 
         if (!empty($initialSubDistrictId)) {
-            $initSd = \App\Models\Frontend\Location\SubDistrict::with('city')->find($initialSubDistrictId);
+            $initSd = \App\Models\Frontend\Location\SubDistrict::withoutGlobalScopes()->with('city')->find($initialSubDistrictId)
+                ?? \App\Models\Frontend\Location\SubDistrict::with('city')->find($initialSubDistrictId);
             if ($initSd) {
                 $selectedSubDistrictId = $initSd->id;
                 $selectedCityId = $initSd->city_id;
@@ -219,7 +314,7 @@ class CheckoutController extends Controller
             $courierPrices[$courier->code] = $this->calculateShippingDetails($courier->code, $initialSubDistrictId ?? '', $cart);
         }
 
-        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'provinces', 'cities', 'subDistricts', 'selectedProvinceId', 'selectedCityId', 'selectedSubDistrictId', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers', 'enforcedCourierType', 'cartWeightDetails', 'courierPrices'));
+        return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'provinces', 'cities', 'subDistricts', 'selectedProvinceId', 'selectedCityId', 'selectedSubDistrictId', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers', 'enforcedCourierType', 'cartWeightDetails', 'courierPrices', 'defaultCustomerAddr'));
     }
 
     public function store(Request $request)
@@ -277,33 +372,47 @@ class CheckoutController extends Controller
             $quantity = (int) $item['quantity'];
 
             if ($isBundle && $bundleData) {
-                $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
+                $bundlePrice = (float) ($bundleData['bundle_price'] ?? 0);
+                $bundleModel = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleData['bundle_id'] ?? '');
+                $basePrice = (float) ($bundleModel->base_price ?? ($bundleData['original_price'] ?? $bundlePrice));
+                if ($basePrice <= 0) {
+                    $basePrice = $bundlePrice;
+                }
                 $variantId = null;
                 $cart[$key]['bundle_data'] = $bundleData;
                 
-                $originalSubtotal = $originalPrice * $quantity;
+                $originalSubtotal = $basePrice * $quantity;
                 $originalCartTotal += $originalSubtotal;
                 
-                $promotionalPrice = $originalPrice;
-                $itemStaticDiscount = 0.0;
-                $bundleModel = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleData['bundle_id'] ?? '');
+                $promotionalPrice = $bundlePrice;
                 if ($bundleModel) {
-                    $ppsPromo = \App\Services\StaticPromoService::forBundling($bundleModel, $originalPrice);
+                    $ppsPromo = \App\Services\StaticPromoService::forBundling($bundleModel, $bundlePrice);
                     if ($ppsPromo) {
-                        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice($originalPrice, $ppsPromo);
-                        $itemStaticDiscount = ($originalPrice - $promotionalPrice) * $quantity;
+                        $promotionalPrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
                     }
                 }
                 
-                $totalStaticDiscount += $itemStaticDiscount;
+                $itemTotal = $promotionalPrice * $quantity;
+                $itemDiscount = max(0.0, $originalSubtotal - $itemTotal);
+                $discountPercent = $originalSubtotal > 0 ? round(($itemDiscount / $originalSubtotal) * 100, 2) : 0.0;
+                
+                $totalStaticDiscount += $itemDiscount;
+                $cart[$key]['base_price'] = $basePrice;
+                $cart[$key]['original_price'] = $basePrice;
                 $cart[$key]['sell_price'] = $promotionalPrice;
 
                 $resolvedItems[] = [
                     'item' => $item,
                     'variant_id' => $variantId,
-                    'original_price' => $originalPrice,
+                    'base_price' => $basePrice,
+                    'original_price' => $basePrice,
+                    'sell_price' => $promotionalPrice,
+                    'after_disc_price' => $promotionalPrice,
                     'original_subtotal' => $originalSubtotal,
-                    'static_promo_discount' => $itemStaticDiscount,
+                    'item_total' => $itemTotal,
+                    'discount_nominal' => $itemDiscount,
+                    'discount_percent' => $discountPercent,
+                    'static_promo_discount' => $itemDiscount,
                     'volume_promo_discount' => 0.0,
                 ];
                 continue;
@@ -311,41 +420,66 @@ class CheckoutController extends Controller
 
             $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
 
-            $originalPrice = 0.0;
+            $basePrice = 0.0;
+            $sellPrice = 0.0;
             if ($variantId) {
                 $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
                 if ($variantModel) {
-                    $originalPrice = (float) $variantModel->sell_price;
+                    $basePrice = (float) ($variantModel->base_price > 0 ? $variantModel->base_price : $variantModel->sell_price);
+                    $sellPrice = (float) $variantModel->sell_price;
                 }
             }
-            if ($originalPrice <= 0.0) {
+            if ($basePrice <= 0.0) {
                 $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
                 if ($productModel) {
-                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
+                    $minBase = (float) ($productModel->variants->where('status', true)->min('base_price') ?? 0);
+                    $minSell = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
+                    $basePrice = $minBase > 0 ? $minBase : $minSell;
+                    $sellPrice = $minSell;
                 }
             }
-            if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['sell_price'];
+            if ($basePrice <= 0.0) {
+                $basePrice = (float) ($item['base_price'] ?? ($item['unit_price'] ?? $item['sell_price'] ?? 0));
+                $sellPrice = (float) ($item['sell_price'] ?? $basePrice);
+            }
+            if ($sellPrice <= 0.0) {
+                $sellPrice = $basePrice;
+            }
+            if ($basePrice < $sellPrice) {
+                $basePrice = $sellPrice;
             }
 
-            $originalSubtotal = $originalPrice * $quantity;
+            $originalSubtotal = $basePrice * $quantity;
             $originalCartTotal += $originalSubtotal;
 
-            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, $quantity, $originalPrice);
-            $itemStaticDiscount = $res['static_discount'];
-            $itemVolumeDiscount = $res['volume_discount'];
+            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, $quantity, $sellPrice);
+            $promotionalPrice = (float) ($res['promotional_price'] ?? $sellPrice);
+            $itemVolumeDiscount = (float) ($res['volume_discount'] ?? 0);
 
+            $itemTotal = $promotionalPrice * $quantity;
+            $itemDiscount = max(0.0, $originalSubtotal - $itemTotal);
+            $discountPercent = $originalSubtotal > 0 ? round(($itemDiscount / $originalSubtotal) * 100, 2) : 0.0;
+
+            $itemStaticDiscount = max(0.0, $itemDiscount - $itemVolumeDiscount);
             $totalStaticDiscount += $itemStaticDiscount;
             $priceProductSettingDiscount += $itemVolumeDiscount;
 
             // Recalculate cart item price for voucher calculations
-            $cart[$key]['sell_price'] = $res['promotional_price'];
+            $cart[$key]['base_price'] = $basePrice;
+            $cart[$key]['original_price'] = $basePrice;
+            $cart[$key]['sell_price'] = $promotionalPrice;
 
             $resolvedItems[] = [
                 'item' => $item,
                 'variant_id' => $variantId,
-                'original_price' => $originalPrice,
+                'base_price' => $basePrice,
+                'original_price' => $basePrice,
+                'sell_price' => $promotionalPrice,
+                'after_disc_price' => $promotionalPrice,
                 'original_subtotal' => $originalSubtotal,
+                'item_total' => $itemTotal,
+                'discount_nominal' => $itemDiscount,
+                'discount_percent' => $discountPercent,
                 'static_promo_discount' => $itemStaticDiscount,
                 'volume_promo_discount' => $itemVolumeDiscount,
             ];
@@ -428,10 +562,21 @@ class CheckoutController extends Controller
 
         $shippingAddressRecord = null;
         if ($courierModel && $finalSubDistrictId) {
+            $destSd = \App\Models\Frontend\Location\SubDistrict::withoutGlobalScopes()->find($finalSubDistrictId);
+            $destCityId = $destSd?->city_id;
             $shippingAddressRecord = \App\Models\Frontend\Shipping\ShippingAddress::where('courier_id', $courierModel->id)
-                ->where('sub_district_id', $finalSubDistrictId)
-                ->where('type', 1)
+                ->where(function ($q) use ($finalSubDistrictId, $destCityId) {
+                    $q->where('sub_district_id', $finalSubDistrictId);
+                    if ($destCityId) {
+                        $q->orWhere('city_id', $destCityId);
+                    }
+                })
+                ->orderByRaw('sub_district_id IS NOT NULL DESC')
                 ->first();
+        }
+
+        if ($courierModel && $courierModel->courier_type === 'toko' && !$shippingAddressRecord) {
+            return redirect()->route('checkout')->withErrors(['courier' => 'Kurir Toko belum melayani pengiriman ke wilayah / kota tujuan yang dipilih. Silakan pilih alamat lain atau hubungi admin.'])->withInput();
         }
         $shippingAddressesId = $shippingAddressRecord ? $shippingAddressRecord->id : null;
 
@@ -463,6 +608,8 @@ class CheckoutController extends Controller
                     'province' => $subDistrictModel->city->province->name ?? '',
                     'postal_code' => $postalCode,
                     'sub_district_id' => $finalSubDistrictId,
+                    'city_id' => $subDistrictModel->city_id,
+                    'province_id' => $subDistrictModel->province_id ?? ($subDistrictModel->city?->province_id ?? null),
                 ];
             }
         }
@@ -745,49 +892,92 @@ class CheckoutController extends Controller
                     ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) 
                     : ($customerData['user_id'] ?? null);
 
-                $customer = null;
-                if ($userId) {
+                $inputEmail = strtolower(trim($customerData['email'] ?? ''));
+                $inputPhone = trim($customerData['phone'] ?? '');
+                $inputName = trim($customerData['name'] ?? 'Pelanggan');
+
+                // Customer unique by email (case-insensitive)
+                $customer = !empty($inputEmail)
+                    ? Customer::whereRaw('LOWER(email) = ?', [$inputEmail])->first()
+                    : null;
+
+                if ($userId && !$customer) {
+                    $customer = Customer::where('user_id', $userId)->first();
+                }
+
+                if ($customer) {
+                    // Jika emailnya sama dan nomor hapenya sama, yg berubah hanya namanya saja, jadi emailnya unique
+                    $updateFields = [
+                        'name' => $inputName,
+                    ];
+                    if ($userId && empty($customer->user_id)) {
+                        $updateFields['user_id'] = $userId;
+                    }
+                    if (!empty($inputPhone)) {
+                        $updateFields['phone'] = $inputPhone;
+                    }
+                    $customer->update($updateFields);
+                } else {
+                    $customer = Customer::create([
+                        'id' => Str::uuid()->toString(),
+                        'user_id' => $userId,
+                        'email' => $inputEmail ?: 'guest@example.com',
+                        'name' => $inputName,
+                        'phone' => $inputPhone,
+                    ]);
+                }
+
+                if ($customer && !empty($customerData['sub_district_id'])) {
                     if (!empty($customerData['selected_address_id'])) {
                         Address::where('id', $customerData['selected_address_id'])->update(['is_primary' => true]);
-                    } elseif (!empty($customerData['sub_district_id'])) {
-                        $subDistrict = SubDistrict::find($customerData['sub_district_id']);
+                    } else {
+                        $subDistrict = SubDistrict::withoutGlobalScopes()->find($customerData['sub_district_id']) ?? SubDistrict::find($customerData['sub_district_id']);
                         if ($subDistrict) {
-                            Address::create([
-                                'id' => Str::uuid()->toString(),
-                                'user_id' => $userId,
-                                'sub_district_id' => $subDistrict->id,
-                                'city_id' => $subDistrict->city_id,
-                                'label' => 'Rumah',
-                                'recipient_name' => $customerData['name'] ?? '',
-                                'phone' => $customerData['phone'] ?? '',
-                                'address' => $customerData['address'] ?? '',
-                                'postal_code' => $customerData['postal_code'] ?? $subDistrict->postal_code,
-                                'is_primary' => true,
-                            ]);
+                            $existingAddr = Address::where(function ($q) use ($customer, $userId) {
+                                if ($userId) {
+                                    $q->where('user_id', $userId);
+                                }
+                                $q->orWhere('customer_id', $customer->id);
+                            })->where('deleted', false)->first();
+
+                            if ($existingAddr) {
+                                $existingAddr->update([
+                                    'customer_id' => $customer->id,
+                                    'user_id' => $userId ?: $existingAddr->user_id,
+                                    'sub_district_id' => $subDistrict->id,
+                                    'city_id' => $subDistrict->city_id,
+                                    'recipient_name' => $customerData['name'] ?? $existingAddr->recipient_name,
+                                    'phone' => $customerData['phone'] ?? $existingAddr->phone,
+                                    'address' => $customerData['address'] ?? $existingAddr->address,
+                                    'postal_code' => $customerData['postal_code'] ?? ($subDistrict->postal_code ?? $existingAddr->postal_code),
+                                    'is_primary' => true,
+                                ]);
+                            } else {
+                                Address::create([
+                                    'id' => Str::uuid()->toString(),
+                                    'customer_id' => $customer->id,
+                                    'user_id' => $userId,
+                                    'sub_district_id' => $subDistrict->id,
+                                    'city_id' => $subDistrict->city_id,
+                                    'label' => 'Rumah',
+                                    'recipient_name' => $customerData['name'] ?? '',
+                                    'phone' => $customerData['phone'] ?? '',
+                                    'address' => $customerData['address'] ?? '',
+                                    'postal_code' => $customerData['postal_code'] ?? $subDistrict->postal_code,
+                                    'is_primary' => true,
+                                ]);
+                            }
                         }
                     }
+                }
 
-                    $customer = Customer::updateOrCreate(
-                        ['user_id' => $userId],
-                        [
-                            'email' => $customerData['email'] ?? '',
-                            'name' => $customerData['name'] ?? '',
-                            'phone' => $customerData['phone'] ?? '',
-                        ]
-                    );
-
+                if ($userId) {
                     $user = session()->get('user', []);
-                    $user['name'] = $customerData['name'] ?? ($user['name'] ?? '');
-                    $user['phone'] = $customerData['phone'] ?? ($user['phone'] ?? '');
+                    $user['name'] = $inputName;
+                    if (!empty($inputPhone)) {
+                        $user['phone'] = $inputPhone;
+                    }
                     session()->put('user', $user);
-                } else {
-                    $customer = Customer::updateOrCreate(
-                        ['email' => $customerData['email'] ?? 'guest@example.com'],
-                        [
-                            'name' => $customerData['name'] ?? 'Pelanggan',
-                            'phone' => $customerData['phone'] ?? '',
-                        ]
-                    );
                 }
 
                 // 2. Prepare Order Metadata
@@ -835,12 +1025,11 @@ class CheckoutController extends Controller
                     foreach ($resolvedItems as $resolved) {
                         $item = $resolved['item'];
                         $variantId = $resolved['variant_id'];
-                        $originalPrice = $resolved['original_price'] ?? $item['sell_price'];
-                        $originalSubtotal = $resolved['original_subtotal'];
-                        $staticPromoDiscountTotal = $resolved['static_promo_discount'];
-
-                        $productDiscountNominal = $staticPromoDiscountTotal + (float) ($resolved['volume_promo_discount'] ?? 0);
-                        $discountPercent = $originalSubtotal > 0 ? round(($productDiscountNominal / $originalSubtotal) * 100, 2) : 0.0;
+                        $basePrice = (float) ($resolved['base_price'] ?? $resolved['original_price'] ?? $item['sell_price']);
+                        $originalSubtotal = (float) ($resolved['original_subtotal'] ?? ($basePrice * (int) $item['quantity']));
+                        $productDiscountNominal = (float) ($resolved['discount_nominal'] ?? 0);
+                        $discountPercent = (float) ($resolved['discount_percent'] ?? 0);
+                        $itemTotal = (float) ($resolved['item_total'] ?? max(0, $originalSubtotal - $productDiscountNominal));
 
                         $itemNotesValue = $item['item_note'] ?? ($itemNotes[$item['id']] ?? '');
                         if (($item['type'] ?? null) === 'bundle' && ($item['bundle_data'] ?? null)) {
@@ -856,6 +1045,13 @@ class CheckoutController extends Controller
                             $itemMeta['color_name'] = $item['color_name'] ?? null;
                             $itemMeta['color_code'] = $item['color_code'] ?? null;
                         }
+                        $itemMeta['base_price'] = $basePrice;
+                        $itemMeta['original_price'] = $basePrice;
+                        $itemMeta['after_disc_price'] = (int)$item['quantity'] > 0 ? round($itemTotal / (int)$item['quantity'], 2) : $basePrice;
+                        $itemMeta['original_subtotal'] = $originalSubtotal;
+                        $itemMeta['discount_nominal'] = $productDiscountNominal;
+                        $itemMeta['discount_percent'] = $discountPercent;
+                        $itemMeta['unit_discount_nominal'] = (int)$item['quantity'] > 0 ? round($productDiscountNominal / (int)$item['quantity'], 2) : 0;
 
                         OrderItem::create([
                             'id' => Str::uuid(),
@@ -864,12 +1060,12 @@ class CheckoutController extends Controller
                             'product_variant_id' => $variantId,
                             'name' => $itemName,
                             'quantity' => $item['quantity'],
-                            'unit_price' => $originalPrice,
+                            'unit_price' => $basePrice,
                             'discount_nominal' => $productDiscountNominal,
                             'discount_percent' => $discountPercent,
-                            'total' => max(0, $originalSubtotal - $productDiscountNominal),
+                            'total' => $itemTotal,
                             'item_notes' => is_array($itemNotesValue) ? json_encode($itemNotesValue) : $itemNotesValue,
-                            'meta' => !empty($itemMeta) ? $itemMeta : null,
+                            'meta' => $itemMeta,
                         ]);
 
                         if ($variantId && ($item['type'] ?? null) !== 'bundle') {
@@ -904,18 +1100,44 @@ class CheckoutController extends Controller
                     }
                 } else {
                     foreach ($cart as $item) {
+                        $variantId = $item['variant_id'] ?? null;
+                        $basePrice = 0.0;
+                        if ($variantId) {
+                            $vModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                            if ($vModel) {
+                                $basePrice = (float) ($vModel->base_price > 0 ? $vModel->base_price : $vModel->sell_price);
+                            }
+                        }
+                        if ($basePrice <= 0.0) {
+                            $basePrice = (float) ($item['base_price'] ?? ($item['sell_price'] ?? 0));
+                        }
+                        $qty = (int) $item['quantity'];
+                        $sellPrice = (float) ($item['sell_price'] ?? $basePrice);
+                        $origSub = $basePrice * $qty;
+                        $itemTot = $sellPrice * $qty;
+                        $discNom = max(0.0, $origSub - $itemTot);
+                        $discPct = $origSub > 0 ? round(($discNom / $origSub) * 100, 2) : 0.0;
+
                         OrderItem::create([
                             'id' => Str::uuid(),
                             'order_id' => $order->id,
                             'product_id' => $item['product_id'],
-                            'product_variant_id' => $item['variant_id'] ?? null,
+                            'product_variant_id' => $variantId,
                             'name' => $item['name'],
-                            'quantity' => $item['quantity'],
-                            'unit_price' => $item['sell_price'],
-                            'discount_nominal' => 0,
-                            'discount_percent' => 0,
-                            'total' => $item['sell_price'] * $item['quantity'],
+                            'quantity' => $qty,
+                            'unit_price' => $basePrice,
+                            'discount_nominal' => $discNom,
+                            'discount_percent' => $discPct,
+                            'total' => $itemTot,
                             'item_notes' => $item['item_note'] ?? '',
+                            'meta' => [
+                                'base_price' => $basePrice,
+                                'after_disc_price' => $sellPrice,
+                                'original_price' => $basePrice,
+                                'original_subtotal' => $origSub,
+                                'discount_nominal' => $discNom,
+                                'discount_percent' => $discPct,
+                            ],
                         ]);
                         if (!empty($item['variant_id'])) {
                             \App\Services\InventoryService::recordWebOrder($item['variant_id'], (int) $item['quantity']);
@@ -1552,10 +1774,24 @@ class CheckoutController extends Controller
                         $v = $bItem->variant;
                         $p = $bItem->product;
 
-                        $isFixed = ($p && $p->shipping_scheme === 'fixed');
+                        $cat = $p?->category;
+                        $isFixed = false;
+                        if ($cat && $cat->courier_setting_type === 'global' && !empty($cat->shipping_scheme)) {
+                            $isFixed = ($cat->shipping_scheme === 'fixed');
+                        } else {
+                            $isFixed = ($p && $p->shipping_scheme === 'fixed');
+                        }
+
                         if ($isFixed) {
                             $hasFixedShippingItems = true;
-                            $vShip = (float) ($v?->shipping_cost ?? $p?->shipping_cost ?? 0);
+                            $vShip = 0.0;
+                            if ($v && $v->shipping_cost !== null && (float) $v->shipping_cost > 0) {
+                                $vShip = (float) $v->shipping_cost;
+                            } elseif ($p && $p->shipping_cost !== null && (float) $p->shipping_cost > 0) {
+                                $vShip = (float) $p->shipping_cost;
+                            } elseif ($cat && $cat->shipping_cost !== null && (float) $cat->shipping_cost > 0) {
+                                $vShip = (float) $cat->shipping_cost;
+                            }
                             $totalFixedShippingCost += ($vShip * $bQty);
                         } else {
                             $hasDimensionItems = true;
@@ -1580,15 +1816,32 @@ class CheckoutController extends Controller
 
             $variantId = $item['variant_id'] ?? (($item['id'] ?? null) !== ($item['product_id'] ?? null) ? ($item['id'] ?? null) : null);
             $variantModel = $variantId ? \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId) : null;
-            $productModel = !empty($item['product_id']) ? \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']) : null;
+            $productModel = !empty($item['product_id']) ? \App\Models\Frontend\ProductsCatalog\Product::with('category')->find($item['product_id']) : null;
             if (!$productModel && $variantModel) {
                 $productModel = $variantModel->product;
+                if ($productModel) {
+                    $productModel->loadMissing('category');
+                }
             }
 
-            $isFixed = ($productModel && $productModel->shipping_scheme === 'fixed');
+            $cat = $productModel?->category;
+            $isFixed = false;
+            if ($cat && $cat->courier_setting_type === 'global' && !empty($cat->shipping_scheme)) {
+                $isFixed = ($cat->shipping_scheme === 'fixed');
+            } else {
+                $isFixed = ($productModel && $productModel->shipping_scheme === 'fixed');
+            }
+
             if ($isFixed) {
                 $hasFixedShippingItems = true;
-                $vShip = (float) ($variantModel?->shipping_cost ?? $productModel?->shipping_cost ?? 0);
+                $vShip = 0.0;
+                if ($variantModel && $variantModel->shipping_cost !== null && (float) $variantModel->shipping_cost > 0) {
+                    $vShip = (float) $variantModel->shipping_cost;
+                } elseif ($productModel && $productModel->shipping_cost !== null && (float) $productModel->shipping_cost > 0) {
+                    $vShip = (float) $productModel->shipping_cost;
+                } elseif ($cat && $cat->shipping_cost !== null && (float) $cat->shipping_cost > 0) {
+                    $vShip = (float) $cat->shipping_cost;
+                }
                 $totalFixedShippingCost += ($vShip * $quantity);
             } else {
                 $hasDimensionItems = true;
@@ -1657,6 +1910,7 @@ class CheckoutController extends Controller
             return [
                 'shipping_cost' => 0,
                 'base_price' => 0,
+                'is_available' => false,
                 'is_calculated' => false,
                 'billable_weight' => 0,
                 'chargeable_weight' => 0,
@@ -1664,22 +1918,9 @@ class CheckoutController extends Controller
                 'volumetric_weight' => 0,
                 'has_fixed_items' => false,
                 'has_dimension_items' => false,
+                'message' => 'Kurir tidak ditemukan',
             ];
         }
-
-        $shipping = null;
-        if (!empty($subDistrictId)) {
-            $shipping = ShippingAddress::where('courier_id', $courierModel->id)
-                ->where('sub_district_id', $subDistrictId)
-                ->first();
-        }
-
-        if (!$shipping) {
-            $shipping = ShippingAddress::where('courier_id', $courierModel->id)
-                ->first();
-        }
-
-        $basePrice = $shipping ? (int) $shipping->price : 25000;
 
         $weightDetails = $this->calculateCartWeightAndDimensions($cart);
         $totalChargeableWeight = $weightDetails['chargeable_weight'];
@@ -1687,6 +1928,142 @@ class CheckoutController extends Controller
         $fixedShippingCost = (int) ($weightDetails['fixed_shipping_cost'] ?? 0);
         $hasDimensionItems = $weightDetails['has_dimension_items'] ?? false;
         $hasFixedItems = $weightDetails['has_fixed_items'] ?? false;
+
+        $destCityId = null;
+        $destPostalCode = null;
+        if (!empty($subDistrictId)) {
+            $destSubDistrict = SubDistrict::withoutGlobalScopes()->find($subDistrictId);
+            if ($destSubDistrict) {
+                $destCityId = $destSubDistrict->city_id;
+                $destPostalCode = $destSubDistrict->postal_code;
+            }
+        }
+
+        // Logic for Kurir Toko (Scope Wilayah Kota & Hybrid Ongkir Model A+B)
+        if ($courierModel->courier_type === 'toko') {
+            $shipping = null;
+            if (!empty($subDistrictId)) {
+                $shipping = ShippingAddress::where('courier_id', $courierModel->id)
+                    ->where(function ($q) use ($subDistrictId, $destCityId) {
+                        $q->where('sub_district_id', $subDistrictId);
+                        if ($destCityId) {
+                            $q->orWhere('city_id', $destCityId);
+                        }
+                    })
+                    ->orderByRaw('sub_district_id IS NOT NULL DESC')
+                    ->first();
+
+                // If destination is not in Kurir Toko's configured coverage, it is OUT OF RANGE
+                if (!$shipping) {
+                    return [
+                        'shipping_cost' => 0,
+                        'base_price' => 0,
+                        'additional_price_per_kg' => 0,
+                        'fixed_shipping_cost' => $fixedShippingCost,
+                        'expedition_cost' => 0,
+                        'is_available' => false,
+                        'is_calculated' => false,
+                        'billable_weight' => 0,
+                        'chargeable_weight' => $totalChargeableWeight,
+                        'actual_weight' => $weightDetails['actual_weight'],
+                        'volumetric_weight' => $weightDetails['volumetric_weight'],
+                        'has_fixed_items' => $hasFixedItems,
+                        'has_dimension_items' => $hasDimensionItems,
+                        'service_name' => 'Kurir Toko',
+                        'duration' => null,
+                        'source' => 'internal',
+                        'courier_type' => 'toko',
+                        'message' => 'Kurir Toko belum melayani pengiriman ke kota / wilayah tujuan ini.',
+                    ];
+                }
+            } else {
+                // If subDistrictId is empty (initial view before entering address)
+                $shipping = ShippingAddress::where('courier_id', $courierModel->id)->first();
+                if (!$shipping) {
+                    return [
+                        'shipping_cost' => 0,
+                        'base_price' => 0,
+                        'additional_price_per_kg' => 0,
+                        'fixed_shipping_cost' => $fixedShippingCost,
+                        'expedition_cost' => 0,
+                        'is_available' => false,
+                        'is_calculated' => false,
+                        'billable_weight' => 0,
+                        'chargeable_weight' => $totalChargeableWeight,
+                        'actual_weight' => $weightDetails['actual_weight'],
+                        'volumetric_weight' => $weightDetails['volumetric_weight'],
+                        'has_fixed_items' => $hasFixedItems,
+                        'has_dimension_items' => $hasDimensionItems,
+                        'service_name' => 'Kurir Toko',
+                        'duration' => null,
+                        'source' => 'internal',
+                        'courier_type' => 'toko',
+                        'message' => 'Kurir Toko belum diatur jangkauan wilayahnya.',
+                    ];
+                }
+            }
+
+            $basePrice = (int) $shipping->price;
+            $additionalPricePerKg = (int) ($shipping->additional_price_per_kg ?? 0);
+
+            $dimensionCost = 0;
+            $billableWeight = 0;
+
+            if ($hasDimensionItems) {
+                $billableWeight = max(1, (int) ceil($totalChargeableWeight));
+                if ($totalChargeableWeight > 1 && $additionalPricePerKg > 0) {
+                    $extraKg = (int) ceil($totalChargeableWeight - 1);
+                    $dimensionCost = $basePrice + ($extraKg * $additionalPricePerKg);
+                } else {
+                    $dimensionCost = $basePrice;
+                }
+            } elseif (!$hasFixedItems) {
+                $dimensionCost = $basePrice;
+                $billableWeight = 1;
+            }
+
+            $totalShippingCost = $fixedShippingCost + $dimensionCost;
+
+            return [
+                'shipping_cost' => $totalShippingCost,
+                'base_price' => $basePrice,
+                'additional_price_per_kg' => $additionalPricePerKg,
+                'fixed_shipping_cost' => $fixedShippingCost,
+                'expedition_cost' => $dimensionCost,
+                'is_available' => true,
+                'is_calculated' => true,
+                'billable_weight' => $billableWeight,
+                'chargeable_weight' => $totalChargeableWeight,
+                'actual_weight' => $weightDetails['actual_weight'],
+                'volumetric_weight' => $weightDetails['volumetric_weight'],
+                'has_fixed_items' => $hasFixedItems,
+                'has_dimension_items' => $hasDimensionItems,
+                'service_name' => 'Kurir Toko',
+                'duration' => '1-2 Hari',
+                'source' => 'internal',
+                'courier_type' => 'toko',
+            ];
+        }
+
+        // Logic for Kurir Ekspedisi
+        $shipping = null;
+        if (!empty($subDistrictId)) {
+            $shipping = ShippingAddress::where('courier_id', $courierModel->id)
+                ->where(function ($q) use ($subDistrictId, $destCityId) {
+                    $q->where('sub_district_id', $subDistrictId);
+                    if ($destCityId) {
+                        $q->orWhere('city_id', $destCityId);
+                    }
+                })
+                ->orderByRaw('sub_district_id IS NOT NULL DESC')
+                ->first();
+        }
+
+        if (!$shipping) {
+            $shipping = ShippingAddress::where('courier_id', $courierModel->id)->first();
+        }
+
+        $basePrice = $shipping ? (int) $shipping->price : 25000;
 
         $expeditionCost = 0;
         $billableWeight = 0;
@@ -1696,12 +2073,8 @@ class CheckoutController extends Controller
 
         $biteshipService = app(BiteshipService::class);
         $biteshipRate = null;
-        if ($biteshipService->isConfigured() && $courierModel->courier_type === 'expedisi' && !empty($subDistrictId)) {
-            $destSubDistrict = SubDistrict::find($subDistrictId);
-            $destPostalCode = $destSubDistrict?->postal_code;
-            if ($destPostalCode) {
-                $biteshipRate = $biteshipService->getBestRateForCourier($courierModel->code, $cart, (string) $destPostalCode);
-            }
+        if ($biteshipService->isConfigured() && !empty($destPostalCode)) {
+            $biteshipRate = $biteshipService->getBestRateForCourier($courierModel->code, $cart, (string) $destPostalCode);
         }
 
         if ($biteshipRate && isset($biteshipRate['price'])) {
@@ -1717,7 +2090,6 @@ class CheckoutController extends Controller
                 $expeditionCost = $basePrice;
             }
         } elseif (!$hasFixedItems) {
-            // No fixed items and no dimension items (fallback)
             $expeditionCost = $basePrice;
         }
 
@@ -1728,6 +2100,7 @@ class CheckoutController extends Controller
             'base_price' => $basePrice,
             'fixed_shipping_cost' => $fixedShippingCost,
             'expedition_cost' => $expeditionCost,
+            'is_available' => true,
             'is_calculated' => ($isCalculable && $totalChargeableWeight > 0) || $hasFixedItems || $biteshipRate !== null,
             'billable_weight' => $billableWeight,
             'chargeable_weight' => $totalChargeableWeight,
@@ -1737,6 +2110,7 @@ class CheckoutController extends Controller
             'service_name' => $shippingServiceName,
             'duration' => $shippingEtd,
             'source' => $shippingSource,
+            'courier_type' => 'expedisi',
         ];
     }
 
@@ -1785,11 +2159,25 @@ class CheckoutController extends Controller
         $buffer = $this->getCurrentBuffer();
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
+        if ($courier === 'all' || empty($courier)) {
+            $couriers = Courier::all();
+            $results = [];
+            foreach ($couriers as $c) {
+                $results[$c->code] = $this->calculateShippingDetails($c->code, $subDistrictId, $cart);
+            }
+            return response()->json([
+                'success' => true,
+                'data' => $results,
+                'is_bulk' => true,
+            ]);
+        }
+
         $details = $this->calculateShippingDetails($courier, $subDistrictId, $cart);
 
         return response()->json([
             'success' => true,
             'data' => $details,
+            'is_bulk' => false,
         ]);
     }
 
@@ -1873,6 +2261,132 @@ class CheckoutController extends Controller
         ];
     }
 
+    private function resolveCustomerAddressData(Customer $customer): ?array
+    {
+        $address = null;
+        if (!empty($customer->user_id)) {
+            $address = Address::where('user_id', $customer->user_id)
+                ->where('deleted', false)
+                ->orderBy('is_primary', 'desc')
+                ->first();
+        }
+        if (!$address) {
+            $address = Address::where('customer_id', $customer->id)
+                ->where('deleted', false)
+                ->orderBy('is_primary', 'desc')
+                ->first();
+        }
+
+        $addressText = '';
+        $subDistrictId = null;
+        $cityId = null;
+        $provinceId = null;
+        $postalCode = '';
+        $cityName = '';
+        $provinceName = '';
+        $subDistrictName = '';
+
+        if ($address) {
+            $addressText = $address->address ?? '';
+            $subDistrictId = $address->sub_district_id ?? null;
+            $cityId = $address->city_id ?? null;
+            $postalCode = $address->postal_code ?? '';
+        } else {
+            $order = Order::where('customer_id', $customer->id)->whereNotNull('meta')->latest()->first();
+            if ($order) {
+                $shippingData = $order->meta['shipping_address'] ?? null;
+                $custData = $order->meta['customer'] ?? null;
+                $addressText = $shippingData['address'] ?? ($custData['address'] ?? '');
+                $subDistrictId = $shippingData['sub_district_id'] ?? ($custData['sub_district_id'] ?? null);
+                $cityId = $shippingData['city_id'] ?? ($custData['city_id'] ?? null);
+                $provinceId = $shippingData['province_id'] ?? ($custData['province_id'] ?? null);
+                $postalCode = $shippingData['postal_code'] ?? ($custData['postal_code'] ?? '');
+                $cityName = $shippingData['city'] ?? '';
+                $provinceName = $shippingData['province'] ?? '';
+                $subDistrictName = $shippingData['sub_district'] ?? '';
+            }
+        }
+
+        $sd = null;
+        if ($subDistrictId) {
+            $sd = SubDistrict::withoutGlobalScopes()->find($subDistrictId);
+        }
+
+        if ($sd) {
+            $subDistrictId = $sd->id;
+            $subDistrictName = $sd->sub_district;
+            $postalCode = $postalCode ?: ($sd->postal_code ?? '');
+            if (!$cityId) {
+                $cityId = $sd->city_id;
+            }
+            if (!$provinceId) {
+                $provinceId = $sd->province_id ?? ($sd->city?->province_id ?? null);
+            }
+            if (empty($provinceName) && is_string($sd->province)) {
+                $provinceName = $sd->province;
+            }
+        }
+
+        if ($cityId) {
+            $city = \App\Models\Frontend\Location\City::find($cityId);
+            if ($city) {
+                $cityId = $city->id;
+                if (empty($cityName)) {
+                    $cityName = $city->name;
+                }
+                if (!$provinceId) {
+                    $provinceId = $city->province_id;
+                }
+                if (empty($provinceName) && is_string($city->province)) {
+                    $provinceName = $city->province;
+                }
+            }
+
+            if (!$sd) {
+                $fallbackSd = null;
+                if (!empty($postalCode)) {
+                    $fallbackSd = SubDistrict::where('city_id', $cityId)->where('postal_code', $postalCode)->first();
+                }
+                if (!$fallbackSd) {
+                    $fallbackSd = SubDistrict::where('city_id', $cityId)->first();
+                }
+                if ($fallbackSd) {
+                    $subDistrictId = $fallbackSd->id;
+                    $subDistrictName = $fallbackSd->sub_district;
+                    $postalCode = $postalCode ?: ($fallbackSd->postal_code ?? '');
+                    if (!$provinceId) {
+                        $provinceId = $fallbackSd->province_id;
+                    }
+                    if (empty($provinceName) && is_string($fallbackSd->province)) {
+                        $provinceName = $fallbackSd->province;
+                    }
+                }
+            }
+        }
+
+        if ($provinceId && empty($provinceName)) {
+            $prov = \App\Models\Frontend\Location\Province::find($provinceId);
+            if ($prov) {
+                $provinceName = $prov->name;
+            }
+        }
+
+        if (!$addressText && !$subDistrictId && !$cityId && !$provinceId) {
+            return null;
+        }
+
+        return [
+            'address' => $addressText,
+            'province_id' => $provinceId,
+            'city_id' => $cityId,
+            'sub_district_id' => $subDistrictId,
+            'province_name' => $provinceName,
+            'city_name' => $cityName,
+            'sub_district_name' => $subDistrictName,
+            'postal_code' => $postalCode,
+        ];
+    }
+
     public function searchUser(Request $request)
     {
         $term = $request->input('term');
@@ -1888,18 +2402,20 @@ class CheckoutController extends Controller
 
         $results = [];
         foreach ($customers as $c) {
-            $address = Address::where('user_id', $c->user_id)
-                ->where('deleted', false)
-                ->orderBy('is_primary', 'desc')
-                ->first();
+            $addr = $this->resolveCustomerAddressData($c);
                 
             $results[] = [
                 'name' => $c->name,
                 'email' => $c->email,
                 'phone' => $c->phone,
-                'address' => $address ? $address->address : '',
-                'sub_district_id' => $address ? $address->sub_district_id : '',
-                'postal_code' => $address ? $address->postal_code : '',
+                'address' => $addr['address'] ?? '',
+                'province_id' => $addr['province_id'] ?? null,
+                'city_id' => $addr['city_id'] ?? null,
+                'sub_district_id' => $addr['sub_district_id'] ?? null,
+                'province_name' => $addr['province_name'] ?? '',
+                'city_name' => $addr['city_name'] ?? '',
+                'sub_district_name' => $addr['sub_district_name'] ?? '',
+                'postal_code' => $addr['postal_code'] ?? '',
             ];
         }
 
@@ -1927,10 +2443,7 @@ class CheckoutController extends Controller
         }
 
         if ($customer) {
-            $address = Address::where('user_id', $customer->user_id)
-                ->where('deleted', false)
-                ->orderBy('is_primary', 'desc')
-                ->first();
+            $addr = $this->resolveCustomerAddressData($customer);
 
             return response()->json([
                 'registered' => true,
@@ -1939,12 +2452,7 @@ class CheckoutController extends Controller
                     'phone' => $customer->phone,
                     'email' => $customer->email,
                 ],
-                'address' => $address ? [
-                    'address' => $address->address,
-                    'sub_district_id' => $address->sub_district_id,
-                    'city' => $address->city->name ?? ($address->subDistrict->city->name ?? ''),
-                    'postal_code' => $address->postal_code,
-                ] : null,
+                'address' => $addr,
             ]);
         }
 
