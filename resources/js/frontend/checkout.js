@@ -89,20 +89,130 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var courierShippingPricesEl = document.getElementById('checkout-courier-shipping-prices');
     var courierShippingPrices = courierShippingPricesEl ? JSON.parse(courierShippingPricesEl.textContent || '{}') : {};
+    var courierShippingDetailsEl = document.getElementById('checkout-courier-shipping-details');
+    var courierShippingDetails = courierShippingDetailsEl ? JSON.parse(courierShippingDetailsEl.textContent || '{}') : {};
+
+    function updateShippingUI(courier, cost, details) {
+        currentShippingCost = cost;
+        if (shippingCost) {
+            shippingCost.innerHTML = '<span class="text-brand-dark">' + formatRupiah(currentShippingCost) + '</span>';
+        }
+        var shippingLabel = document.getElementById('checkout-shipping-label');
+        if (shippingLabel) {
+            var labelText = 'Shipping';
+            if (courier) {
+                labelText += ' (' + courier.toUpperCase();
+                if (details && details.has_fixed_items && details.has_dimension_items) {
+                    labelText += ' - Tetap + ' + (details.billable_weight || 1) + ' kg';
+                } else if (details && details.has_fixed_items) {
+                    labelText += ' - Tetap';
+                } else if (details && details.is_calculated && details.billable_weight) {
+                    labelText += ' - ' + details.billable_weight + ' kg';
+                }
+                labelText += ')';
+            }
+            shippingLabel.textContent = labelText;
+        }
+        updateSelectedCouponDisplay();
+        updateTotal();
+    }
+
+    function fetchAndUpdateShippingCost() {
+        var subDistrictSelect = document.querySelector('select[name="sub_district_id"]');
+        var subDistrictId = subDistrictSelect ? subDistrictSelect.value : '';
+        var courier = courierSelect ? courierSelect.value : '';
+
+        var alertEl = document.getElementById('courier-unavailable-alert');
+        var alertMsg = document.getElementById('courier-unavailable-message');
+        var submitBtn = document.querySelector('button[type="submit"]');
+
+        if (!courierSelect || !courier) {
+            if (alertEl) alertEl.classList.add('hidden');
+            if (submitBtn) submitBtn.disabled = false;
+            updateShippingUI('', 0, null);
+            return;
+        }
+
+        // If subdistrict is empty, fallback to pre-rendered price
+        if (!subDistrictId) {
+            var fallbackCost = courierShippingPrices[courier] || 0;
+            var fallbackDetails = courierShippingDetails[courier] || null;
+            if (alertEl) alertEl.classList.add('hidden');
+            if (submitBtn) submitBtn.disabled = false;
+            updateShippingUI(courier, fallbackCost, fallbackDetails);
+            return;
+        }
+
+        // Fetch accurate shipping cost for all couriers given this subdistrict
+        fetch('/checkout/calculate-shipping?courier=all&sub_district_id=' + encodeURIComponent(subDistrictId))
+            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                if (res.success && res.data) {
+                    var allData = res.data;
+                    var selectedCourierData = null;
+
+                    Object.keys(allData).forEach(function (cCode) {
+                        var data = allData[cCode];
+                        courierShippingPrices[cCode] = data.shipping_cost;
+                        courierShippingDetails[cCode] = data;
+
+                        var opt = courierSelect.querySelector('option[value="' + cCode + '"]');
+                        if (opt) {
+                            var rawName = opt.getAttribute('data-courier-name') || opt.textContent.split(' - ')[0].trim();
+                            if (!opt.getAttribute('data-courier-name')) {
+                                opt.setAttribute('data-courier-name', rawName);
+                            }
+
+                            if (data.is_available === false) {
+                                opt.disabled = true;
+                                opt.textContent = rawName + ' - Di Luar Jangkauan (Tidak Melayani Wilayah Ini)';
+                            } else {
+                                opt.disabled = false;
+                                var weightText = '';
+                                if (data.has_fixed_items && data.has_dimension_items) {
+                                    weightText = ' (Tetap + ' + (data.billable_weight || 1) + ' kg)';
+                                } else if (data.has_fixed_items) {
+                                    weightText = ' (Ongkir Tetap)';
+                                } else if (data.is_calculated && data.billable_weight > 0) {
+                                    weightText = ' (' + data.billable_weight + ' kg)';
+                                } else {
+                                    weightText = ' (Tarif Tetap)';
+                                }
+                                opt.textContent = rawName + ' - ' + formatRupiah(data.shipping_cost) + weightText;
+                            }
+                        }
+
+                        if (cCode.toLowerCase() === courier.toLowerCase()) {
+                            selectedCourierData = data;
+                        }
+                    });
+
+                    if (selectedCourierData && selectedCourierData.is_available === false) {
+                        if (alertEl) {
+                            alertEl.classList.remove('hidden');
+                            if (alertMsg) alertMsg.textContent = selectedCourierData.message || 'Kurir yang dipilih belum melayani pengiriman ke kota/wilayah tujuan ini.';
+                        }
+                        updateShippingUI(courier, 0, selectedCourierData);
+                        if (submitBtn) submitBtn.disabled = true;
+                    } else {
+                        if (alertEl) alertEl.classList.add('hidden');
+                        var cost = selectedCourierData ? selectedCourierData.shipping_cost : (courierShippingPrices[courier] || 0);
+                        updateShippingUI(courier, cost, selectedCourierData);
+                        if (submitBtn) submitBtn.disabled = false;
+                    }
+                }
+            })
+            .catch(function () {
+                var fallbackCost = courierShippingPrices[courier] || 0;
+                var fallbackDetails = courierShippingDetails[courier] || null;
+                updateShippingUI(courier, fallbackCost, fallbackDetails);
+            });
+    }
+
+    window.fetchAndUpdateShippingCost = fetchAndUpdateShippingCost;
 
     if (courierSelect) {
-        courierSelect.addEventListener('change', function () {
-            currentShippingCost = courierShippingPrices[this.value] || 0;
-            if (shippingCost) {
-                shippingCost.innerHTML = '<span class="text-brand-dark">' + formatRupiah(currentShippingCost) + '</span>';
-            }
-            var shippingLabel = document.getElementById('checkout-shipping-label');
-            if (shippingLabel) {
-                shippingLabel.textContent = 'Shipping (' + this.value.toUpperCase() + ')';
-            }
-            updateSelectedCouponDisplay();
-            updateTotal();
-        });
+        courierSelect.addEventListener('change', fetchAndUpdateShippingCost);
     }
 
     window.selectCoupon = function (button) {
@@ -347,7 +457,13 @@ document.addEventListener('DOMContentLoaded', function () {
     var isLoggedIn = formEl ? formEl.dataset.isLoggedIn === '1' : false;
 
     restoreCartCoupon();
-    updateTotal();
+    if (courierSelect && courierSelect.value && courierShippingPrices[courierSelect.value] !== undefined) {
+        currentShippingCost = courierShippingPrices[courierSelect.value];
+        var initDetails = courierShippingDetails[courierSelect.value] || null;
+        updateShippingUI(courierSelect.value, currentShippingCost, initDetails);
+    } else {
+        updateTotal();
+    }
 });
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -360,18 +476,76 @@ document.addEventListener('DOMContentLoaded', function() {
     var subDistrictMapEl = document.getElementById('checkout-subdistrict-map');
     var subDistrictMap = subDistrictMapEl ? JSON.parse(subDistrictMapEl.textContent || '{}') : {};
 
+    function initSelect2() {
+        if (window.jQuery && typeof window.jQuery.fn.select2 === 'function') {
+            var $j = window.jQuery;
+            var $prov = $j('#checkout-province');
+            var $city = $j('#checkout-city');
+            var $sub = $j('#checkout-sub-district');
+
+            if ($prov.length && !$prov.hasClass('select2-hidden-accessible')) {
+                $prov.select2({
+                    placeholder: 'Pilih Provinsi',
+                    allowClear: false,
+                    width: '100%'
+                });
+            }
+
+            if ($city.length && !$city.hasClass('select2-hidden-accessible')) {
+                $city.select2({
+                    placeholder: 'Pilih Kota/Kabupaten',
+                    allowClear: false,
+                    width: '100%'
+                });
+            }
+
+            if ($sub.length && !$sub.hasClass('select2-hidden-accessible')) {
+                $sub.select2({
+                    placeholder: 'Pilih Kecamatan/Kelurahan',
+                    allowClear: false,
+                    width: '100%'
+                });
+            }
+        }
+    }
+
+    initSelect2();
+    setTimeout(initSelect2, 150);
+
+    function syncSelect2(selectElement) {
+        if (window.jQuery && typeof window.jQuery.fn.select2 === 'function' && selectElement) {
+            var $el = window.jQuery(selectElement);
+            if ($el.length) {
+                if (!$el.hasClass('select2-hidden-accessible')) {
+                    var ph = $el.attr('id') === 'checkout-province' ? 'Pilih Provinsi' :
+                             ($el.attr('id') === 'checkout-city' ? 'Pilih Kota/Kabupaten' : 'Pilih Kecamatan/Kelurahan');
+                    $el.select2({ placeholder: ph, allowClear: false, width: '100%' });
+                }
+                $el.prop('disabled', selectElement.disabled);
+                $el.val(selectElement.value).trigger('change.select2');
+            }
+        }
+    }
+
+    var lastLoadedProvId = null;
+    var lastLoadedCityId = null;
+
     function loadCities(provinceId, selectedCityId, callback) {
         if (!citySelect) return;
         citySelect.innerHTML = '<option value="">Memuat kota/kabupaten...</option>';
         citySelect.disabled = true;
+        syncSelect2(citySelect);
+
         if (subDistrictSelect) {
             subDistrictSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
             subDistrictSelect.disabled = true;
+            syncSelect2(subDistrictSelect);
         }
 
         if (!provinceId) {
             citySelect.innerHTML = '<option value="">Pilih Provinsi Terlebih Dahulu</option>';
             citySelect.disabled = true;
+            syncSelect2(citySelect);
             if (callback) callback();
             return;
         }
@@ -386,12 +560,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 citySelect.innerHTML = html;
                 citySelect.disabled = false;
+                if (selectedCityId) {
+                    citySelect.value = selectedCityId;
+                    lastLoadedCityId = selectedCityId;
+                    var selCityObj = cities.find(function(c) { return String(c.id) === String(selectedCityId); });
+                    if (selCityObj && cityInput) {
+                        cityInput.value = selCityObj.name;
+                    }
+                }
+                syncSelect2(citySelect);
                 if (callback) callback();
             })
             .catch(function(err) {
                 console.error('Error loading cities:', err);
                 citySelect.innerHTML = '<option value="">Gagal memuat kota</option>';
                 citySelect.disabled = false;
+                syncSelect2(citySelect);
             });
     }
 
@@ -399,10 +583,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!subDistrictSelect) return;
         subDistrictSelect.innerHTML = '<option value="">Memuat kecamatan/kelurahan...</option>';
         subDistrictSelect.disabled = true;
+        syncSelect2(subDistrictSelect);
 
         if (!cityId) {
             subDistrictSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
             subDistrictSelect.disabled = true;
+            syncSelect2(subDistrictSelect);
             if (callback) callback();
             return;
         }
@@ -418,41 +604,146 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 subDistrictSelect.innerHTML = html;
                 subDistrictSelect.disabled = false;
+                if (selectedSubDistrictId) {
+                    subDistrictSelect.value = selectedSubDistrictId;
+                    var selSdObj = subDistricts.find(function(sd) { return String(sd.id) === String(selectedSubDistrictId); });
+                    if (selSdObj && postalInput && !postalInput.value && selSdObj.postal_code) {
+                        postalInput.value = selSdObj.postal_code;
+                    }
+                }
+                syncSelect2(subDistrictSelect);
                 if (callback) callback();
             })
             .catch(function(err) {
                 console.error('Error loading sub-districts:', err);
                 subDistrictSelect.innerHTML = '<option value="">Gagal memuat kecamatan/kelurahan</option>';
                 subDistrictSelect.disabled = false;
+                syncSelect2(subDistrictSelect);
             });
     }
 
-    if (provinceSelect) {
-        provinceSelect.addEventListener('change', function() {
-            var provId = this.value;
-            loadCities(provId, null);
-        });
+    function applyAddressData(data, callback) {
+        if (!data) return;
+
+        if (data.name) {
+            var nInput = document.querySelector('input[name="name"]');
+            if (nInput && !nInput.value) {
+                nInput.value = data.name;
+                nInput.dispatchEvent(new Event('input'));
+            }
+        }
+        if (data.phone) {
+            var pInput = document.querySelector('input[name="phone"]');
+            if (pInput && !pInput.value) {
+                pInput.value = data.phone;
+                pInput.dispatchEvent(new Event('input'));
+            }
+        }
+        if (data.email) {
+            var eInput = document.querySelector('input[name="email"]');
+            if (eInput && !eInput.value) {
+                eInput.value = data.email;
+                eInput.dispatchEvent(new Event('input'));
+            }
+        }
+        if (data.address) {
+            var addrInput = document.querySelector('textarea[name="address"]');
+            if (addrInput) {
+                addrInput.value = data.address;
+                addrInput.dispatchEvent(new Event('input'));
+            }
+        }
+        if (data.postal_code) {
+            if (postalInput) {
+                postalInput.value = data.postal_code;
+                postalInput.dispatchEvent(new Event('input'));
+            }
+        }
+
+        var provId = data.province_id;
+        var cityId = data.city_id;
+        var subDistrictId = data.sub_district_id;
+        var cityName = data.city || data.city_name;
+
+        if (cityName && cityInput) {
+            cityInput.value = cityName;
+        }
+
+        if (provId && provinceSelect) {
+            provinceSelect.value = provId;
+            lastLoadedProvId = provId;
+            syncSelect2(provinceSelect);
+
+            loadCities(provId, cityId, function() {
+                if (cityId && citySelect) {
+                    citySelect.value = cityId;
+                    lastLoadedCityId = cityId;
+                    syncSelect2(citySelect);
+
+                    var selOpt = citySelect.options[citySelect.selectedIndex];
+                    if (cityInput && selOpt && selOpt.value) {
+                        cityInput.value = selOpt.textContent.trim();
+                    }
+
+                    loadSubDistricts(cityId, subDistrictId, function() {
+                        if (subDistrictId && subDistrictSelect) {
+                            subDistrictSelect.value = subDistrictId;
+                            syncSelect2(subDistrictSelect);
+                            var subOpt = subDistrictSelect.options[subDistrictSelect.selectedIndex];
+                            if (subOpt && postalInput && !postalInput.value) {
+                                var p = subOpt.getAttribute('data-postal');
+                                if (p) postalInput.value = p;
+                            }
+                        }
+                        if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                            window.fetchAndUpdateShippingCost();
+                        }
+                        if (typeof callback === 'function') callback();
+                    });
+                } else {
+                    if (typeof callback === 'function') callback();
+                }
+            });
+        } else if (subDistrictId && subDistrictSelect) {
+            subDistrictSelect.value = subDistrictId;
+            syncSelect2(subDistrictSelect);
+            if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                window.fetchAndUpdateShippingCost();
+            }
+            if (typeof callback === 'function') callback();
+        } else {
+            if (typeof callback === 'function') callback();
+        }
     }
 
-    if (citySelect) {
-        citySelect.addEventListener('change', function() {
-            var cId = this.value;
-            var selOpt = citySelect.options[citySelect.selectedIndex];
-            if (cityInput && selOpt && selOpt.value) {
-                cityInput.value = selOpt.textContent.trim();
+    if (window.jQuery && typeof window.jQuery.fn.select2 === 'function') {
+        var $j = window.jQuery;
+        $j('#checkout-province').on('change', function(e) {
+            var provId = $j(this).val();
+            if (provId === lastLoadedProvId) return;
+            lastLoadedProvId = provId;
+            loadCities(provId, null);
+        });
+
+        $j('#checkout-city').on('change', function(e) {
+            var cId = $j(this).val();
+            if (cId === lastLoadedCityId) return;
+            lastLoadedCityId = cId;
+            var selOpt = $j('#checkout-city option:selected');
+            if (cityInput && cId && selOpt.length) {
+                cityInput.value = selOpt.text().trim();
             }
             loadSubDistricts(cId, null);
         });
-    }
 
-    if (subDistrictSelect) {
-        subDistrictSelect.addEventListener('change', function() {
-            var selOpt = this.options[this.selectedIndex];
-            if (selOpt && postalInput) {
-                var postal = selOpt.getAttribute('data-postal');
+        $j('#checkout-sub-district').on('change', function(e) {
+            var val = $j(this).val();
+            var selOpt = $j('#checkout-sub-district option:selected');
+            if (selOpt.length && postalInput) {
+                var postal = selOpt.attr('data-postal');
                 if (postal) postalInput.value = postal;
             }
-            var data = subDistrictMap[this.value];
+            var data = subDistrictMap[val];
             if (data) {
                 if (cityInput && !cityInput.value && data.city) cityInput.value = data.city;
                 if (postalInput && !postalInput.value && data.postal_code) postalInput.value = data.postal_code;
@@ -461,10 +752,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.fetchAndUpdateShippingCost();
             }
         });
+    } else {
+        if (provinceSelect) {
+            provinceSelect.addEventListener('change', function() {
+                var provId = this.value;
+                loadCities(provId, null);
+            });
+        }
+
+        if (citySelect) {
+            citySelect.addEventListener('change', function() {
+                var cId = this.value;
+                var selOpt = citySelect.options[citySelect.selectedIndex];
+                if (cityInput && selOpt && selOpt.value) {
+                    cityInput.value = selOpt.textContent.trim();
+                }
+                loadSubDistricts(cId, null);
+            });
+        }
+
+        if (subDistrictSelect) {
+            subDistrictSelect.addEventListener('change', function() {
+                var selOpt = this.options[this.selectedIndex];
+                if (selOpt && postalInput) {
+                    var postal = selOpt.getAttribute('data-postal');
+                    if (postal) postalInput.value = postal;
+                }
+                var data = subDistrictMap[this.value];
+                if (data) {
+                    if (cityInput && !cityInput.value && data.city) cityInput.value = data.city;
+                    if (postalInput && !postalInput.value && data.postal_code) postalInput.value = data.postal_code;
+                }
+                if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                    window.fetchAndUpdateShippingCost();
+                }
+            });
+        }
     }
 
     window.loadCities = loadCities;
     window.loadSubDistricts = loadSubDistricts;
+    window.applyAddressData = applyAddressData;
 
     var originalFillAddress = window.fillAddress;
     window.fillAddress = function(el) {
@@ -473,35 +801,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var addresses = savedAddressesEl ? JSON.parse(savedAddressesEl.textContent || '[]') : [];
         var selected = addresses.find(function(a) { return String(a.id) === String(el.value); });
         if (selected) {
-            if (selected.province_id && provinceSelect) {
-                provinceSelect.value = selected.province_id;
-                loadCities(selected.province_id, selected.city_id, function() {
-                    if (selected.city_id) {
-                        loadSubDistricts(selected.city_id, selected.sub_district_id, function() {
-                            if (subDistrictSelect && selected.sub_district_id) {
-                                subDistrictSelect.value = selected.sub_district_id;
-                                subDistrictSelect.dispatchEvent(new Event('change'));
-                            }
-                        });
-                    }
-                });
-            } else if (selected.sub_district_id && subDistrictSelect) {
-                subDistrictSelect.value = selected.sub_district_id;
-                subDistrictSelect.dispatchEvent(new Event('change'));
-            }
-
-            if (postalInput && selected.postal_code) {
-                postalInput.value = selected.postal_code;
-            }
-            if (cityInput && selected.city) {
-                cityInput.value = selected.city;
-            }
+            applyAddressData(selected);
             var addressSelector = document.getElementById('address-selector');
             if (addressSelector) addressSelector.classList.add('hidden');
-
-            if (typeof window.fetchAndUpdateShippingCost === 'function') {
-                window.fetchAndUpdateShippingCost();
-            }
         }
     };
 });

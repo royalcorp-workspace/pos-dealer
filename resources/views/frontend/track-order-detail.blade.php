@@ -158,13 +158,37 @@
                                     <i class="fa-solid fa-box text-gray-400 text-2xl"></i>
                                 @endif
                             </div>
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
+                                @php
+                                    $itemMeta = is_array($item->meta) ? $item->meta : (json_decode($item->meta ?? '[]', true) ?: []);
+                                    $unitPrice = (float) ($item->unit_price ?? $itemMeta['original_price'] ?? 0);
+                                    $discNom = (float) ($item->discount_nominal ?? $itemMeta['discount_nominal'] ?? 0);
+                                    $discPct = (float) ($item->discount_percent ?? $itemMeta['discount_percent'] ?? 0);
+                                    $subtotalAsli = $unitPrice * (int) $item->quantity;
+                                    if ($discPct > 0 && $discNom <= 0) {
+                                        $discNom = ($subtotalAsli * $discPct) / 100;
+                                    }
+                                    if ($discNom > 0 && $discPct <= 0 && $subtotalAsli > 0) {
+                                        $discPct = round(($discNom / $subtotalAsli) * 100, 1);
+                                    }
+                                @endphp
                                 <h4 class="font-bold text-gray-800 line-clamp-2 leading-tight mb-1">{{ $item->name }}</h4>
-                                <div class="text-sm text-gray-500 mb-2">
-                                    {{ $item->quantity }} x Rp {{ number_format($item->unit_price, 0, ',', '.') }}
+                                <div class="flex items-center gap-2 text-xs text-gray-500 mb-1 flex-wrap">
+                                    <span>{{ $item->quantity }} x Rp {{ number_format($unitPrice, 0, ',', '.') }}</span>
+                                    @if($discNom > 0)
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-50 text-red-600 font-bold text-[11px]">
+                                            <span>Diskon {{ (float) $discPct }}%</span>
+                                            <span>(-Rp {{ number_format($discNom, 0, ',', '.') }})</span>
+                                        </span>
+                                    @endif
                                 </div>
-                                <div class="font-bold text-brand-dark">
-                                    Rp {{ number_format($item->total, 0, ',', '.') }}
+                                <div class="flex items-center gap-2">
+                                    @if($discNom > 0 && $subtotalAsli > $item->total)
+                                        <span class="text-xs text-gray-400 line-through">Rp {{ number_format($subtotalAsli, 0, ',', '.') }}</span>
+                                    @endif
+                                    <span class="font-bold text-brand-dark">
+                                        Rp {{ number_format($item->total, 0, ',', '.') }}
+                                    </span>
                                 </div>
                             </div>
                         </div>

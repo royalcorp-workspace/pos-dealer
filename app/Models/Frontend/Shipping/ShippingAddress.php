@@ -18,9 +18,11 @@ class ShippingAddress extends Model
 
     protected $fillable = [
         'courier_id',
+        'city_id',
         'sub_district_id',
         'type',
         'price',
+        'additional_price_per_kg',
         'is_active',
         'sort_order',
         'creator',
@@ -33,6 +35,7 @@ class ShippingAddress extends Model
         return [
             'type' => 'integer',
             'price' => 'integer',
+            'additional_price_per_kg' => 'float',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
             'deleted' => 'boolean',
@@ -54,6 +57,11 @@ class ShippingAddress extends Model
     public function courier(): BelongsTo
     {
         return $this->belongsTo(Courier::class, 'courier_id', 'id');
+    }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Location\City::class, 'city_id', 'id');
     }
 
     public function subDistrict(): BelongsTo

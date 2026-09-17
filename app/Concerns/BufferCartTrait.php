@@ -36,10 +36,20 @@ trait BufferCartTrait
 
     private function getSessionId(): string
     {
-        if (!session()->has('guest_session_id')) {
-            session()->put('guest_session_id', session()->getId() ?: Str::random(40));
+        $cookieSessionId = request()->cookie('guest_session_id');
+        $sessionSessionId = session()->get('guest_session_id');
+
+        $sessionId = $sessionSessionId ?: ($cookieSessionId ?: (session()->getId() ?: Str::random(40)));
+
+        if (!session()->has('guest_session_id') || session()->get('guest_session_id') !== $sessionId) {
+            session()->put('guest_session_id', $sessionId);
         }
-        return (string) session()->get('guest_session_id');
+
+        try {
+            cookie()->queue(cookie()->make('guest_session_id', $sessionId, 60 * 24 * 30));
+        } catch (\Throwable $e) {}
+
+        return (string) $sessionId;
     }
 
     private function findOrCreateBuffer(): Buffer
@@ -55,7 +65,7 @@ trait BufferCartTrait
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        return Buffer::create([
+        $buffer = Buffer::create([
             'id' => Str::uuid()->toString(),
             'customer_id' => $customerId,
             'session_id' => $sessionId,
@@ -64,20 +74,74 @@ trait BufferCartTrait
             'creator' => $userId,
             'editor' => $userId,
         ]);
+
+        try {
+            cookie()->queue(cookie()->make('buffer_cart_id', $buffer->id, 60 * 24 * 30));
+            cookie()->queue(cookie()->make('guest_session_id', $sessionId, 60 * 24 * 30));
+        } catch (\Throwable $e) {}
+
+        return $buffer;
     }
 
     private function getCurrentBuffer(): ?Buffer
     {
         $customerId = $this->resolveCustomerId();
         $sessionId = $this->getSessionId();
+        $cookieToken = request()->cookie('guest_session_id');
+        $cookieBufferId = request()->cookie('buffer_cart_id');
 
-        return Buffer::where(function ($q) use ($customerId, $sessionId) {
+        $query = Buffer::where(function ($q) use ($customerId, $sessionId, $cookieToken) {
             if ($customerId) {
-                $q->where('customer_id', $customerId)->orWhere('session_id', $sessionId);
+                $q->where('customer_id', $customerId)
+                  ->orWhere('session_id', $sessionId);
+                if ($cookieToken) {
+                    $q->orWhere('session_id', $cookieToken);
+                }
             } else {
                 $q->where('session_id', $sessionId);
+                if ($cookieToken) {
+                    $q->orWhere('session_id', $cookieToken);
+                }
             }
-        })->first();
+        });
+
+        // 1. Highest priority: buffer that actually has items, latest updated
+        $buffer = (clone $query)->whereHas('items')->latest('updated_at')->first();
+
+        // 2. If not found by session/customer, check if cookie 'buffer_cart_id' points to a buffer with items
+        if (!$buffer && $cookieBufferId) {
+            $buffer = Buffer::where('id', $cookieBufferId)->whereHas('items')->first();
+        }
+
+        // 3. Fallback: most recently updated buffer matching query
+        if (!$buffer) {
+            $buffer = (clone $query)->latest('updated_at')->first();
+        }
+
+        // 4. Fallback: buffer by cookie buffer_cart_id even if empty
+        if (!$buffer && $cookieBufferId) {
+            $buffer = Buffer::where('id', $cookieBufferId)->first();
+        }
+
+        if ($buffer) {
+            $updates = [];
+            if ($buffer->session_id !== $sessionId) {
+                $updates['session_id'] = $sessionId;
+            }
+            if ($customerId && $buffer->customer_id !== $customerId) {
+                $updates['customer_id'] = $customerId;
+            }
+            if (!empty($updates)) {
+                $buffer->update($updates);
+            }
+
+            try {
+                cookie()->queue(cookie()->make('buffer_cart_id', $buffer->id, 60 * 24 * 30));
+                cookie()->queue(cookie()->make('guest_session_id', $sessionId, 60 * 24 * 30));
+            } catch (\Throwable $e) {}
+        }
+
+        return $buffer;
     }
 
     private function recalculateBuffer(Buffer $buffer): void
@@ -119,6 +183,9 @@ trait BufferCartTrait
                 $colorName = $itemMeta['color_name'] ?? null;
                 $colorCode = $itemMeta['color_code'] ?? null;
 
+                $basePrice = (float) ($itemMeta['base_price'] ?? $item->unit_price);
+                $sellPrice = (float) ($itemMeta['sell_price'] ?? $itemMeta['after_disc_price'] ?? ($item->total > 0 && $item->quantity > 0 ? ($item->total / $item->quantity) : $item->unit_price));
+
                 return [
                     'id' => $item->id,
                     'product_id' => $item->product_id,
@@ -126,7 +193,10 @@ trait BufferCartTrait
                     'name' => $item->name,
                     'brand' => $item->product->brand->name ?? '',
                     'image' => $item->product->thumbnail_url ?? '',
-                    'sell_price' => (float) $item->unit_price,
+                    'base_price' => $basePrice,
+                    'sell_price' => $sellPrice,
+                    'original_price' => $basePrice,
+                    'unit_price' => $basePrice,
                     'quantity' => (int) $item->quantity,
                     'item_note' => $item->item_notes ?? '',
                     'color_id' => $colorId,

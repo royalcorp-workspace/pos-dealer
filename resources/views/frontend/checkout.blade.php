@@ -3,6 +3,84 @@
 @section('title', 'Checkout - IMG')
 @section('robots', 'noindex,nofollow')
 
+@push('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+/* Custom Select2 Styling matching Tailwind rounded-xl checkout theme */
+.select2-container {
+    width: 100% !important;
+}
+.select2-container--default .select2-selection--single {
+    height: 46px !important;
+    background-color: rgb(249 250 251 / 0.5) !important;
+    border: 1px solid rgb(229 231 235) !important;
+    border-radius: 0.75rem !important; /* rounded-xl */
+    display: flex !important;
+    align-items: center !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    transition: all 0.2s ease !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #1f2937 !important;
+    font-size: 0.875rem !important; /* text-sm */
+    line-height: 1.25rem !important;
+    padding-left: 0.5rem !important;
+}
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 44px !important;
+    right: 10px !important;
+}
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-container--default.select2-container--open .select2-selection--single {
+    border-color: #c09d6b !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 0 0 2px rgba(192, 157, 107, 0.2) !important;
+    outline: none !important;
+}
+.select2-container--default .select2-selection--single.select2-selection--disabled {
+    background-color: #f3f4f6 !important;
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+}
+.select2-dropdown {
+    border: 1px solid rgb(229 231 235) !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+    overflow: hidden !important;
+    z-index: 9999 !important;
+    background-color: #ffffff !important;
+}
+.select2-search--dropdown {
+    padding: 8px !important;
+}
+.select2-search--dropdown .select2-search__field {
+    border: 1px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 6px 12px !important;
+    font-size: 0.875rem !important;
+    outline: none !important;
+}
+.select2-search--dropdown .select2-search__field:focus {
+    border-color: #c09d6b !important;
+    box-shadow: 0 0 0 2px rgba(192, 157, 107, 0.2) !important;
+}
+.select2-results__option {
+    padding: 8px 14px !important;
+    font-size: 0.875rem !important;
+}
+.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: #c09d6b !important;
+    color: #ffffff !important;
+}
+.select2-container--default .select2-results__option--selected {
+    background-color: #fdfbf7 !important;
+    color: #ad8a58 !important;
+    font-weight: 600 !important;
+}
+</style>
+@endpush
+
 @section('content')
     @php
         $cart = $cart ?? session()->get('cart', []);
@@ -138,12 +216,12 @@
 
                         @php
                             $sessionUser = session()->get('user', []);
-                            $defaultName = old('name', $form['name'] ?? $defaultAddress?->recipient_name ?? $sessionUser['name'] ?? '');
-                            $defaultEmail = old('email', $form['email'] ?? $sessionUser['email'] ?? '');
-                            $defaultPhone = old('phone', $form['phone'] ?? $defaultAddress?->phone ?? '');
-                            $defaultCity = old('city', $form['city'] ?? $defaultAddress?->subDistrict->city->name ?? '');
-                            $defaultAddressText = old('address', $form['address'] ?? $defaultAddress?->address ?? '');
-                            $defaultPostal = old('postal_code', $form['postal_code'] ?? $defaultAddress?->postal_code ?? '');
+                            $defaultName = old('name', $form['name'] ?? $defaultAddress?->recipient_name ?? ($defaultCustomerAddr['name'] ?? ($sessionUser['name'] ?? '')));
+                            $defaultEmail = old('email', $form['email'] ?? ($defaultCustomerAddr['email'] ?? ($sessionUser['email'] ?? '')));
+                            $defaultPhone = old('phone', $form['phone'] ?? $defaultAddress?->phone ?? ($defaultCustomerAddr['phone'] ?? ($sessionUser['phone'] ?? '')));
+                            $defaultCity = old('city', $form['city'] ?? $defaultAddress?->subDistrict->city->name ?? ($defaultCustomerAddr['city_name'] ?? ''));
+                            $defaultAddressText = old('address', $form['address'] ?? $defaultAddress?->address ?? ($defaultCustomerAddr['address'] ?? ''));
+                            $defaultPostal = old('postal_code', $form['postal_code'] ?? $defaultAddress?->postal_code ?? ($defaultCustomerAddr['postal_code'] ?? ''));
                         @endphp
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -246,26 +324,40 @@
                                 @foreach($couriers as $courier)
                                     @php
                                         $details = $courierPrices[$courier->code] ?? null;
+                                        $isAvailable = $details['is_available'] ?? true;
                                         $calculatedCost = $details['shipping_cost'] ?? ($courier->shippingAddresses->where('type', 1)->first()->price ?? ($courier->shippingAddresses->first()->price ?? 25000));
                                         $isCalculated = $details['is_calculated'] ?? false;
                                         $billableWeight = $details['billable_weight'] ?? 1;
                                         $hasFixed = $details['has_fixed_items'] ?? false;
                                         $hasDim = $details['has_dimension_items'] ?? false;
                                     @endphp
-                                    <option value="{{ $courier->code }}" data-base-price="{{ $details['base_price'] ?? $calculatedCost }}" {{ (old('courier', $form['courier'] ?? '') == $courier->code) ? 'selected' : '' }}>
-                                        {{ $courier->name }} - Rp {{ number_format($calculatedCost, 0, ',', '.') }}
-                                        @if($hasFixed && $hasDim)
-                                            (Tetap + {{ $billableWeight }} kg)
-                                        @elseif($hasFixed)
-                                            (Ongkir Tetap)
-                                        @elseif($isCalculated && $billableWeight > 0)
-                                            ({{ $billableWeight }} kg)
+                                    <option value="{{ $courier->code }}" 
+                                            data-courier-name="{{ $courier->name }}"
+                                            data-base-price="{{ $details['base_price'] ?? $calculatedCost }}"
+                                            data-available="{{ $isAvailable ? '1' : '0' }}"
+                                            {{ !$isAvailable ? 'disabled' : '' }}
+                                            {{ (old('courier', $form['courier'] ?? '') == $courier->code) ? 'selected' : '' }}>
+                                        @if(!$isAvailable)
+                                            {{ $courier->name }} - Di Luar Jangkauan (Tidak Melayani Wilayah Ini)
                                         @else
-                                            (Tarif Tetap)
+                                            {{ $courier->name }} - Rp {{ number_format($calculatedCost, 0, ',', '.') }}
+                                            @if($hasFixed && $hasDim)
+                                                (Tetap + {{ $billableWeight }} kg)
+                                            @elseif($hasFixed)
+                                                (Ongkir Tetap)
+                                            @elseif($isCalculated && $billableWeight > 0)
+                                                ({{ $billableWeight }} kg)
+                                            @else
+                                                (Tarif Tetap)
+                                            @endif
                                         @endif
                                     </option>
                                 @endforeach
                             </select>
+                            <div id="courier-unavailable-alert" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                                <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-600 shrink-0"></i>
+                                <span id="courier-unavailable-message">Kurir yang dipilih belum melayani pengiriman ke kota/wilayah tujuan ini. Silakan pilih kurir lain atau ganti alamat tujuan.</span>
+                            </div>
                             @error('courier')
                                 <p class="text-xs text-red-500 mt-1.5 flex items-center gap-1">
                                     <i class="fa-solid fa-circle-exclamation"></i> {{ $message }}
@@ -644,7 +736,7 @@
                                     <span class="text-[11px] text-gray-400">Termasuk PPN & Biaya Kirim</span>
                                 </div>
                                 <span class="text-2xl font-black text-brand-dark font-serif" id="total-cost">
-                                    Rp {{ number_format(max(0, $cartTotal - ($priceProductSettingDiscount ?? 0) + ($form['shipping_cost'] ?? 0) - ($selectedVoucher['discount'] ?? 0)), 0, ',', '.') }}
+                                    Rp {{ number_format(max(0, $originalCartTotal - ($totalPercentDiscount ?? 0) - ($totalNominalDiscount ?? 0) - ($priceProductSettingDiscount ?? 0) + ($form['shipping_cost'] ?? 0) - ($selectedVoucher['discount'] ?? 0)), 0, ',', '.') }}
                                 </span>
                             </div>
                         </div>
@@ -687,6 +779,9 @@
     <script id="checkout-saved-addresses" type="application/json">
         @json($savedAddressesSafe)
     </script>
+    <!-- jQuery & Select2 JS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ asset('js/frontend/checkout.js') }}?v={{ filemtime(public_path('js/frontend/checkout.js')) }}"></script>
     
     <script>
@@ -729,42 +824,55 @@
                                 // Ambil hasil pertama yang paling cocok
                                 const customer = data[0];
                                 
-                                // Isi otomatis (hanya jika kolom lain masih kosong, atau paksa timpa)
-                                if(emailInput && emailInput !== e.target) { emailInput.value = customer.email; emailInput.dispatchEvent(new Event('input')); }
-                                if(phoneInput && phoneInput !== e.target) { phoneInput.value = customer.phone; phoneInput.dispatchEvent(new Event('input')); }
-                                if(nameInput && nameInput.value === '') { nameInput.value = customer.name; nameInput.dispatchEvent(new Event('input')); }
+                                // Isi otomatis nama, email, telepon
+                                if(emailInput && emailInput !== e.target && !emailInput.value) { 
+                                    emailInput.value = customer.email; 
+                                    emailInput.dispatchEvent(new Event('input')); 
+                                }
+                                if(phoneInput && phoneInput !== e.target && !phoneInput.value) { 
+                                    phoneInput.value = customer.phone; 
+                                    phoneInput.dispatchEvent(new Event('input')); 
+                                }
+                                if(nameInput && !nameInput.value) { 
+                                    nameInput.value = customer.name; 
+                                    nameInput.dispatchEvent(new Event('input')); 
+                                }
                                 
-                                if (customer.address) {
-                                    const addrInput = document.querySelector('textarea[name="address"]');
-                                    if(addrInput && addrInput.value === '') { addrInput.value = customer.address; addrInput.dispatchEvent(new Event('input')); }
-                                }
-                                if (customer.postal_code) {
-                                    const postalInput = document.querySelector('input[name="postal_code"]');
-                                    if(postalInput && postalInput.value === '') { postalInput.value = customer.postal_code; postalInput.dispatchEvent(new Event('input')); }
-                                }
-                                if (customer.sub_district_id) {
-                                    if (customer.province_id && typeof window.loadCities === 'function') {
-                                        const provSelect = document.getElementById('checkout-province');
-                                        if (provSelect) {
-                                            provSelect.value = customer.province_id;
-                                            window.loadCities(customer.province_id, customer.city_id, function() {
-                                                if (customer.city_id) {
-                                                    window.loadSubDistricts(customer.city_id, customer.sub_district_id, function() {
-                                                        const subSelect = document.getElementById('checkout-sub-district');
-                                                        if (subSelect) {
-                                                            subSelect.value = customer.sub_district_id;
-                                                            subSelect.dispatchEvent(new Event('change'));
-                                                        }
-                                                    });
-                                                }
-                                            });
-                                        }
-                                    } else {
-                                        const subSelect = document.getElementById('checkout-sub-district') || document.querySelector('select[name="sub_district_id"]');
-                                        if(subSelect && subSelect.value === '') {
-                                            subSelect.value = customer.sub_district_id;
-                                            subSelect.dispatchEvent(new Event('change'));
-                                            subSelect.dispatchEvent(new Event('input'));
+                                if (typeof window.applyAddressData === 'function') {
+                                    window.applyAddressData(customer);
+                                } else {
+                                    if (customer.address) {
+                                        const addrInput = document.querySelector('textarea[name="address"]');
+                                        if(addrInput && !addrInput.value) { addrInput.value = customer.address; addrInput.dispatchEvent(new Event('input')); }
+                                    }
+                                    if (customer.postal_code) {
+                                        const postalInput = document.querySelector('input[name="postal_code"]');
+                                        if(postalInput && !postalInput.value) { postalInput.value = customer.postal_code; postalInput.dispatchEvent(new Event('input')); }
+                                    }
+                                    if (customer.sub_district_id) {
+                                        if (customer.province_id && typeof window.loadCities === 'function') {
+                                            const provSelect = document.getElementById('checkout-province');
+                                            if (provSelect) {
+                                                provSelect.value = customer.province_id;
+                                                window.loadCities(customer.province_id, customer.city_id, function() {
+                                                    if (customer.city_id) {
+                                                        window.loadSubDistricts(customer.city_id, customer.sub_district_id, function() {
+                                                            const subSelect = document.getElementById('checkout-sub-district');
+                                                            if (subSelect) {
+                                                                subSelect.value = customer.sub_district_id;
+                                                                subSelect.dispatchEvent(new Event('change'));
+                                                            }
+                                                        });
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            const subSelect = document.getElementById('checkout-sub-district') || document.querySelector('select[name="sub_district_id"]');
+                                            if(subSelect && !subSelect.value) {
+                                                subSelect.value = customer.sub_district_id;
+                                                subSelect.dispatchEvent(new Event('change'));
+                                                subSelect.dispatchEvent(new Event('input'));
+                                            }
                                         }
                                     }
                                 }
@@ -774,12 +882,30 @@
                 }
             }
 
+            function debouncedCustomerSearch(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(function() {
+                    handleCustomerSearch(e);
+                }, 400);
+            }
+
             if (emailInput) {
-                // Gunakan event 'change' agar dipicu saat berpindah kolom
+                emailInput.addEventListener('input', debouncedCustomerSearch);
                 emailInput.addEventListener('change', handleCustomerSearch);
             }
             if (phoneInput) {
+                phoneInput.addEventListener('input', debouncedCustomerSearch);
                 phoneInput.addEventListener('change', handleCustomerSearch);
+            }
+
+            // Trigger auto-completion on load if email exists (misal user login) dan sub-district belum terpilih
+            if (emailInput && emailInput.value && emailInput.value.trim().length >= 4) {
+                const subDistrictSelect = document.getElementById('checkout-sub-district');
+                if (subDistrictSelect && !subDistrictSelect.value) {
+                    setTimeout(() => {
+                        handleCustomerSearch({ target: emailInput });
+                    }, 200);
+                }
             }
             const formInputs = document.querySelectorAll('input[name="email"], input[name="name"], input[name="phone"], select[name="province_id"], select[name="city_id"], select[name="sub_district_id"], textarea[name="address"], input[name="postal_code"]');
             

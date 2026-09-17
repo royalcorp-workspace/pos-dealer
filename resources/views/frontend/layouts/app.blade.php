@@ -466,6 +466,7 @@
     <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"></noscript>
 
     @include('frontend.components.tracking')
+    @stack('styles')
 </head>
 @php
     $whatsappNumber = isset($about) && isset($about->social_media['whatsapp'])
