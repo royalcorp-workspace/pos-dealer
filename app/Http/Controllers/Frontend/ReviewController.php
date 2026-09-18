@@ -66,6 +66,11 @@ class ReviewController extends Controller
         return response()->json(['success' => true, 'review' => $review]);
     }
 
+    public function index(Request $request, string $productId)
+    {
+        return $this->filter($request, $productId);
+    }
+
     public function filter(Request $request, string $productId)
     {
         $rating = $request->query('rating');

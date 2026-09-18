@@ -141,47 +141,119 @@
             
             <!-- Left Column: Sticky Product Media Gallery (Luxury Studio Viewer) -->
             @php
-                $headerImages = $product->images->whereNull('variant_id');
+                $rawThumb = trim((string)($product->thumbnail ?? ''));
+                $thumbnail = ($rawThumb !== '' && $rawThumb !== 'null') ? media_url($rawThumb) : null;
+
+                // Fallback to product->thumbnail_url if not dummy
+                if (!$thumbnail && !empty($product->thumbnail_url) && !str_contains($product->thumbnail_url, 'dummy')) {
+                    $thumbnail = $product->thumbnail_url;
+                }
+
+                // Fallback to first image in product gallery if thumbnail missing
+                if (!$thumbnail && $product->relationLoaded('images') && $product->images && $product->images->isNotEmpty()) {
+                    $firstGalleryImg = $product->images->first();
+                    $firstGalleryUrl = $firstGalleryImg->image_url ?? ($firstGalleryImg->image ? media_url($firstGalleryImg->image) : null);
+                    if (!empty($firstGalleryUrl) && !str_contains($firstGalleryUrl, 'dummy')) {
+                        $thumbnail = $firstGalleryUrl;
+                    }
+                }
+
+                // Fallback to first variant with image if product has no thumbnail
+                if (!$thumbnail && $product->relationLoaded('variants') && $product->variants && $product->variants->isNotEmpty()) {
+                    foreach ($product->variants as $v) {
+                        $vImg = $v->image_url ?? ($v->relationLoaded('images') ? $v->images->first()?->image_url : null);
+                        if (!empty($vImg) && !str_contains($vImg, 'dummy')) {
+                            $thumbnail = $vImg;
+                            break;
+                        }
+                    }
+                }
+
+                $headerImages = ($product->relationLoaded('images') && $product->images)
+                    ? $product->images->whereNull('variant_id') 
+                    : collect([]);
                 $dbImages = $headerImages->isNotEmpty() 
                     ? $headerImages->map(fn($i) => $i->image_url ?? ($i->image ? media_url($i->image) : null))->filter()->values()->toArray()
                     : [];
 
-                $allImages = collect([$product->thumbnail_url ?: asset('images/dummy/header.jpg')])
+                $allImages = collect([$thumbnail])
                     ->merge($dbImages)
+                    ->filter(fn($u) => !empty($u) && !str_contains((string)$u, 'dummy'))
                     ->unique()
-                    ->filter()
                     ->values()
                     ->toArray();
 
-                // If only 1 image exists in database, supply curated studio perspective angles
-                if (count($allImages) < 2) {
-                    $allImages = array_merge($allImages, [
-                        asset('images/dummy/detail-1.jpg'),
-                        asset('images/dummy/detail-2.jpg'),
-                        asset('images/dummy/detail-3.jpg'),
-                        asset('images/dummy/detail-4.jpg'),
-                    ]);
+                $hasRealImage = !empty($allImages);
+
+                // Only fallback to dummy if absolutely NO real image or thumbnail exists anywhere
+                if (!$hasRealImage) {
+                    $allImages = [asset('images/dummy/header.jpg')];
                 }
             @endphp
             <div 
                 class="w-full lg:w-1/2 lg:sticky lg:top-28 space-y-3.5" 
                 x-data="{ 
+                    baseImages: {{ json_encode($allImages) }},
                     images: {{ json_encode($allImages) }},
+                    defaultThumbnail: {{ json_encode($thumbnail ?: ($allImages[0] ?? null)) }},
+                    hasRealImage: {{ $hasRealImage ? 'true' : 'false' }},
                     currentIndex: 0,
-                    get currentImage() { return this.images[this.currentIndex] || this.images[0]; },
-                    nextImage() { this.currentIndex = (this.currentIndex + 1) % this.images.length; },
-                    prevImage() { this.currentIndex = (this.currentIndex - 1 + this.images.length) % this.images.length; },
+                    get currentImage() { 
+                        return this.images[this.currentIndex] || this.images[0] || '{{ asset('images/dummy/header.jpg') }}'; 
+                    },
+                    nextImage() { 
+                        if (this.images.length > 1) {
+                            this.currentIndex = (this.currentIndex + 1) % this.images.length; 
+                        }
+                    },
+                    prevImage() { 
+                        if (this.images.length > 1) {
+                            this.currentIndex = (this.currentIndex - 1 + this.images.length) % this.images.length; 
+                        }
+                    },
+                    hasDummyImage() {
+                        return !this.hasRealImage || this.images.some(img => typeof img === 'string' && img.includes('dummy'));
+                    },
                     setMainImage(detail) {
-                        if (!detail) return;
-                        let url = (typeof detail === 'string') ? detail : (detail.url || (detail.images && detail.images[0]));
-                        if (!url) return;
+                        let url = null;
+                        if (typeof detail === 'string') {
+                            url = detail;
+                        } else if (detail && typeof detail === 'object') {
+                            url = detail.url || (detail.images && detail.images[0]) || null;
+                        }
 
-                        let idx = this.images.indexOf(url);
-                        if (idx === -1) {
-                            this.images.unshift(url);
+                        // If no url provided, revert to default base images / thumbnail
+                        if (!url) {
+                            this.images = [...this.baseImages];
+                            this.currentIndex = 0;
+                            return;
+                        }
+
+                        // If currently showing dummy, replace dummy completely with real variant image
+                        if (this.hasDummyImage()) {
+                            this.images = [url];
+                            this.currentIndex = 0;
+                            this.hasRealImage = true;
+                            return;
+                        }
+
+                        // If the url is already part of base gallery, jump to it without adding thumbnails
+                        let baseIdx = this.baseImages.indexOf(url);
+                        if (baseIdx !== -1) {
+                            this.images = [...this.baseImages];
+                            this.currentIndex = baseIdx;
+                            return;
+                        }
+
+                        // If base gallery only had 1 image (e.g. thumbnail only, no extra gallery):
+                        // Swap the single image with the variant image instead of accumulating thumbnails!
+                        if (this.baseImages.length <= 1) {
+                            this.images = [url];
                             this.currentIndex = 0;
                         } else {
-                            this.currentIndex = idx;
+                            // If base gallery has multiple images, replace the active variant slot at index 0
+                            this.images = [url, ...this.baseImages];
+                            this.currentIndex = 0;
                         }
                     }
                 }"
@@ -212,8 +284,8 @@
                         @endif
                     </div>
 
-                    <!-- Next & Previous Arrows (Always Available) -->
-                    <div class="absolute inset-x-3 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none z-10">
+                    <!-- Next & Previous Arrows (Available when multiple images) -->
+                    <div class="absolute inset-x-3 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none z-10" x-show="images.length > 1">
                         <button 
                             type="button" 
                             @click="prevImage()" 
@@ -233,13 +305,13 @@
                     </div>
 
                     <!-- Image Counter Badge (Bottom Right) -->
-                    <div class="absolute bottom-4 right-4 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-extrabold shadow-sm tracking-wider z-10">
+                    <div class="absolute bottom-4 right-4 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-extrabold shadow-sm tracking-wider z-10" x-show="images.length > 1">
                         <span x-text="currentIndex + 1"></span> / <span x-text="images.length"></span>
                     </div>
                 </div>
                 
-                <!-- Thumbnails Strip (Always Visible) -->
-                <div class="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-hide snap-x snap-mandatory">
+                <!-- Thumbnails Strip (Visible when multiple images) -->
+                <div class="flex items-center gap-3 overflow-x-auto pb-2 pt-1 scrollbar-hide snap-x snap-mandatory" x-show="images.length > 1">
                     <template x-for="(img, idx) in images" :key="idx">
                         <button 
                             type="button"
@@ -311,7 +383,7 @@
                         </span>
                         <span class="text-xs font-semibold text-brand-gold-dark mt-1.5" id="price-label">
                             @if($hasMultiplePrices)
-                                {{ __('Pilih ukuran matras di bawah untuk melihat harga akurat') }}
+                                {{ __('Pilih ukuran di bawah untuk melihat harga akurat') }}
                             @else
                                 {{ __('Harga resmi untuk ukuran') }}: {{ $firstVariantName }}
                             @endif
@@ -764,7 +836,10 @@
             }
         }
         $vImgUrl = $v->image_url ?? ($v->images->first()?->image_url ?? ($v->images->first()?->image ? media_url($v->images->first()->image) : null));
-        $vImages = $v->images->map(fn($img) => $img->image_url ?? media_url($img->image))->filter()->values()->all();
+        if ($vImgUrl && str_contains($vImgUrl, 'dummy')) {
+            $vImgUrl = null;
+        }
+        $vImages = $v->images->map(fn($img) => $img->image_url ?? media_url($img->image))->filter(fn($img) => !empty($img) && !str_contains($img, 'dummy'))->values()->all();
 
         return [
             'id' => $v->id,

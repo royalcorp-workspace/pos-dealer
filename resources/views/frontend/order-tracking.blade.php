@@ -97,8 +97,26 @@
                                 <div>
                                     <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Detail Pengiriman</p>
                                     <h2 class="text-2xl font-extrabold text-brand-dark mt-1">Status dari Ekspedisi</h2>
-                                    <p class="text-sm text-gray-500 mt-2">Timeline ini hanya menampilkan status setelah paket diterima ekspedisi.</p>
+                                    <p class="text-sm text-gray-500 mt-2">Timeline ini menampilkan pembaruan status pelacakan pengiriman resi.</p>
                                 </div>
+                                @if(!empty($shipment['waybill_id']))
+                                    <div class="bg-brand-light/70 border border-brand-gold/30 rounded-2xl p-3 px-4 shrink-0">
+                                        <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nomor Resi / Waybill</p>
+                                        <div class="flex items-center gap-2 mt-0.5" x-data="{ copied: false }">
+                                            <span class="font-mono font-extrabold text-brand-dark text-base select-all">{{ $shipment['waybill_id'] }}</span>
+                                            <button 
+                                                type="button" 
+                                                @click="navigator.clipboard.writeText('{{ $shipment['waybill_id'] }}'); copied = true; setTimeout(() => copied = false, 2000)" 
+                                                class="text-brand-gold-dark hover:text-brand-dark transition-colors text-xs" 
+                                                title="Salin Nomor Resi">
+                                                <i class="fa-regular" :class="copied ? 'fa-check text-green-600' : 'fa-copy'"></i>
+                                            </button>
+                                        </div>
+                                        @if(!empty($shipment['courier']))
+                                            <p class="text-xs text-gray-500 font-medium mt-0.5">{{ $shipment['courier'] }}</p>
+                                        @endif
+                                    </div>
+                                @endif
                             </div>
 
                             <div class="mt-8 space-y-4">
@@ -112,7 +130,7 @@
                                                 <div class="w-px h-full bg-brand-light my-1"></div>
                                             @endif
                                         </div>
-                                        <div class="pb-6 flex-1">
+                                        <div class="pb-6 flex-1" x-data="{ showPayload: false }">
                                             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                                                 <div>
                                                     <p class="font-bold text-brand-dark">{{ $event->title }}</p>
@@ -123,11 +141,39 @@
                                                 </span>
                                             </div>
                                             <p class="text-sm text-gray-600 mt-2">{{ $event->description }}</p>
-                                            <p class="text-xs text-gray-400 mt-2">{{ $event->date->format('d M Y H:i') }}</p>
+                                            <div class="flex items-center justify-between mt-2">
+                                                <p class="text-xs text-gray-400">{{ $event->date->format('d M Y H:i') }}</p>
+                                                @if(!empty($event->payload))
+                                                    <button type="button" @click="showPayload = !showPayload" class="text-xs font-semibold text-brand-gold-dark hover:underline inline-flex items-center gap-1">
+                                                        <i class="fa-solid fa-code"></i>
+                                                        <span x-text="showPayload ? 'Tutup Payload' : 'Lihat Payload Resi'">Lihat Payload Resi</span>
+                                                    </button>
+                                                @endif
+                                            </div>
+                                            @if(!empty($event->payload))
+                                                <div x-show="showPayload" x-cloak class="mt-3 bg-gray-900 text-gray-100 rounded-xl p-3 text-xs font-mono overflow-x-auto shadow-inner border border-gray-800">
+                                                    <pre class="whitespace-pre-wrap">{{ json_encode($event->payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                </div>
+                                            @endif
                                         </div>
                                     </div>
                                 @endforeach
                             </div>
+
+                            @if(!empty($shipment['latest_payload']))
+                                <div class="mt-6 pt-6 border-t border-brand-muted/60" x-data="{ openRaw: false }">
+                                    <button type="button" @click="openRaw = !openRaw" class="w-full flex items-center justify-between text-xs font-bold text-gray-500 hover:text-brand-dark transition-colors py-1">
+                                        <span class="flex items-center gap-2">
+                                            <i class="fa-solid fa-file-lines text-brand-gold"></i>
+                                            <span>Raw Payload Tracking Resi (Biteship / Ekspedisi)</span>
+                                        </span>
+                                        <i class="fa-solid text-xs transition-transform duration-200" :class="openRaw ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                    </button>
+                                    <div x-show="openRaw" x-cloak class="mt-3 bg-gray-900 text-emerald-400 rounded-2xl p-4 text-xs font-mono overflow-x-auto shadow-inner border border-gray-800">
+                                        <pre class="whitespace-pre-wrap">{{ json_encode($shipment['latest_payload'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     @else
                         <div class="bg-white border border-brand-muted rounded-3xl p-6 shadow-sm">

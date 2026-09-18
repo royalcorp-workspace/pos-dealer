@@ -59,13 +59,18 @@
     
     // Data untuk review component
     $reviewPayload = [
-        'id' => $product->id,
-        'name' => $product->name,
-        'image' => $product->thumbnail_url ?? '',
-        'brand' => $product->brand->name ?? '',
-        'rating' => number_format($product->average_rating ?? 0, 1),
-        'reviewsCount' => $product->review_count ?? 0,
-        'slug' => $product->slug,
+        'id' => is_array($product) ? ($product['id'] ?? '') : ($product->id ?? ''),
+        'name' => is_array($product) ? ($product['name'] ?? '') : ($product->name ?? ''),
+        'image' => is_array($product) ? ($product['image'] ?? ($product['thumbnail_url'] ?? '')) : ($product->thumbnail_url ?? ($product->image ?? '')),
+        'brand' => is_array($product) ? ($product['brand'] ?? '') : ($product->brand->name ?? ''),
+        'rating' => number_format((float)(is_array($product) ? ($product['rating'] ?? 0) : ($product->average_rating ?? 0)), 1),
+        'reviewsCount' => (int)(is_array($product) ? ($product['reviewsCount'] ?? 0) : ($product->review_count ?? 0)),
+        'slug' => is_array($product) ? ($product['slug'] ?? '') : ($product->slug ?? ''),
+        'price' => (float)($price ?? 0),
+        'originalPrice' => (float)($strikeMinPrice ?? $originalMinPrice ?? 0),
+        'minPrice' => (float)($price ?? 0),
+        'maxPrice' => (float)($displayOriginalPrice ?? $price ?? 0),
+        'isVariable' => (bool)($hasPriceRange ?? false),
     ];
 @endphp
 

@@ -2553,6 +2553,34 @@ class CheckoutController extends Controller
     public function trackOrderDetail(string $orderId)
     {
         $order = \App\Models\Frontend\Order::with(['customer', 'courier', 'items.product', 'voucher'])->findOrFail($orderId);
-        return view('frontend.track-order-detail', compact('order'));
+
+        $deliveryLogs = \Illuminate\Support\Facades\DB::table('delivery_logs')
+            ->where(function ($q) use ($order) {
+                $q->where('order_id', $order->id);
+                if (!empty($order->order_number)) {
+                    $q->orWhereRaw("payload->'metadata'->>'order_number' = ?", [$order->order_number]);
+                }
+            })
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        $delivery = \Illuminate\Support\Facades\DB::table('deliveries')
+            ->where('order_id', $order->id)
+            ->first();
+
+        $waybillId = $deliveryLogs->firstWhere('waybill_id', '!=', null)->waybill_id 
+            ?? $delivery->tracking_number 
+            ?? data_get($order->meta, 'waybill_id') 
+            ?? data_get($order->meta, 'resi') 
+            ?? null;
+
+        $courierName = $order->courier->name 
+            ?? $deliveryLogs->firstWhere('courier_code', '!=', null)->courier_code 
+            ?? 'Kurir Pengiriman';
+
+        $latestLog = $deliveryLogs->last();
+        $latestPayload = $latestLog ? (is_string($latestLog->payload) ? json_decode($latestLog->payload, true) : (array) $latestLog->payload) : null;
+
+        return view('frontend.track-order-detail', compact('order', 'deliveryLogs', 'delivery', 'waybillId', 'courierName', 'latestPayload'));
     }
 }
