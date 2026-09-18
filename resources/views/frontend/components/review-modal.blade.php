@@ -9,6 +9,42 @@
         productId: null,
         orderId: null,
         product: null,
+        loadingReviews: false,
+        reviews: [],
+        formatPrice(val) {
+            if (val === null || val === undefined || val === '' || isNaN(Number(val)) || Number(val) <= 0) return '';
+            return 'Rp ' + Number(val).toLocaleString('id-ID');
+        },
+        getPriceDisplay() {
+            if (!this.product) return '';
+            if (this.product.isVariable && this.product.minPrice && this.product.maxPrice && Number(this.product.minPrice) !== Number(this.product.maxPrice)) {
+                const minFmt = this.formatPrice(this.product.minPrice);
+                const maxFmt = this.formatPrice(this.product.maxPrice);
+                if (minFmt && maxFmt) return minFmt + ' - ' + maxFmt;
+            }
+            const p = this.product.price || this.product.minPrice || this.product.sell_price;
+            return this.formatPrice(p);
+        },
+        fetchReviews(pid) {
+            if (!pid) return;
+            this.loadingReviews = true;
+            fetch('/products/' + pid + '/reviews')
+                .then(r => r.json())
+                .then(data => {
+                    const items = data.data || data || [];
+                    if (Array.isArray(items)) {
+                        this.reviews = items.map(r => ({
+                            id: r.id,
+                            user: r.user_name || r.user || 'Pelanggan',
+                            rating: Number(r.rating || 5),
+                            text: r.text || '',
+                            date: r.created_at ? new Date(r.created_at).toLocaleDateString('id-ID') : (r.date || '')
+                        }));
+                    }
+                })
+                .catch(() => {})
+                .finally(() => { this.loadingReviews = false; });
+        },
         resetForm() {
             showReviewForm = false;
             rating = 0;
@@ -30,6 +66,7 @@
             .then(data => {
                 if (data.success) {
                     resetForm();
+                    if (productId) fetchReviews(productId);
                 } else {
                     reviewError = data.error || 'Gagal mengirim ulasan';
                 }
@@ -45,11 +82,15 @@
     @open-review.window="
         showReviewForm = false;
         product = $event.detail;
-        productId = $event.detail.product_id;
-        orderId = $event.detail.order_id;
+        productId = $event.detail.product_id || $event.detail.id;
+        orderId = $event.detail.order_id || null;
         rating = 0;
         reviewText = '';
         reviewError = '';
+        reviews = Array.isArray($event.detail.reviews) && $event.detail.reviews.length > 0 ? $event.detail.reviews : [];
+        if (productId && reviews.length === 0) {
+            fetchReviews(productId);
+        }
     "
 >
     <!-- Backdrop -->
@@ -96,10 +137,10 @@
                     <span class="text-sm text-gray-500" x-text="'(' + (product?.reviewsCount || 0) + ' Ulasan)'"></span>
                 </div>
 
-                <div class="flex items-center gap-2 mt-1">
-                    <span class="text-sm text-gray-500 line-through" x-show="product?.originalPrice && product?.originalPrice > product?.price" x-text="'Rp ' + Number(product?.originalPrice).toLocaleString('id-ID')"></span>
+                <div class="flex items-center gap-2 mt-1" x-show="getPriceDisplay()">
+                    <span class="text-sm text-gray-500 line-through" x-show="product?.originalPrice && Number(product?.originalPrice) > Number(product?.price || product?.minPrice)" x-text="formatPrice(product?.originalPrice)"></span>
                     <span class="text-lg font-bold text-brand-darker bg-white px-4 py-2 rounded-lg shadow-sm border border-brand-muted"
-                        x-text="product?.isVariable ? 'Rp ' + Number(product?.minPrice).toLocaleString('id-ID') + ' - ' + Number(product?.maxPrice).toLocaleString('id-ID') : 'Rp ' + Number(product?.price).toLocaleString('id-ID')">
+                        x-text="getPriceDisplay()">
                     </span>
                 </div>
             </div>
@@ -167,44 +208,52 @@
                 <!-- Reviews List -->
                 <template x-if="!showReviewForm">
                     <div class="flex-1 overflow-y-auto space-y-4 pr-2">
-                        <template x-if="!product?.reviews || product?.reviews.length === 0">
+                        <template x-if="loadingReviews">
+                            <div class="flex items-center justify-center h-32 text-gray-400 space-x-2">
+                                <i class="fa-solid fa-spinner fa-spin text-brand-gold mr-2"></i>
+                                <span class="text-sm">Memuat ulasan...</span>
+                            </div>
+                        </template>
+                        <template x-if="!loadingReviews && (!reviews || reviews.length === 0)">
                             <div class="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
                                 <i class="fa-solid fa-comments w-10 h-10 opacity-20"></i>
                                 <p class="text-sm">Belum ada ulasan untuk produk ini.</p>
                             </div>
                         </template>
-                        <template x-for="review in product?.reviews || []" :key="review.id">
-                            <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                                <div class="flex justify-between items-start mb-2">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-8 h-8 bg-brand-light text-brand-gold-dark font-bold flex items-center justify-center rounded-full text-sm" x-text="(review.user || 'P').charAt(0)"></div>
-                                        <div>
-                                            <h5 class="font-semibold text-sm text-brand-dark" x-text="review.user || 'Pelanggan'"></h5>
-                                            <span class="text-[10px] text-gray-400" x-text="review.date"></span>
+                        <template x-if="!loadingReviews">
+                            <template x-for="review in reviews || []" :key="review.id">
+                                <div class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 bg-brand-light text-brand-gold-dark font-bold flex items-center justify-center rounded-full text-sm" x-text="(review.user || 'P').charAt(0)"></div>
+                                            <div>
+                                                <h5 class="font-semibold text-sm text-brand-dark" x-text="review.user || 'Pelanggan'"></h5>
+                                                <span class="text-[10px] text-gray-400" x-text="review.date"></span>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Rating Stars -->
+                                        <div class="flex items-center gap-0.5">
+                                            <template x-for="starIndex in [1, 2, 3, 4, 5]">
+                                                <svg 
+                                                    class="w-3.5 h-3.5"
+                                                    :class="starIndex <= review.rating ? 'text-yellow-400 fill-current' : 'text-gray-200'"
+                                                    xmlns="http://www.w3.org/2000/svg" 
+                                                    viewBox="0 0 24 24" 
+                                                    fill="none" 
+                                                    stroke="currentColor" 
+                                                    stroke-width="2" 
+                                                    stroke-linecap="round" 
+                                                    stroke-linejoin="round"
+                                                >
+                                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                                </svg>
+                                            </template>
                                         </div>
                                     </div>
-                                    
-                                    <!-- Rating Stars -->
-                                    <div class="flex items-center gap-0.5">
-                                        <template x-for="starIndex in [1, 2, 3, 4, 5]">
-                                            <svg 
-                                                class="w-3.5 h-3.5"
-                                                :class="starIndex <= review.rating ? 'text-yellow-400 fill-current' : 'text-gray-200'"
-                                                xmlns="http://www.w3.org/2000/svg" 
-                                                viewBox="0 0 24 24" 
-                                                fill="none" 
-                                                stroke="currentColor" 
-                                                stroke-width="2" 
-                                                stroke-linecap="round" 
-                                                stroke-linejoin="round"
-                                            >
-                                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                                            </svg>
-                                        </template>
-                                    </div>
+                                    <p class="text-sm text-gray-600 mt-2 leading-relaxed" x-text="review.text"></p>
                                 </div>
-                                <p class="text-sm text-gray-600 mt-2 leading-relaxed" x-text="review.text"></p>
-                            </div>
+                            </template>
                         </template>
                     </div>
                 </template>

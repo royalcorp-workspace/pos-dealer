@@ -81,6 +81,85 @@ function selectAttribute(el) {
     findMatchingVariant();
 }
 
+function applyVariantPrice(matchedVariant) {
+    if (!matchedVariant) return;
+
+    const priceEl = document.getElementById('product-price');
+    const dc = document.getElementById('product-discount-container');
+    const strikeEl = document.getElementById('product-strike-price');
+    const dbEl = document.getElementById('product-default-badge');
+    const ppsEl = document.getElementById('product-pps-badge');
+
+    let finalPrice = parseFloat(matchedVariant.price) || 0;
+    let basePrice = parseFloat(matchedVariant.base_price) || 0;
+    if (basePrice <= 0 && typeof window.productBasePrice !== 'undefined') {
+        basePrice = parseFloat(window.productBasePrice) || 0;
+    }
+    if (basePrice <= 0) basePrice = finalPrice;
+
+    let originalPrice = finalPrice;
+    let defaultBadge = null;
+    let ppsBadge = null;
+    let strikePrice = null;
+
+    if (basePrice > finalPrice) {
+        let pct = Math.round(((basePrice - finalPrice) / basePrice) * 100);
+        defaultBadge = pct + '% OFF';
+        strikePrice = basePrice;
+    }
+
+    if (window.staticPromo) {
+        const promo = window.staticPromo;
+        strikePrice = (basePrice > finalPrice) ? basePrice : finalPrice;
+
+        if (promo.discount_type === 'fixed') {
+            finalPrice = Math.max(0, finalPrice - parseFloat(promo.discount_value));
+        } else if (promo.discount_type === 'percentage') {
+            finalPrice = Math.max(0, finalPrice - (finalPrice * parseFloat(promo.discount_value) / 100));
+        }
+
+        if (strikePrice > 0) {
+            let totalPct = Math.round(((strikePrice - finalPrice) / strikePrice) * 100);
+            if (basePrice > originalPrice) {
+                let ppsPct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
+                ppsBadge = 'EXTRA ' + ppsPct + '% OFF';
+            } else {
+                defaultBadge = totalPct + '% OFF';
+            }
+        }
+    }
+
+    if (priceEl) {
+        priceEl.textContent = 'Rp ' + Number(finalPrice).toLocaleString('id-ID');
+
+        if (defaultBadge || ppsBadge || (strikePrice && strikePrice > finalPrice)) {
+            priceEl.classList.remove('text-brand-dark');
+            priceEl.classList.add('text-red-600');
+            if (dc) dc.style.display = 'flex';
+
+            if (strikeEl && strikePrice) {
+                // Harga coret bukan range, tapi harga variasi tersebut
+                strikeEl.textContent = 'Rp ' + Number(strikePrice).toLocaleString('id-ID');
+                strikeEl.style.display = 'inline';
+            }
+
+            if (dbEl) {
+                dbEl.textContent = defaultBadge || '';
+                dbEl.style.display = defaultBadge ? 'inline-block' : 'none';
+            }
+
+            if (ppsEl) {
+                ppsEl.textContent = ppsBadge || '';
+                ppsEl.style.display = ppsBadge ? 'inline-block' : 'none';
+            }
+        } else {
+            priceEl.classList.remove('text-red-600');
+            priceEl.classList.add('text-brand-dark');
+            if (dc) dc.style.display = 'none';
+        }
+    }
+}
+
 function findMatchingVariant() {
     const requiredGroupsCount = document.querySelectorAll('.attribute-group-container').length;
     const currentSelectedCount = Object.keys(selectedAttributes).length;
@@ -103,79 +182,13 @@ function findMatchingVariant() {
 
             if (matchedVariant.image_url || (matchedVariant.images && matchedVariant.images.length > 0)) {
                 window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: matchedVariant.image_url, images: matchedVariant.images } }));
+            } else {
+                window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: null } }));
             }
             
-            const priceEl = document.getElementById('product-price');
+            applyVariantPrice(matchedVariant);
+            
             const priceLabel = document.getElementById('price-label');
-            
-            let finalPrice = parseFloat(matchedVariant.price) || 0;
-            let basePrice = parseFloat(matchedVariant.base_price) || finalPrice;
-            if (basePrice <= 0) basePrice = finalPrice;
-            
-            let originalPrice = finalPrice;
-            let defaultBadge = null;
-            let ppsBadge = null;
-            let strikePrice = null;
-            
-            if (basePrice > finalPrice) {
-                let pct = Math.round(((basePrice - finalPrice) / basePrice) * 100);
-                defaultBadge = pct + '% OFF';
-            }
-            
-            if (window.staticPromo) {
-                const promo = window.staticPromo;
-                strikePrice = (basePrice > finalPrice) ? basePrice : finalPrice;
-                
-                if (promo.discount_type === 'fixed') {
-                    finalPrice = Math.max(0, finalPrice - parseFloat(promo.discount_value));
-                } else if (promo.discount_type === 'percentage') {
-                    finalPrice = Math.max(0, finalPrice - (finalPrice * parseFloat(promo.discount_value) / 100));
-                }
-                
-                if (strikePrice > 0) {
-                    let totalPct = Math.round(((strikePrice - finalPrice) / strikePrice) * 100);
-                    if (basePrice > originalPrice) {
-                        let ppsPct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
-                        ppsBadge = 'EXTRA ' + ppsPct + '% OFF';
-                    } else {
-                        defaultBadge = totalPct + '% OFF';
-                    }
-                }
-            } else if (basePrice > finalPrice) {
-                strikePrice = basePrice;
-            }
-            
-            if (priceEl) {
-                priceEl.textContent = 'Rp ' + Number(finalPrice).toLocaleString('id-ID');
-                
-                if (defaultBadge || ppsBadge || (strikePrice && strikePrice > finalPrice)) {
-                    priceEl.classList.remove('text-brand-dark');
-                    priceEl.classList.add('text-red-600');
-                    const dc = document.getElementById('product-discount-container');
-                    if (dc) dc.style.display = 'flex';
-                    
-                    const strikeEl = document.getElementById('product-strike-price');
-                    if (strikeEl && strikePrice) strikeEl.textContent = 'Rp ' + Number(strikePrice).toLocaleString('id-ID');
-                    
-                    const dbEl = document.getElementById('product-default-badge');
-                    if (dbEl) {
-                        dbEl.textContent = defaultBadge || '';
-                        dbEl.style.display = defaultBadge ? 'inline-block' : 'none';
-                    }
-                    
-                    const ppsEl = document.getElementById('product-pps-badge');
-                    if (ppsEl) {
-                        ppsEl.textContent = ppsBadge || '';
-                        ppsEl.style.display = ppsBadge ? 'inline-block' : 'none';
-                    }
-                } else {
-                    priceEl.classList.remove('text-red-600');
-                    priceEl.classList.add('text-brand-dark');
-                    const dc = document.getElementById('product-discount-container');
-                    if (dc) dc.style.display = 'none';
-                }
-            }
-            
             if (priceLabel) {
                 let selectionText = Object.entries(selectedAttributes).map(([k,v]) => `${k}: ${v}`).join(', ');
                 const activeColor = document.querySelector('[data-color-id].border-brand-dark, [data-color-id].border-brand-gold');
@@ -187,6 +200,26 @@ function findMatchingVariant() {
         } else {
             if (variantInput) variantInput.value = "";
             window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Kombinasi varian ini sedang tidak tersedia' } }));
+        }
+    } else if (currentSelectedCount > 0 && window.productVariants) {
+        if (variantInput) variantInput.value = "";
+        const matchingVariants = window.productVariants.filter(v => {
+            if (!v.attributes) return false;
+            for (const key in selectedAttributes) {
+                if (v.attributes[key] !== selectedAttributes[key]) return false;
+            }
+            return true;
+        });
+
+        if (matchingVariants.length === 1) {
+            applyVariantPrice(matchingVariants[0]);
+        } else if (matchingVariants.length > 1) {
+            const firstPrice = matchingVariants[0].price;
+            const firstBase = matchingVariants[0].base_price;
+            const allSame = matchingVariants.every(v => v.price === firstPrice && v.base_price === firstBase);
+            if (allSame) {
+                applyVariantPrice(matchingVariants[0]);
+            }
         }
     } else if (requiredGroupsCount > 0) {
         if (variantInput) variantInput.value = "";
@@ -203,13 +236,33 @@ function selectVariant(el) {
     el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
     el.classList.add('border-brand-dark', 'bg-brand-dark', 'text-white', 'shadow-md', 'scale-102', 'ring-2', 'ring-brand-gold/40');
     
-    const priceEl = document.getElementById('product-price');
-    const priceLabel = document.getElementById('price-label');
-    
-    if (priceEl && el.dataset.variantPrice) {
-        priceEl.textContent = 'Rp ' + Number(el.dataset.variantPrice).toLocaleString('id-ID');
+    const variantId = el.dataset.variantId;
+    const variantInput = document.getElementById('variant-id-input');
+    if (variantInput) {
+        variantInput.value = variantId;
     }
-    
+
+    let vObj = null;
+    if (window.productVariants) {
+        vObj = window.productVariants.find(v => String(v.id) === String(variantId));
+    }
+
+    if (vObj) {
+        applyVariantPrice(vObj);
+        if (vObj.image_url || (vObj.images && vObj.images.length > 0)) {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: vObj.image_url, images: vObj.images } }));
+        } else {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: null } }));
+        }
+    } else {
+        const dummyVariant = {
+            price: el.dataset.variantPrice || 0,
+            base_price: el.dataset.variantOriginalPrice || el.dataset.variantPrice || 0,
+        };
+        applyVariantPrice(dummyVariant);
+    }
+
+    const priceLabel = document.getElementById('price-label');
     if (priceLabel) {
         const variantName = el.textContent.trim().split('\n')[0];
         const activeColor = document.querySelector('[data-color-id].border-brand-dark, [data-color-id].border-brand-gold');
@@ -217,18 +270,6 @@ function selectVariant(el) {
             priceLabel.textContent = 'Harga untuk variasi: ' + variantName + ', Warna: ' + activeColor.dataset.colorName;
         } else {
             priceLabel.textContent = 'Harga untuk variasi: ' + variantName;
-        }
-    }
-    
-    const variantInput = document.getElementById('variant-id-input');
-    if (variantInput) {
-        variantInput.value = el.dataset.variantId;
-    }
-
-    if (window.productVariants) {
-        const vObj = window.productVariants.find(v => String(v.id) === String(el.dataset.variantId));
-        if (vObj && (vObj.image_url || (vObj.images && vObj.images.length > 0))) {
-            window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: vObj.image_url, images: vObj.images } }));
         }
     }
     

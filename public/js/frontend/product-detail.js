@@ -182,6 +182,8 @@ function findMatchingVariant() {
 
             if (matchedVariant.image_url || (matchedVariant.images && matchedVariant.images.length > 0)) {
                 window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: matchedVariant.image_url, images: matchedVariant.images } }));
+            } else {
+                window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: null } }));
             }
             
             applyVariantPrice(matchedVariant);
@@ -249,6 +251,8 @@ function selectVariant(el) {
         applyVariantPrice(vObj);
         if (vObj.image_url || (vObj.images && vObj.images.length > 0)) {
             window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: vObj.image_url, images: vObj.images } }));
+        } else {
+            window.dispatchEvent(new CustomEvent('set-main-image', { detail: { url: null } }));
         }
     } else {
         const dummyVariant = {

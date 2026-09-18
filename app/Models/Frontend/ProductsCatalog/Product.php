@@ -101,11 +101,28 @@ class Product extends Model
 
     public function getThumbnailUrlAttribute(): string
     {
-        if (!$this->thumbnail) {
-            return asset('images/dummy/header.jpg');
+        $rawThumb = trim((string)($this->thumbnail ?? ''));
+        if ($rawThumb !== '' && $rawThumb !== 'null') {
+            return media_url($rawThumb);
         }
 
-        return media_url($this->thumbnail);
+        if ($this->relationLoaded('images') && $this->images && $this->images->isNotEmpty()) {
+            $firstImg = $this->images->first();
+            $url = $firstImg->image_url ?? ($firstImg->image ? media_url($firstImg->image) : null);
+            if (!empty($url) && !str_contains($url, 'dummy')) {
+                return $url;
+            }
+        }
+
+        if ($this->relationLoaded('variants') && $this->variants && $this->variants->isNotEmpty()) {
+            foreach ($this->variants as $v) {
+                if (!empty($v->image_url) && !str_contains($v->image_url, 'dummy')) {
+                    return $v->image_url;
+                }
+            }
+        }
+
+        return asset('images/dummy/header.jpg');
     }
 
     public function getCourierTypeLabelAttribute(): string
