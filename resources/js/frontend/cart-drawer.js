@@ -188,8 +188,25 @@
         })
         .then(function (data) {
             const drawerBody = document.getElementById('cart-drawer-body');
+            const innerScrollEl = drawerBody ? drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]') : null;
+            const prevInnerScroll = innerScrollEl ? innerScrollEl.scrollTop : 0;
+            const prevBodyScroll = drawerBody ? drawerBody.scrollTop : 0;
+            const parentScrollEl = drawerBody ? drawerBody.parentElement : null;
+            const prevParentScroll = parentScrollEl ? parentScrollEl.scrollTop : 0;
+
             if (drawerBody && data.cart_drawer_html) {
                 drawerBody.innerHTML = data.cart_drawer_html;
+
+                const restoreScroll = () => {
+                    if (prevBodyScroll > 0 && drawerBody) drawerBody.scrollTop = prevBodyScroll;
+                    if (prevParentScroll > 0 && parentScrollEl) parentScrollEl.scrollTop = prevParentScroll;
+                    const newInner = drawerBody ? drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]') : null;
+                    if (newInner && prevInnerScroll > 0) newInner.scrollTop = prevInnerScroll;
+                };
+
+                restoreScroll();
+                requestAnimationFrame(restoreScroll);
+                setTimeout(restoreScroll, 50);
             }
 
             currentCartTotal = Number(data.cart_total || 0);

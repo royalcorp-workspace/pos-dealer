@@ -792,10 +792,10 @@ class HomeController extends Controller
 
     private function getSortExpression(?string $sort): string
     {
-        $minPriceSubquery = '(SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND status = true)';
+        $minPriceSubquery = '(SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND status = true AND deleted = false AND sell_price > 0)';
         return match ($sort) {
-            'price_asc' => $minPriceSubquery . ' ASC',
-            'price_desc' => $minPriceSubquery . ' DESC',
+            'price_asc' => 'CASE WHEN ' . $minPriceSubquery . ' IS NULL OR ' . $minPriceSubquery . ' <= 0 THEN 999999999999 ELSE ' . $minPriceSubquery . ' END ASC',
+            'price_desc' => 'COALESCE(' . $minPriceSubquery . ', 0) DESC',
             'newest' => 'created_at DESC',
             'oldest' => 'created_at ASC',
             'name_asc' => 'name ASC',

@@ -204,8 +204,15 @@
                                         @if(($item->discount_nominal ?? 0) > 0)
                                             <p class="text-xs text-red-500 mt-1">Diskon: -{{ $formatRupiah($item->discount_nominal) }}</p>
                                         @endif
-                                        @if(!empty($item->item_notes))
-                                            <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $item->item_notes }}</p>
+                                        @php
+                                            $dispNotes = $item->item_notes ?? '';
+                                            if (is_string($dispNotes) && (str_starts_with(trim($dispNotes), '{') || str_starts_with(trim($dispNotes), '['))) {
+                                                $dNotes = json_decode(trim($dispNotes), true);
+                                                $dispNotes = is_array($dNotes) ? ($dNotes['user_note'] ?? '') : '';
+                                            }
+                                        @endphp
+                                        @if(!empty($dispNotes))
+                                            <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $dispNotes }}</p>
                                         @endif
                                     </div>
                                     <div class="text-right">

@@ -22,6 +22,12 @@ class Product extends Model
     protected static function boot(): void
     {
         parent::boot();
+        static::addGlobalScope('show-on-web', function ($q) {
+            $q->where(function ($sub) {
+                $sub->where('products.show_on_web', true)
+                    ->orWhereNull('products.show_on_web');
+            });
+        });
         static::addGlobalScope('not-deleted', fn($q) => $q->where('products.deleted', false));
         static::addGlobalScope('sellable', function ($q) {
             $q->where(function ($query) {
@@ -72,6 +78,7 @@ class Product extends Model
         'is_bundle',
         'sort_order',
         'status',
+        'show_on_web',
         'creator',
         'editor',
         'deleted',
@@ -86,6 +93,7 @@ class Product extends Model
             'is_bundle' => 'boolean',
             'sort_order' => 'integer',
             'status' => 'boolean',
+            'show_on_web' => 'boolean',
             'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
