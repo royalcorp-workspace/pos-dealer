@@ -111,7 +111,24 @@ window.updateCartHeader = function (count, total) {
 window.updateCartDrawer = function (html) {
     const drawerBody = $('#cart-drawer-body');
     if (drawerBody && html) {
+        const innerScrollEl = drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]');
+        const prevInnerScroll = innerScrollEl ? innerScrollEl.scrollTop : 0;
+        const prevBodyScroll = drawerBody.scrollTop;
+        const parentScrollEl = drawerBody.parentElement;
+        const prevParentScroll = parentScrollEl ? parentScrollEl.scrollTop : 0;
+
         drawerBody.innerHTML = html;
+
+        const restoreScroll = () => {
+            if (prevBodyScroll > 0) drawerBody.scrollTop = prevBodyScroll;
+            if (prevParentScroll > 0 && parentScrollEl) parentScrollEl.scrollTop = prevParentScroll;
+            const newInner = drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]');
+            if (newInner && prevInnerScroll > 0) newInner.scrollTop = prevInnerScroll;
+        };
+        restoreScroll();
+        requestAnimationFrame(restoreScroll);
+        setTimeout(restoreScroll, 50);
+
         const footer = $('#cart-footer');
         const newTotal = footer ? Number(footer.dataset.cartTotal || 0) : 0;
         drawerBody.setAttribute('data-cart-total', newTotal);

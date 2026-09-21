@@ -350,13 +350,6 @@
 
                 <!-- Price Box Card -->
                 <div class="mb-6 p-5 sm:p-6 bg-gradient-to-br from-[#FCFAF7] to-[#F7F5F0] rounded-3xl border border-[#EFECE6] shadow-xs">
-                    @php
-                        $minPrice = $hasVariants ? $validVariants->min('price') : null;
-                        $maxPrice = $hasVariants ? $validVariants->max('price') : null;
-                        $hasMultiplePrices = $hasVariants && $minPrice != $maxPrice;
-                        $firstVariantName = $hasVariants ? $validVariants->first()->variant_name : '';
-                    @endphp
-                    
                     <div id="product-discount-container" class="flex items-center gap-2 mb-1.5" style="display: {{ ($hasDefaultDiscount || $staticPromo) ? 'flex' : 'none' }};">
                         <span id="product-strike-price" class="text-xs sm:text-sm text-gray-400 line-through">
                             Rp {{ number_format($strikeMinPrice ?: $promoOriginalPrice, 0, ',', '.') }}
@@ -382,10 +375,12 @@
                             Rp {{ number_format($price, 0, ',', '.') }}@if($hasMultiplePrices) - Rp {{ number_format($displayMaxPrice, 0, ',', '.') }}@endif
                         </span>
                         <span class="text-xs font-semibold text-brand-gold-dark mt-1.5" id="price-label">
-                            @if($hasMultiplePrices)
-                                {{ __('Pilih ukuran di bawah untuk melihat harga akurat') }}
+                            @if($hasVariants && (!empty($attributeGroups) || $validVariants->count() > 1))
+                                {{ __('Pilih variasi produk di bawah untuk melihat harga akurat') }}
+                            @elseif($hasVariants)
+                                {{ __('Harga resmi untuk') }}: {{ $firstVariantName }}
                             @else
-                                {{ __('Harga resmi untuk ukuran') }}: {{ $firstVariantName }}
+                                {{ __('Harga resmi') }}
                             @endif
                         </span>
                     </div>
@@ -396,75 +391,142 @@
                     @csrf
                     <input type="hidden" name="product_id" value="{{ $product->id }}">
 
-                    <!-- Options (Variants / Sizes) -->
-                    @if($hasVariants)
-                        @if(!empty($attributeGroups))
+                    <!-- Options (Separated Checked Attribute Groups) -->
+                    @if(!empty($attributeGroups))
+                        <div class="mb-6 space-y-4 variant-selection-container">
                             @foreach($attributeGroups as $groupName => $options)
-                                <div class="mb-6 attribute-group-container" data-group="{{ $groupName }}">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500">{{ __('Pilih') }} {{ $groupName }}</h3>
-                                        <span class="text-[11px] text-gray-400 font-medium">{{ count($options) }} {{ __('opsi tersedia') }}</span>
+                                <div class="attribute-group-container" data-attribute-group="{{ $groupName }}">
+                                    <div class="flex items-center justify-between mb-2.5">
+                                        <label class="text-xs uppercase tracking-wider font-bold text-gray-700 flex items-center gap-1.5">
+                                            @if(stripos($groupName, 'ukuran') !== false || stripos($groupName, 'size') !== false)
+                                                <i class="fa-solid fa-ruler-combined text-brand-gold text-xs"></i>
+                                            @elseif(stripos($groupName, 'tebal') !== false || stripos($groupName, 'tinggi') !== false || stripos($groupName, 'height') !== false)
+                                                <i class="fa-solid fa-arrows-up-down text-brand-gold text-xs"></i>
+                                            @elseif(stripos($groupName, 'kelengkapan') !== false || stripos($groupName, 'paket') !== false || stripos($groupName, 'feel') !== false)
+                                                <i class="fa-solid fa-box-open text-brand-gold text-xs"></i>
+                                            @else
+                                                <i class="fa-solid fa-layer-group text-brand-gold text-xs"></i>
+                                            @endif
+                                            <span>{{ __('   ') }} {{ $groupName }}</span>
+                                        </label>
+                                        <span class="text-xs font-bold text-brand-gold-dark selected-attr-badge" data-group="{{ $groupName }}"></span>
                                     </div>
+
                                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                                         @foreach($options as $option)
-                                            @php
-                                                $optionImage = null;
-                                                foreach ($validVariants as $vv) {
-                                                    $rawAttr = $vv->getRawOriginal('attributes');
-                                                    $vAttrs = $rawAttr ? (is_string($rawAttr) ? json_decode($rawAttr, true) : $rawAttr) : [];
-                                                    if (is_array($vAttrs) && isset($vAttrs[$groupName]) && (string)$vAttrs[$groupName] === (string)$option) {
-                                                        if ($vv->image_url) {
-                                                            $optionImage = $vv->image_url;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                            @endphp
                                             <button 
                                                 type="button"
                                                 data-attribute-group="{{ $groupName }}"
                                                 data-attribute-value="{{ $option }}"
                                                 onclick="selectAttribute(this)"
-                                                class="py-2.5 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-2 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs attribute-btn cursor-pointer"
+                                                class="attribute-btn text-left p-3 sm:p-3.5 rounded-2xl border-2 transition-all duration-200 cursor-pointer relative group flex items-center justify-between gap-3 focus:outline-none bg-white border-gray-200 hover:border-brand-gold/70 hover:shadow-2xs"
                                             >
-                                                @if($optionImage)
-                                                    <img src="{{ $optionImage }}" alt="{{ $option }}" class="w-6 h-6 rounded-lg object-cover border border-gray-200 shrink-0">
-                                                @endif
-                                                <span>{{ $option }}</span>
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <div class="card-radio-circle w-4 h-4 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0 group-hover:border-brand-gold transition-colors">
+                                                        <!-- Dynamic checkmark inserted on select -->
+                                                    </div>
+                                                    <span class="font-bold text-xs sm:text-sm text-brand-dark group-hover:text-black leading-tight truncate">
+                                                        {{ $option }}
+                                                    </span>
+                                                </div>
                                             </button>
                                         @endforeach
                                     </div>
                                 </div>
                             @endforeach
-                        @else
-                            <!-- Legacy fallback for variants without attributes -->
-                            <div class="mb-6">
-                                <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 mb-3">{{ __('Pilih Ukuran / Tipe') }}</h3>
-                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                                    @foreach($validVariants as $i => $variant)
-                                        <button 
-                                            type="button"
-                                            data-variant-id="{{ $variant->id }}"
-                                            data-variant-price="{{ \App\Services\StaticPromoService::discountedPrice((float) $variant->sell_price, $staticPromo) }}"
-                                            data-variant-original-price="{{ $variant->sell_price }}"
-                                            onclick="selectVariant(this)"
-                                            class="py-3 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs legacy-variant-btn cursor-pointer"
-                                        >
-                                            {{ $variant->variant_name }}
-                                        </button>
-                                    @endforeach
-                                </div>
+                            <input type="hidden" name="variant_id" id="variant-id-input" value="">
+                        </div>
+                    @elseif($hasVariants)
+                        <!-- Fallback: Composite Variant Cards when attributes are not grouped -->
+                        <div class="mb-6 variant-selection-container">
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="text-xs uppercase tracking-wider font-bold text-gray-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-layer-group text-brand-gold text-xs"></i>
+                                    {{ __('Pilih Variasi Produk') }}
+                                </label>
+                                <span class="text-[11px] text-gray-400 font-medium">{{ $validVariants->count() }} {{ __('opsi tersedia') }}</span>
                             </div>
-                        @endif
-                        <input type="hidden" name="variant_id" id="variant-id-input" value="">
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                @foreach($validVariants as $variant)
+                                    @php
+                                        $vSell = \App\Services\StaticPromoService::discountedPrice((float) $variant->sell_price, $staticPromo);
+                                        $vOrig = (float) $variant->sell_price;
+                                        $vStock = (int) $variant->stock_quantity;
+                                        $isOutOfStock = $vStock <= 0;
+                                    @endphp
+                                    <button 
+                                        type="button"
+                                        data-variant-id="{{ $variant->id }}"
+                                        data-variant-name="{{ $variant->variant_name }}"
+                                        data-variant-price="{{ $vSell }}"
+                                        data-variant-original-price="{{ $vOrig }}"
+                                        data-variant-stock="{{ $vStock }}"
+                                        data-variant-image="{{ $variant->image_url ?? '' }}"
+                                        onclick="selectVariantCard(this)"
+                                        {{ $isOutOfStock ? 'disabled' : '' }}
+                                        class="variant-card-btn text-left p-3.5 rounded-2xl border-2 transition-all duration-200 cursor-pointer relative group flex flex-col justify-between gap-2.5 focus:outline-none {{ $isOutOfStock ? 'opacity-40 cursor-not-allowed bg-gray-50 border-dashed border-gray-200' : 'bg-white border-gray-200 hover:border-brand-gold/70 hover:shadow-sm' }}"
+                                    >
+                                        <div class="flex items-start justify-between gap-2 w-full">
+                                            <div class="flex items-start gap-2.5 min-w-0">
+                                                <div class="card-radio-circle w-5 h-5 mt-0.5 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0 group-hover:border-brand-gold transition-colors">
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <span class="block font-bold text-xs sm:text-sm text-brand-dark group-hover:text-black leading-tight truncate">
+                                                        {{ $variant->variant_name }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="shrink-0">
+                                                @if($isOutOfStock)
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-600 border border-red-200">
+                                                        Habis
+                                                    </span>
+                                                @elseif($vStock <= 5)
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                        Sisa {{ $vStock }}
+                                                    </span>
+                                                @else
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                        Tersedia
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-baseline justify-between border-t border-gray-100 pt-2 w-full">
+                                            <div class="flex items-baseline gap-1.5">
+                                                <span class="text-xs sm:text-sm font-extrabold text-brand-dark">
+                                                    Rp {{ number_format($vSell, 0, ',', '.') }}
+                                                </span>
+                                                @if($vOrig > $vSell)
+                                                    <span class="text-[10px] text-gray-400 line-through">
+                                                        Rp {{ number_format($vOrig, 0, ',', '.') }}
+                                                    </span>
+                                                @endif
+                                            </div>
+                                            @if($vOrig > $vSell)
+                                                <span class="text-[10px] font-extrabold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                                    -{{ round((($vOrig - $vSell) / $vOrig) * 100) }}%
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </button>
+                                @endforeach
+                            </div>
+                            <input type="hidden" name="variant_id" id="variant-id-input" value="">
+                        </div>
                     @endif
 
                     <!-- Options (Colors) -->
                     @if($hasColors)
                         <div class="mb-6 color-selection-container">
-                            <div class="flex items-center justify-between mb-3">
-                                <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500">{{ __('Pilih Warna') }}</h3>
-                                <span class="text-[11px] text-gray-400 font-medium">{{ $colorsData->count() }} {{ __('opsi tersedia') }}</span>
+                            <div class="flex items-center justify-between mb-2.5">
+                                <label class="text-xs uppercase tracking-wider font-bold text-gray-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-palette text-brand-gold text-xs"></i>
+                                    <span>{{ __('Pilih Warna') }}</span>
+                                </label>
+                                <span class="text-xs font-bold text-brand-gold-dark selected-color-badge" id="selected-color-badge"></span>
                             </div>
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                                 @foreach($colorsData as $color)
@@ -474,10 +536,17 @@
                                         data-color-name="{{ $color->color_name }}"
                                         data-color-code="{{ $color->color_code }}"
                                         onclick="selectColor(this)"
-                                        class="py-2.5 px-3 rounded-2xl font-bold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center gap-2.5 text-center focus:outline-none border-2 border-gray-200 bg-white text-gray-700 hover:border-brand-gold/60 shadow-2xs color-btn cursor-pointer"
+                                        class="color-btn text-left p-3 sm:p-3.5 rounded-2xl border-2 transition-all duration-200 cursor-pointer relative group flex items-center justify-between gap-3 focus:outline-none bg-white border-gray-200 hover:border-brand-gold/70 hover:shadow-2xs"
                                     >
-                                        <span class="w-4 h-4 rounded-full border border-black/15 shadow-2xs shrink-0" style="background-color: {{ $color->color_code ?: '#1e293b' }}"></span>
-                                        <span class="truncate">{{ $color->color_name }}</span>
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="card-radio-circle w-4 h-4 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0 group-hover:border-brand-gold transition-colors">
+                                                <!-- Dynamic checkmark inserted on select -->
+                                            </div>
+                                            <span class="w-4 h-4 rounded-full border border-black/15 shadow-2xs shrink-0" style="background-color: {{ $color->color_code ?: '#1e293b' }}"></span>
+                                            <span class="font-bold text-xs sm:text-sm text-brand-dark group-hover:text-black leading-tight truncate">
+                                                {{ $color->color_name }}
+                                            </span>
+                                        </div>
                                     </button>
                                 @endforeach
                             </div>
@@ -491,14 +560,29 @@
                     @endphp
                     <div class="mb-8 pt-5 border-t border-brand-muted/40">
                         <!-- Quantity Header with Live Ready Stock Indicator -->
+                        @php
+                            $totalAvailableStock = $hasVariants ? $validVariants->sum('stock_quantity') : 999;
+                        @endphp
                         <div class="flex items-center justify-between mb-2.5 px-0.5">
                             <span class="text-xs uppercase tracking-wider font-bold text-gray-500">{{ __('Jumlah') }}</span>
-                            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-bold text-emerald-800 shadow-2xs">
-                                <span class="relative flex h-2 w-2">
-                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                            <div id="product-stock-badge-pill" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full {{ $totalAvailableStock > 10 ? 'bg-emerald-50 border-emerald-200/80 text-emerald-800' : ($totalAvailableStock > 0 ? 'bg-amber-50 border-amber-200/80 text-amber-800' : 'bg-red-50 border-red-200/80 text-red-800') }} border text-[11px] font-bold shadow-2xs transition-all">
+                                <span id="product-stock-dot" class="relative flex h-2 w-2">
+                                    <span id="product-stock-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full {{ $totalAvailableStock > 10 ? 'bg-emerald-400' : ($totalAvailableStock > 0 ? 'bg-amber-400' : 'hidden') }} opacity-75"></span>
+                                    <span id="product-stock-core" class="relative inline-flex rounded-full h-2 w-2 {{ $totalAvailableStock > 10 ? 'bg-emerald-600' : ($totalAvailableStock > 0 ? 'bg-amber-600' : 'bg-red-600') }}"></span>
                                 </span>
-                                <span>{{ __('Ready Stock • Siap Kirim') }}</span>
+                                <span id="product-stock-text">
+                                    @if($hasVariants)
+                                        @if($totalAvailableStock > 10)
+                                            {{ __('Stok Tersedia: ') }}{{ $totalAvailableStock }} {{ __('unit') }}
+                                        @elseif($totalAvailableStock > 0)
+                                            {{ __('Sisa Terbatas: ') }}{{ $totalAvailableStock }} {{ __('unit') }}
+                                        @else
+                                            {{ __('Stok Habis') }}
+                                        @endif
+                                    @else
+                                        {{ __('Ready Stock • Siap Kirim') }}
+                                    @endif
+                                </span>
                             </div>
                         </div>
 
@@ -815,12 +899,12 @@
         if ($rawAttrs) {
             $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
             if (is_array($parsedAttrs)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
                 
                 // Cek apakah ada atribut selain yang diabaikan
                 $hasOther = false;
                 foreach ($parsedAttrs as $key => $val) {
-                    if (!in_array(strtolower($key), $ignoredKeys)) {
+                    if (!in_array(strtolower($key), $ignoredKeys) && !in_array($key, $ignoredKeys)) {
                         $hasOther = true;
                         break;
                     }
@@ -833,6 +917,23 @@
                 foreach ($ignoredKeys as $ik) {
                     unset($parsedAttrs[$ik]);
                 }
+
+                // Normalisasi kunci & nilai ke bahasa Indonesia standar
+                $normalizedAttrs = [];
+                foreach ($parsedAttrs as $k => $val) {
+                    $normK = $k;
+                    $normV = (string) $val;
+                    if (strcasecmp($normK, 'feel') === 0 || strcasecmp($normK, 'completeness') === 0) {
+                        $normK = 'Kelengkapan';
+                    }
+                    if (strcasecmp($normV, 'mattress only') === 0) {
+                        $normV = 'Kasur Saja';
+                    } elseif (strcasecmp($normV, 'fullset') === 0 || strcasecmp($normV, 'full bed set') === 0) {
+                        $normV = 'Set Kasur + Divan';
+                    }
+                    $normalizedAttrs[$normK] = $normV;
+                }
+                $parsedAttrs = $normalizedAttrs;
             }
         }
         $vImgUrl = $v->image_url ?? ($v->images->first()?->image_url ?? ($v->images->first()?->image ? media_url($v->images->first()->image) : null));
@@ -841,11 +942,18 @@
         }
         $vImages = $v->images->map(fn($img) => $img->image_url ?? media_url($img->image))->filter(fn($img) => !empty($img) && !str_contains($img, 'dummy'))->values()->all();
 
+        $cleanVariantName = str_ireplace(
+            ['Full Bed Set', 'Fullset', 'Mattress Only'],
+            ['Set Kasur + Divan', 'Set Kasur + Divan', 'Kasur Saja'],
+            (string) $v->variant_name
+        );
+
         return [
             'id' => $v->id,
             'price' => (float)$v->sell_price,
             'base_price' => (float)$v->base_price,
-            'variant_name' => $v->variant_name,
+            'variant_name' => $cleanVariantName,
+            'stock_quantity' => (int) $v->stock_quantity,
             'attributes' => $parsedAttrs,
             'image_url' => $vImgUrl,
             'images' => $vImages,

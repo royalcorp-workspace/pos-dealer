@@ -35,6 +35,7 @@ class Product extends Model
         'is_new',
         'sort_order',
         'status',
+        'show_on_web',
         'creator',
         'editor',
         'deleted',
@@ -47,6 +48,9 @@ class Product extends Model
             'specifications' => 'array',
             'is_active' => 'boolean',
             'is_featured' => 'boolean',
+            'status' => 'boolean',
+            'show_on_web' => 'boolean',
+            'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];

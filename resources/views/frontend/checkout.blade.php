@@ -565,9 +565,9 @@
                                         <!-- Product Info & Pricing -->
                                         <div class="flex-1 min-w-0 flex flex-col sm:flex-row sm:justify-between items-start gap-2">
                                             <div class="min-w-0 flex-1">
-                                                @if(($item['type'] ?? '') === 'bundle')
+                                                @if(($item['type'] ?? '') === 'bundle' || !empty($item['bundle_data']) || str_starts_with($item['name'] ?? '', 'BUNDLE_'))
                                                     <div class="font-bold text-brand-dark flex items-center gap-2 text-sm sm:text-base">
-                                                        {{ $item['bundle_data']['bundle_name'] ?? 'Paket Bundling' }}
+                                                        {{ $item['bundle_data']['bundle_name'] ?? ($item['name'] ?? 'Paket Bundling') }}
                                                         <span class="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Bundling</span>
                                                     </div>
                                                     <div class="mt-1.5 pl-2.5 border-l-2 border-purple-300 text-xs text-gray-500 space-y-1">
@@ -659,13 +659,25 @@
                                         </div>
                                     </div>
                                     <div class="mt-3 pt-2.5 border-t border-gray-200/60">
+                                        @php
+                                            $cleanItemNote = $item['item_note'] ?? '';
+                                            if (is_array($cleanItemNote)) {
+                                                $cleanItemNote = '';
+                                            } elseif (is_string($cleanItemNote)) {
+                                                $trimmedN = trim($cleanItemNote);
+                                                if (str_starts_with($trimmedN, '{') || str_starts_with($trimmedN, '[')) {
+                                                    $dec = json_decode($trimmedN, true);
+                                                    $cleanItemNote = is_array($dec) ? ($dec['user_note'] ?? '') : '';
+                                                }
+                                            }
+                                        @endphp
                                         <textarea
                                             name="item_notes[{{ $item['id'] }}]"
                                             rows="1"
                                             maxlength="500"
                                             class="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs focus:outline-none focus:border-brand-gold focus:ring-1 focus:ring-brand-gold transition-all"
                                             placeholder="Catatan khusus untuk item ini (opsional: warna cadangan, lantai pengiriman, dll)"
-                                        >{{ $item['item_note'] ?? '' }}</textarea>
+                                        >{{ $cleanItemNote }}</textarea>
                                     </div>
                                 </div>
                             @endforeach

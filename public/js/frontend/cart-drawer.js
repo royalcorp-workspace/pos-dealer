@@ -188,8 +188,25 @@
         })
         .then(function (data) {
             const drawerBody = document.getElementById('cart-drawer-body');
+            const innerScrollEl = drawerBody ? drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]') : null;
+            const prevInnerScroll = innerScrollEl ? innerScrollEl.scrollTop : 0;
+            const prevBodyScroll = drawerBody ? drawerBody.scrollTop : 0;
+            const parentScrollEl = drawerBody ? drawerBody.parentElement : null;
+            const prevParentScroll = parentScrollEl ? parentScrollEl.scrollTop : 0;
+
             if (drawerBody && data.cart_drawer_html) {
                 drawerBody.innerHTML = data.cart_drawer_html;
+
+                const restoreScroll = () => {
+                    if (prevBodyScroll > 0 && drawerBody) drawerBody.scrollTop = prevBodyScroll;
+                    if (prevParentScroll > 0 && parentScrollEl) parentScrollEl.scrollTop = prevParentScroll;
+                    const newInner = drawerBody ? drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]') : null;
+                    if (newInner && prevInnerScroll > 0) newInner.scrollTop = prevInnerScroll;
+                };
+
+                restoreScroll();
+                requestAnimationFrame(restoreScroll);
+                setTimeout(restoreScroll, 50);
             }
 
             currentCartTotal = Number(data.cart_total || 0);
@@ -204,18 +221,8 @@
 
             const countBadge = document.getElementById('cart-count-badge');
             const headerTotal = document.getElementById('header-cart-total');
-            const drawerCount = document.getElementById('cart-drawer-count');
             if (countBadge) countBadge.textContent = data.cart_count || 0;
-            if (drawerCount) drawerCount.textContent = data.cart_count || 0;
             if (headerTotal) headerTotal.textContent = formatRupiah(data.cart_total || 0);
-
-            if (Number(data.cart_count || 0) === 0) {
-                var currentPath = window.location.pathname;
-                if (currentPath.includes('/checkout') || currentPath.includes('/payment')) {
-                    window.location.href = data.redirect_url || '/';
-                    return;
-                }
-            }
 
             document.dispatchEvent(new CustomEvent('cart-drawer-updated'));
         })
@@ -370,58 +377,6 @@
             }
         } catch (e) {}
     }
-
-    document.addEventListener('submit', function (e) {
-        var form = e.target.closest('form[action*="/cart/remove/"]');
-        if (!form) return;
-        e.preventDefault();
-
-        var action = form.getAttribute('action');
-        var currentPath = window.location.pathname;
-        var isCheckoutOrPayment = currentPath.includes('/checkout') || currentPath.includes('/payment');
-
-        fetch(action, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-                'Accept': 'application/json'
-            }
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) {
-            if (data.success) {
-                if (Number(data.cart_count || 0) === 0 && isCheckoutOrPayment) {
-                    window.location.href = data.redirect_url || '/products';
-                    return;
-                }
-
-                var drawerBody = document.getElementById('cart-drawer-body');
-                if (drawerBody && data.cart_drawer_html) {
-                    drawerBody.innerHTML = data.cart_drawer_html;
-                }
-                var countBadge = document.getElementById('cart-count-badge');
-                var drawerCount = document.getElementById('cart-drawer-count');
-                if (countBadge) countBadge.textContent = data.cart_count || 0;
-                if (drawerCount) drawerCount.textContent = data.cart_count || 0;
-
-                var cartFooter = document.getElementById('cart-footer');
-                var subtotalEl = document.getElementById('cart-drawer-subtotal');
-                var headerTotal = document.getElementById('header-cart-total');
-                currentCartTotal = Number(data.cart_total || 0);
-                window.currentCartTotal = currentCartTotal;
-                if (cartFooter) cartFooter.setAttribute('data-cart-total', currentCartTotal);
-                if (subtotalEl) subtotalEl.textContent = formatRupiah(currentCartTotal);
-                if (headerTotal) headerTotal.textContent = formatRupiah(currentCartTotal);
-
-                document.dispatchEvent(new CustomEvent('cart-drawer-updated'));
-            } else {
-                form.submit();
-            }
-        })
-        .catch(function() {
-            form.submit();
-        });
-    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', restoreSavedCoupon);

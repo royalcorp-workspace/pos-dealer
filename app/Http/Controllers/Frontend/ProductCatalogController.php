@@ -89,13 +89,17 @@ class ProductCatalogController extends Controller
             ->get();
 
         $query = Product::where('products.deleted', false)
+            ->where(function ($q) {
+                $q->where('products.show_on_web', true)
+                  ->orWhereNull('products.show_on_web');
+            })
             ->select('products.*')
             ->selectRaw('
                 COALESCE(
                     (SELECT 
                         CASE 
-                            WHEN ppsi.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
-                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) - CAST(ppsi.discount_value AS numeric)
+                            WHEN ppsi.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) - CAST(ppsi.discount_value AS numeric)
                         END
                      FROM price_product_setting_items ppsi
                      JOIN price_product_settings pps ON pps.id = ppsi.price_product_setting_id
@@ -109,8 +113,8 @@ class ProductCatalogController extends Controller
                     ),
                     (SELECT
                         CASE 
-                            WHEN pps.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) * (1 - CAST(pps.discount_value AS numeric) / 100)
-                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false) - CAST(pps.discount_value AS numeric)
+                            WHEN pps.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) * (1 - CAST(pps.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) - CAST(pps.discount_value AS numeric)
                         END
                      FROM price_product_settings pps
                      WHERE pps.scope = 1
@@ -120,7 +124,7 @@ class ProductCatalogController extends Controller
                        AND (pps.end_date IS NULL OR pps.end_date >= NOW())
                      LIMIT 1
                     ),
-                    (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false)
+                    (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0)
                 ) as promo_price
             ')
             ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);
@@ -170,11 +174,12 @@ class ProductCatalogController extends Controller
         // Filter by price range (through variants)
         if ($minPrice || $maxPrice) {
             $query->whereHas('variants', function ($q) use ($minPrice, $maxPrice) {
-                if ($minPrice) {
-                    $q->where('sell_price', '>=', $minPrice);
+                $q->where('deleted', false)->where('sell_price', '>', 0);
+                if (!empty($minPrice) && (float)$minPrice > 0) {
+                    $q->where('sell_price', '>=', (float)$minPrice);
                 }
-                if ($maxPrice) {
-                    $q->where('sell_price', '<=', $maxPrice);
+                if (!empty($maxPrice) && (float)$maxPrice > 0) {
+                    $q->where('sell_price', '<=', (float)$maxPrice);
                 }
             });
         }
@@ -278,17 +283,28 @@ class ProductCatalogController extends Controller
             }
             
             if (!empty($variantAttributes) && is_array($variantAttributes)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
                 $addedSomething = false;
                 foreach ($variantAttributes as $key => $value) {
-                    if (in_array(strtolower($key), $ignoredKeys)) {
+                    if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
                         continue;
                     }
-                    if (!isset($attributeGroups[$key])) {
-                        $attributeGroups[$key] = [];
+                    $normKey = $key;
+                    $normValue = (string) $value;
+                    if (strcasecmp($normKey, 'feel') === 0 || strcasecmp($normKey, 'completeness') === 0) {
+                        $normKey = 'Kelengkapan';
                     }
-                    if (!in_array($value, $attributeGroups[$key])) {
-                        $attributeGroups[$key][] = $value;
+                    if (strcasecmp($normValue, 'mattress only') === 0) {
+                        $normValue = 'Kasur Saja';
+                    } elseif (strcasecmp($normValue, 'fullset') === 0 || strcasecmp($normValue, 'full bed set') === 0) {
+                        $normValue = 'Set Kasur + Divan';
+                    }
+
+                    if (!isset($attributeGroups[$normKey])) {
+                        $attributeGroups[$normKey] = [];
+                    }
+                    if (!in_array($normValue, $attributeGroups[$normKey])) {
+                        $attributeGroups[$normKey][] = $normValue;
                     }
                     $addedSomething = true;
                     $hasAnyNonIgnoredAttr = true;
@@ -436,8 +452,8 @@ class ProductCatalogController extends Controller
     private function getSortExpression(?string $sort): string
     {
         return match ($sort) {
-            'price_asc' => 'promo_price ASC, created_at DESC',
-            'price_desc' => 'promo_price DESC, created_at DESC',
+            'price_asc' => 'promo_price ASC NULLS LAST, created_at DESC',
+            'price_desc' => 'promo_price DESC NULLS LAST, created_at DESC',
             'newest' => 'created_at DESC',
             'best_seller' => 'best_seller DESC, created_at DESC',
             'best_selling' => '(SELECT COALESCE(SUM(quantity), 0) FROM order_items WHERE order_items.product_id = products.id) DESC',

@@ -174,8 +174,16 @@ trait BufferCartTrait
             ->map(function ($item) {
                 $isBundle = str_starts_with($item->name ?? '', 'BUNDLE_');
                 $bundleNotes = [];
-                if ($isBundle && $item->item_notes) {
-                    $bundleNotes = json_decode($item->item_notes, true) ?? [];
+                $userNote = '';
+                if ($item->item_notes) {
+                    $decodedNotes = is_string($item->item_notes) ? json_decode($item->item_notes, true) : (is_array($item->item_notes) ? $item->item_notes : null);
+                    if (is_array($decodedNotes) && (isset($decodedNotes['bundle_id']) || isset($decodedNotes['bundle_name']) || isset($decodedNotes['items']))) {
+                        $isBundle = true;
+                        $bundleNotes = $decodedNotes;
+                        $userNote = $decodedNotes['user_note'] ?? '';
+                    } else {
+                        $userNote = is_string($item->item_notes) ? $item->item_notes : '';
+                    }
                 }
 
                 $itemMeta = is_array($item->meta) ? $item->meta : (json_decode((string) $item->meta, true) ?: []);
@@ -186,11 +194,16 @@ trait BufferCartTrait
                 $basePrice = (float) ($itemMeta['base_price'] ?? $item->unit_price);
                 $sellPrice = (float) ($itemMeta['sell_price'] ?? $itemMeta['after_disc_price'] ?? ($item->total > 0 && $item->quantity > 0 ? ($item->total / $item->quantity) : $item->unit_price));
 
+                $displayName = $item->name;
+                if ($isBundle && !empty($bundleNotes['bundle_name'])) {
+                    $displayName = $bundleNotes['bundle_name'];
+                }
+
                 return [
                     'id' => $item->id,
                     'product_id' => $item->product_id,
                     'variant_id' => $item->product_variant_id,
-                    'name' => $item->name,
+                    'name' => $displayName,
                     'brand' => $item->product->brand->name ?? '',
                     'image' => $item->product->thumbnail_url ?? '',
                     'base_price' => $basePrice,
@@ -198,7 +211,7 @@ trait BufferCartTrait
                     'original_price' => $basePrice,
                     'unit_price' => $basePrice,
                     'quantity' => (int) $item->quantity,
-                    'item_note' => $item->item_notes ?? '',
+                    'item_note' => $userNote,
                     'color_id' => $colorId,
                     'color_name' => $colorName,
                     'color_code' => $colorCode,
