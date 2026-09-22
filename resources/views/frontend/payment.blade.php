@@ -79,9 +79,16 @@
                         </div>
                         <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 text-sm">
                             <p class="font-bold text-brand-dark">{{ $address->recipient_name ?? $customerName }} <span class="font-normal text-gray-500">({{ $address->phone ?? $customerPhone }})</span></p>
-                            <span class="text-xs font-semibold text-brand-gold-dark bg-brand-gold/10 px-2.5 py-0.5 rounded-full inline-block w-fit">
-                                Kurir: {{ strtoupper($orderData['courier'] ?? 'Ekspedisi') }}
-                            </span>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-xs font-semibold text-brand-gold-dark bg-brand-gold/10 px-2.5 py-0.5 rounded-full inline-block w-fit">
+                                    Kurir: {{ strtoupper($orderData['courier'] ?? 'Ekspedisi') }}
+                                </span>
+                                @if(!empty($orderData['eta_label']))
+                                    <span class="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full inline-block w-fit">
+                                        <i class="fa-solid fa-clock text-[10px] mr-1"></i> Estimasi Tiba: {{ $orderData['eta_label'] }}
+                                    </span>
+                                @endif
+                            </div>
                         </div>
                         <p class="text-xs sm:text-sm text-gray-600 mt-1 leading-relaxed">{{ $address->address ?? ($customer['address'] ?? '') }}, {{ $address->subDistrict->city->name ?? '' }} {{ $address->postal_code ?? '' }}</p>
                     </div>
@@ -373,6 +380,12 @@
                             <span>Shipping ({{ strtoupper($orderData['courier'] ?? 'Kurir') }})</span>
                             <span class="font-bold text-brand-dark">Rp {{ number_format($orderData['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
                         </div>
+                        @if(!empty($orderData['eta_label']))
+                            <div class="flex justify-between items-center text-xs text-blue-700 bg-blue-50/60 px-2.5 py-1.5 rounded-lg">
+                                <span class="flex items-center gap-1.5"><i class="fa-solid fa-clock text-[11px] text-blue-500"></i> Estimasi Tiba</span>
+                                <span class="font-semibold">{{ $orderData['eta_label'] }}</span>
+                            </div>
+                        @endif
 
                         @if(($orderData['voucher_discount'] ?? 0) > 0)
                             <div class="flex justify-between items-center text-red-600">

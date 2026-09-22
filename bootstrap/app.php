@@ -13,6 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             \App\Http\Middleware\SetLocalization::class,
         ]);
@@ -22,5 +24,19 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            if ($request->expectsJson() || $request->ajax() || $request->is('login', 'api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Sesi telah kedaluwarsa (CSRF token mismatch). Silakan coba masuk kembali.',
+                    'csrf_expired' => true,
+                    'csrf_token' => csrf_token(),
+                ], 419);
+            }
+
+            return redirect()->back()
+                ->withInput($request->except('password', '_token'))
+                ->with('error', 'Sesi Anda telah kedaluwarsa. Silakan coba masuk kembali.')
+                ->with('show_login', true);
+        });
     })->create();

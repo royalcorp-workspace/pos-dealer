@@ -93,6 +93,11 @@ class Order extends Model
         return $this->belongsTo(Courier::class);
     }
 
+    public function delivery(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\Frontend\Shipping\Delivery::class, 'order_id');
+    }
+
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(\App\Models\Frontend\Promo\Voucher::class);

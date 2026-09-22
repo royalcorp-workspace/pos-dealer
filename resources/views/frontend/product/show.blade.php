@@ -554,6 +554,69 @@
                         </div>
                     @endif
 
+                    @if(isset($suggestAddons) && $suggestAddons->isNotEmpty())
+                        <!-- Sering Dibeli Bersama / Bundling Hemat Section -->
+                        <div id="bundling-addon" class="mb-6 p-4 rounded-2xl bg-amber-50/70 border border-amber-200 shadow-2xs transition-all duration-300 scroll-mt-24">
+                            <div class="flex items-center gap-2 mb-3">
+                                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold shadow-2xs">
+                                    <i class="fa-solid fa-tags text-[10px]"></i>
+                                </span>
+                                <div>
+                                    <h4 class="text-xs font-extrabold uppercase tracking-wider text-amber-900">{{ __('Bundling Tambahan Hemat') }}</h4>
+                                    <p class="text-[11px] text-amber-700 font-medium">{{ __('Beli produk ini bersama perlengkapan di bawah dengan harga diskon bundling!') }}</p>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                @foreach($suggestAddons as $addon)
+                                    @php
+                                        $addonProduct = $addon->product;
+                                        $addonVariant = $addon->variant ?? $addonProduct?->variants?->first();
+                                        $addonOrigPrice = (float) ($addonVariant?->sell_price ?? $addonProduct?->price ?? 0);
+                                        $addonBundlePrice = (float) ($addon->bundle_price > 0 ? $addon->bundle_price : $addonOrigPrice);
+                                        $savings = max(0, $addonOrigPrice - $addonBundlePrice);
+                                    @endphp
+                                    @if($addonProduct)
+                                        <label class="flex items-center gap-3 p-2.5 rounded-xl bg-white border border-amber-200/70 hover:border-amber-400 cursor-pointer transition-all shadow-2xs group select-none">
+                                            <input type="checkbox" name="selected_suggests[]" value="{{ $addon->id }}" data-bundle-price="{{ $addonBundlePrice }}" data-orig-price="{{ $addonOrigPrice }}" onchange="updateSuggestSummary()" class="suggest-addon-cb w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-gray-300 cursor-pointer">
+                                            <div class="w-11 h-11 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-100">
+                                                @if($addonVariant && $addonVariant->image_url)
+                                                    <img src="{{ $addonVariant->image_url }}" alt="{{ $addonProduct->name }}" class="w-full h-full object-cover">
+                                                @elseif($addonProduct->images && $addonProduct->images->first())
+                                                    <img src="{{ $addonProduct->images->first()->image_url }}" alt="{{ $addonProduct->name }}" class="w-full h-full object-cover">
+                                                @else
+                                                    <div class="w-full h-full flex items-center justify-center text-gray-300">
+                                                        <i class="fa-solid fa-box text-sm"></i>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <span class="block text-xs font-bold text-brand-dark group-hover:text-amber-900 truncate">
+                                                    + {{ $addonProduct->name }}
+                                                    @if($addonVariant && $addonVariant->variant_name && $addonVariant->variant_name !== 'Default')
+                                                        <span class="text-gray-500 font-normal text-[11px]">({{ $addonVariant->variant_name }})</span>
+                                                    @endif
+                                                </span>
+                                                <div class="flex items-center gap-2 mt-0.5">
+                                                    <span class="text-xs font-extrabold text-amber-900">Rp {{ number_format($addonBundlePrice, 0, ',', '.') }}</span>
+                                                    @if($savings > 0)
+                                                        <span class="text-[11px] text-gray-400 line-through">Rp {{ number_format($addonOrigPrice, 0, ',', '.') }}</span>
+                                                        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                                            Hemat Rp {{ number_format($savings, 0, ',', '.') }}
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        </label>
+                                    @endif
+                                @endforeach
+                            </div>
+                            <div id="suggest-summary-box" class="hidden mt-3 pt-2.5 border-t border-amber-200/80 flex items-center justify-between text-xs">
+                                <span class="text-amber-900 font-bold" id="suggest-summary-count">Produk tambahan dipilih: 0</span>
+                                <span class="text-emerald-700 font-extrabold" id="suggest-summary-savings">Hemat: Rp 0</span>
+                            </div>
+                        </div>
+                    @endif
+
                     <!-- Dual Action Luxury CTA Section -->
                     @php
                         $isDisabledByOptions = $hasVariants || $hasColors;
@@ -964,6 +1027,51 @@
     window.productVariants = @json($mappedVariants);
     window.staticPromo = @json($staticPromo ?? null);
     window.productBasePrice = {{ (float) ($product->base_price ?? 0) }};
+
+    function updateSuggestSummary() {
+        const cbs = document.querySelectorAll('.suggest-addon-cb:checked');
+        const box = document.getElementById('suggest-summary-box');
+        if (!box) return;
+        if (cbs.length === 0) {
+            box.classList.add('hidden');
+            return;
+        }
+        box.classList.remove('hidden');
+        let totalSavings = 0;
+        cbs.forEach(cb => {
+            const bp = parseFloat(cb.getAttribute('data-bundle-price')) || 0;
+            const op = parseFloat(cb.getAttribute('data-orig-price')) || 0;
+            if (op > bp) totalSavings += (op - bp);
+        });
+        document.getElementById('suggest-summary-count').textContent = 'Produk tambahan dipilih: ' + cbs.length;
+        const savEl = document.getElementById('suggest-summary-savings');
+        if (totalSavings > 0) {
+            savEl.textContent = 'Hemat Tambahan: Rp ' + totalSavings.toLocaleString('id-ID');
+            savEl.classList.remove('hidden');
+        } else {
+            savEl.classList.add('hidden');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.location.hash === '#bundling-addon') {
+            setTimeout(function() {
+                const el = document.getElementById('bundling-addon');
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-4', 'ring-amber-400', 'shadow-lg');
+                    const firstCb = el.querySelector('.suggest-addon-cb');
+                    if (firstCb && !firstCb.checked) {
+                        firstCb.checked = true;
+                        updateSuggestSummary();
+                    }
+                    setTimeout(function() {
+                        el.classList.remove('ring-4', 'ring-amber-400', 'shadow-lg');
+                    }, 2500);
+                }
+            }, 350);
+        }
+    });
 </script>
 <script src="{{ asset('js/frontend/product-detail.js') }}?v={{ filemtime(public_path('js/frontend/product-detail.js')) }}"></script>
 @endpush

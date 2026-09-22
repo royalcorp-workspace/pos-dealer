@@ -29,6 +29,7 @@ class User extends Authenticatable
         'email',
         'password',
         'google_id',
+        'firebase_uid',
         'firebase_token',
         'email_verified',
         'email_verified_at',

@@ -80,6 +80,11 @@ class Order extends Model
         return $this->belongsTo(\App\Models\Frontend\Shipping\Courier::class, 'courier_id', 'id');
     }
 
+    public function delivery(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\Frontend\Shipping\Delivery::class, 'order_id', 'id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class, 'order_id', 'id');

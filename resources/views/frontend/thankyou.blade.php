@@ -474,13 +474,23 @@
                         
                         $fullAddress = trim($addressText . ($subDistrict ? ', Kec. ' . $subDistrict : '') . ($city ? ', ' . $city : '') . ($province ? ', ' . $province : '') . ($postalCode ? ' ' . $postalCode : ''));
                         $courierName = $order->courier?->name ?? strtoupper($order->meta['courier'] ?? 'Ekspedisi');
+                    @php
+                        $deliveryRecord = $order->delivery ?? \App\Models\Frontend\Shipping\Delivery::where('order_id', $order->id)->first();
+                        $etaLabel = $deliveryRecord?->eta_label ?? ($order->meta['shipping_eta_label'] ?? ($order->meta['eta_label'] ?? null));
                     @endphp
                     
                     <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 text-sm mb-2">
                         <p class="font-bold text-brand-dark text-base">{{ $recipientName }} <span class="font-normal text-gray-500 text-sm">({{ $recipientPhone }})</span></p>
-                        <span class="text-xs font-semibold text-brand-gold-dark bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-0.5 rounded-full inline-block w-fit">
-                            <i class="fa-solid fa-truck-fast text-[10px] mr-1"></i> Kurir: {{ $courierName }}
-                        </span>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-semibold text-brand-gold-dark bg-brand-gold/10 border border-brand-gold/20 px-2.5 py-0.5 rounded-full inline-block w-fit">
+                                <i class="fa-solid fa-truck-fast text-[10px] mr-1"></i> Kurir: {{ $courierName }}
+                            </span>
+                            @if(!empty($etaLabel))
+                                <span class="text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full inline-block w-fit">
+                                    <i class="fa-solid fa-clock text-[10px] mr-1"></i> Estimasi Tiba: {{ $etaLabel }}
+                                </span>
+                            @endif
+                        </div>
                     </div>
                     <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">{{ $fullAddress }}</p>
                     

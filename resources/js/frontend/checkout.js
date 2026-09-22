@@ -113,6 +113,35 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             shippingLabel.textContent = labelText;
         }
+
+        var etaBadge = document.getElementById('courier-eta-badge');
+        var etaText = document.getElementById('courier-eta-text');
+        var etaSource = document.getElementById('courier-eta-source');
+        var summaryEtaRow = document.getElementById('checkout-shipping-eta-row');
+        var summaryEtaVal = document.getElementById('checkout-shipping-eta-val');
+
+        var etaLabel = details && details.eta_label ? details.eta_label : '';
+        var etaSrc = details && details.eta_source ? details.eta_source : '';
+
+        if (etaBadge && etaText && etaSource) {
+            if (courier && etaLabel && details && details.is_available !== false) {
+                etaText.textContent = etaLabel;
+                etaSource.textContent = etaSrc === 'biteship' ? 'Biteship' : (etaSrc === 'store' ? 'Kurir Toko' : 'Estimasi');
+                etaBadge.classList.remove('hidden');
+            } else {
+                etaBadge.classList.add('hidden');
+            }
+        }
+
+        if (summaryEtaRow && summaryEtaVal) {
+            if (courier && etaLabel && details && details.is_available !== false) {
+                summaryEtaVal.textContent = etaLabel;
+                summaryEtaRow.classList.remove('hidden');
+            } else {
+                summaryEtaRow.classList.add('hidden');
+            }
+        }
+
         updateSelectedCouponDisplay();
         updateTotal();
     }
@@ -178,7 +207,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 } else {
                                     weightText = ' (Tarif Tetap)';
                                 }
-                                opt.textContent = rawName + ' - ' + formatRupiah(data.shipping_cost) + weightText;
+                                var etaText = data.eta_label ? ' | Estimasi tiba: ' + data.eta_label : '';
+                                opt.textContent = rawName + ' - ' + formatRupiah(data.shipping_cost) + weightText + etaText;
                             }
                         }
 

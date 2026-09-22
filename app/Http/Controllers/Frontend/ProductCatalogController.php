@@ -90,6 +90,10 @@ class ProductCatalogController extends Controller
 
         $query = Product::where('products.deleted', false)
             ->where(function ($q) {
+                $q->where('products.is_bundle', false)
+                  ->orWhereNull('products.is_bundle');
+            })
+            ->where(function ($q) {
                 $q->where('products.show_on_web', true)
                   ->orWhereNull('products.show_on_web');
             })
@@ -251,14 +255,40 @@ class ProductCatalogController extends Controller
 
     public function show(Product $product)
     {
+        if ($product->is_bundle) {
+            return redirect()->route('bundling.show', $product->slug);
+        }
+
         if (!empty($product->slug)) {
             session()->put('last_checkout_product_url', route('products.show', $product->slug));
         }
 
         $product->load(['brand', 'category', 'images', 'variants.images', 'colors', 'tags']);
 
+        // Load suggest bundle items if any
+        $suggestAddons = \App\Models\Frontend\ProductsCatalog\ProductBundlingItem::where('product_bundling_id', $product->id)
+            ->where('is_suggest', true)
+            ->with(['product.variants', 'variant'])
+            ->get();
+
+        if ($suggestAddons->isEmpty()) {
+            $bundleIds = \App\Models\Frontend\ProductsCatalog\ProductBundlingItem::where('product_id', $product->id)
+                ->where('is_suggest', false)
+                ->pluck('product_bundling_id');
+            if ($bundleIds->isNotEmpty()) {
+                $suggestAddons = \App\Models\Frontend\ProductsCatalog\ProductBundlingItem::whereIn('product_bundling_id', $bundleIds)
+                    ->where('is_suggest', true)
+                    ->with(['product.variants', 'variant'])
+                    ->get();
+            }
+        }
+
         // Load smart related products (same category or brand - 5 items)
         $relatedProducts = Product::where('deleted', false)
+            ->where(function ($q) {
+                $q->where('is_bundle', false)
+                  ->orWhereNull('is_bundle');
+            })
             ->where('id', '!=', $product->id)
             ->where(function($q) use ($product) {
                 if ($product->category_id) $q->where('category_id', $product->category_id);
@@ -340,7 +370,7 @@ class ProductCatalogController extends Controller
         }
         unset($optionsList);
 
-        return view('frontend.product.show', compact('product', 'attributeGroups', 'relatedProducts'));
+        return view('frontend.product.show', compact('product', 'attributeGroups', 'relatedProducts', 'suggestAddons'));
     }
 
     public function searchSuggestions(Request $request)
@@ -360,6 +390,10 @@ class ProductCatalogController extends Controller
         }
 
         $products = Product::where('deleted', false)
+            ->where(function ($q) {
+                $q->where('is_bundle', false)
+                  ->orWhereNull('is_bundle');
+            })
             ->where(function ($q) use ($query, $words, $fuzzyString) {
                 // 1. Exact phrase match
                 $q->where('name', 'ilike', '%' . $query . '%')

@@ -177,14 +177,28 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 var contentType = response.headers.get("content-type");
                 if (contentType && contentType.indexOf("application/json") !== -1) {
-                    return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+                    return response.json().then(function (data) { return { ok: response.ok, status: response.status, data: data }; });
+                } else if (response.status === 419) {
+                    return { ok: false, status: 419, data: { success: false, message: 'Sesi Anda telah kedaluwarsa. Sedang memperbarui token...', csrf_expired: true } };
                 } else if (response.ok) {
-                    return { ok: true, data: { success: true } };
+                    return { ok: true, status: response.status, data: { success: true } };
                 } else {
                     throw new Error("Invalid response format");
                 }
             })
             .then(function (result) {
+                if (result.status === 419 || (result.data && result.data.csrf_expired)) {
+                    if (result.data && result.data.csrf_token) {
+                        var meta = document.querySelector('meta[name="csrf-token"]');
+                        if (meta) meta.setAttribute('content', result.data.csrf_token);
+                        var tokenInputs = document.querySelectorAll('input[name="_token"]');
+                        tokenInputs.forEach(function(el) { el.value = result.data.csrf_token; });
+                    }
+                    window.dispatchEvent(new CustomEvent('auth-error-login', {
+                        detail: { message: 'Sesi sempat kedaluwarsa. Token keamanan telah diperbarui. Silakan klik "Sign In" kembali.' }
+                    }));
+                    return;
+                }
                 if (result.ok && result.data.success) {
                     var isCheckout = window.location.pathname.includes('checkout');
                     try { window.Alpine.$data(document.querySelector('body')).isAuthOpen = false; } catch(e) {}

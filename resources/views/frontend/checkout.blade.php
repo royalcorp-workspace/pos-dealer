@@ -350,10 +350,28 @@
                                             @else
                                                 (Tarif Tetap)
                                             @endif
+                                            @if(!empty($details['eta_label']))
+                                                | Estimasi tiba: {{ $details['eta_label'] }}
+                                            @endif
                                         @endif
                                     </option>
                                 @endforeach
                             </select>
+                            @php
+                                $selectedCourierCode = old('courier', $form['courier'] ?? '');
+                                $selectedCourierDetails = $courierPrices[$selectedCourierCode] ?? null;
+                                $selectedEta = $selectedCourierDetails['eta_label'] ?? null;
+                                $selectedEtaSource = $selectedCourierDetails['eta_source'] ?? null;
+                            @endphp
+                            <div id="courier-eta-badge" class="{{ empty($selectedEta) ? 'hidden' : '' }} mt-3 p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-clock text-blue-600"></i>
+                                    <span>Estimasi Tiba: <strong id="courier-eta-text">{{ $selectedEta ?? '' }}</strong></span>
+                                </div>
+                                <span id="courier-eta-source" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-200/60 text-blue-800 uppercase tracking-wider">
+                                    {{ $selectedEtaSource === 'biteship' ? 'Biteship' : ($selectedEtaSource === 'store' ? 'Kurir Toko' : 'Estimasi') }}
+                                </span>
+                            </div>
                             <div id="courier-unavailable-alert" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
                                 <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-600 shrink-0"></i>
                                 <span id="courier-unavailable-message">Kurir yang dipilih belum melayani pengiriman ke kota/wilayah tujuan ini. Silakan pilih kurir lain atau ganti alamat tujuan.</span>
@@ -733,6 +751,11 @@
                             <span id="checkout-shipping-label">Ongkos Kirim</span>
                             <span class="text-brand-dark font-bold" id="shipping-cost">Rp {{ number_format($form['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
                             <span id="checkout-shipping-cost" data-value="{{ $form['shipping_cost'] ?? 0 }}" class="hidden"></span>
+                        </div>
+
+                        <div class="flex justify-between items-center text-xs text-blue-700 bg-blue-50/60 px-2.5 py-1.5 rounded-lg {{ empty($selectedEta) ? 'hidden' : '' }}" id="checkout-shipping-eta-row">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-clock text-[11px] text-blue-500"></i> Estimasi Tiba</span>
+                            <span class="font-semibold" id="checkout-shipping-eta-val">{{ $selectedEta ?? '' }}</span>
                         </div>
 
                         <div class="flex justify-between items-center text-red-600" id="checkout-voucher-row" style="{{ ($selectedVoucher['discount'] ?? 0) > 0 ? '' : 'display: none;' }}">

@@ -118,6 +118,17 @@ class OrderTrackingController extends Controller
             ->where('order_id', $order->id ?? null)
             ->first();
 
+        $etaLabel = null;
+        if ($delivery && ($delivery->estimated_delivery_min || $delivery->estimated_delivery_at)) {
+            $min = $delivery->estimated_delivery_min ?: $delivery->estimated_delivery_at;
+            $max = $delivery->estimated_delivery_max ?: $delivery->estimated_delivery_at;
+            $etaLabel = \App\Services\EtaService::formatEtaRange($min, $max, $delivery->estimated_delivery_duration);
+        } elseif (!empty(data_get($order->meta, 'shipping_eta_label'))) {
+            $etaLabel = data_get($order->meta, 'shipping_eta_label');
+        } elseif (!empty(data_get($order->meta, 'eta_label'))) {
+            $etaLabel = data_get($order->meta, 'eta_label');
+        }
+
         $waybillId = $logs->firstWhere('waybill_id', '!=', null)->waybill_id
             ?? $delivery->tracking_number
             ?? data_get($order->meta, 'waybill_id')
@@ -151,6 +162,13 @@ class OrderTrackingController extends Controller
                 'courier' => $courierName,
                 'events' => $events,
                 'latest_payload' => $events->last()?->payload ?? null,
+                'estimated_delivery_at' => $delivery?->estimated_delivery_at,
+                'estimated_delivery_min' => $delivery?->estimated_delivery_min,
+                'estimated_delivery_max' => $delivery?->estimated_delivery_max,
+                'estimated_delivery_duration' => $delivery?->estimated_delivery_duration,
+                'eta_source' => $delivery?->eta_source ?? data_get($order->meta, 'shipping_eta_source'),
+                'eta_notes' => $delivery?->eta_notes,
+                'eta_label' => $etaLabel,
             ];
         }
 
@@ -231,6 +249,13 @@ class OrderTrackingController extends Controller
             'courier' => $courierName,
             'events' => $events,
             'latest_payload' => $events->last()?->payload ?? null,
+            'estimated_delivery_at' => $delivery?->estimated_delivery_at,
+            'estimated_delivery_min' => $delivery?->estimated_delivery_min,
+            'estimated_delivery_max' => $delivery?->estimated_delivery_max,
+            'estimated_delivery_duration' => $delivery?->estimated_delivery_duration,
+            'eta_source' => $delivery?->eta_source ?? data_get($order->meta, 'shipping_eta_source'),
+            'eta_notes' => $delivery?->eta_notes,
+            'eta_label' => $etaLabel,
         ];
     }
 
@@ -281,11 +306,31 @@ class OrderTrackingController extends Controller
             $currentStatus = 0;
         }
 
+        $delivery = null;
+        $etaLabel = null;
+        if ($selectedOrder && !empty($selectedOrder->id)) {
+            $delivery = \Illuminate\Support\Facades\DB::table('deliveries')
+                ->where('order_id', $selectedOrder->id)
+                ->first();
+
+            if ($delivery && ($delivery->estimated_delivery_min || $delivery->estimated_delivery_at)) {
+                $min = $delivery->estimated_delivery_min ?: $delivery->estimated_delivery_at;
+                $max = $delivery->estimated_delivery_max ?: $delivery->estimated_delivery_at;
+                $etaLabel = \App\Services\EtaService::formatEtaRange($min, $max, $delivery->estimated_delivery_duration);
+            } elseif (!empty(data_get($selectedOrder->meta, 'shipping_eta_label'))) {
+                $etaLabel = data_get($selectedOrder->meta, 'shipping_eta_label');
+            } elseif (!empty(data_get($selectedOrder->meta, 'eta_label'))) {
+                $etaLabel = data_get($selectedOrder->meta, 'eta_label');
+            }
+        }
+
         $shipment = $selectedOrder ? $this->buildShipment($selectedOrder, $currentStatus) : null;
 
         return view('frontend.order-tracking', [
             'order' => $selectedOrder,
             'shipment' => $shipment,
+            'delivery' => $delivery,
+            'etaLabel' => $etaLabel,
             'currentStatus' => $currentStatus,
             'orderId' => $queryOrderId,
             'email' => $queryEmail,

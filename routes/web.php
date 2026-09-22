@@ -33,6 +33,7 @@ Route::get('/robots.txt', [PageController::class, 'robots']);
 Route::get('/products', [ProductCatalogController::class, 'index'])->name('products.index');
 Route::get('/products/search-suggestions', [ProductCatalogController::class, 'searchSuggestions'])->name('products.search-suggestions');
 Route::get('/products/{product:slug}', [ProductCatalogController::class, 'show'])->name('products.show');
+Route::get('/product/{product:slug}', [ProductCatalogController::class, 'show'])->name('product.show');
 Route::get('/category/{categorySlug}', [ProductCatalogController::class, 'index'])->name('category.show');
 
 Route::get('/brands', [PageController::class, 'brands'])->name('brands');
@@ -99,6 +100,7 @@ Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->n
 Route::get('/password-otp-sent', [CheckoutController::class, 'passwordOtpSent'])->name('password-otp.sent');
 Route::get('/reset-password', [AuthController::class, 'showResetPassword'])->name('reset-password.show');
 
+Route::get('/refresh-csrf', fn() => response()->json(['csrf_token' => csrf_token()]))->name('csrf.refresh');
 Route::get('/login', fn() => redirect()->route('home', ['show_login' => 1]))->name('login.show');
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

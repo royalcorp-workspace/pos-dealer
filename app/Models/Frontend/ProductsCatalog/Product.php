@@ -184,6 +184,21 @@ class Product extends Model
         return $this->hasMany(ProductBundlingItem::class, 'product_id');
     }
 
+    public function bundleItems(): HasMany
+    {
+        return $this->hasMany(ProductBundlingItem::class, 'product_bundling_id');
+    }
+
+    public function fixedBundleItems(): HasMany
+    {
+        return $this->hasMany(ProductBundlingItem::class, 'product_bundling_id')->where('is_suggest', false);
+    }
+
+    public function suggestBundleItems(): HasMany
+    {
+        return $this->hasMany(ProductBundlingItem::class, 'product_bundling_id')->where('is_suggest', true);
+    }
+
     public function suggestedProducts(): BelongsToMany
     {
         return $this->belongsToMany(

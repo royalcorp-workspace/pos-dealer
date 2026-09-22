@@ -54,17 +54,25 @@ class PasswordResetController extends Controller
             $this->audit->log($user, 'password_reset_request', $request, ['channel' => $channel]);
 
             if ($channel === 'email') {
-                Mail::to($user->email)->send(new OtpPasswordResetMail(
-                    $user->email,
-                    $otp,
-                    (int) ($this->otpTtlSeconds() / 60)
-                ));
+                try {
+                    Mail::to($user->email)->send(new OtpPasswordResetMail(
+                        $user->email,
+                        $otp,
+                        (int) ($this->otpTtlSeconds() / 60)
+                    ));
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error("Gagal mengirim email OTP ke {$user->email}: " . $e->getMessage());
+                    return response()->json([
+                        'message' => 'Gagal mengirim email kode OTP. Silakan periksa koneksi atau coba lagi nanti.',
+                        'success' => false
+                    ], 500);
+                }
             }
 
-            return response()->json(['  ' => 'If account exists, OTP has been sent', 'success' => true]);
+            return response()->json(['message' => 'Kode OTP berhasil dikirim ke email Anda', 'success' => true]);
         }
 
-        return response()->json(['message' => 'If account exists, OTP has been sent', 'success' => true]);
+        return response()->json(['message' => 'Jika akun terdaftar, kode OTP telah dikirimkan', 'success' => true]);
     }
 
     public function reset(Request $request)

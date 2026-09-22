@@ -239,10 +239,11 @@ class AuthController extends Controller
 
         $payload = $this->decodeAccessToken($data['access_token']);
 
-        $email = (string) ($payload->email ?? '');
+        $email = trim((string) ($payload->email ?? ''));
         $name = (string) ($payload->name ?? ($email ? explode('@', $email)[0] : 'Member'));
+        $normalizedEmail = strtolower($email);
 
-        $user = User::query()->where('email', $email)->first();
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$normalizedEmail])->first();
 
         if (!$user) {
             $user = User::create([
@@ -252,24 +253,84 @@ class AuthController extends Controller
                 'email_verified' => true,
                 'email_verified_at' => now(),
             ]);
+        } else {
+            $user->update([
+                'email_verified' => true,
+                'email_verified_at' => $user->email_verified_at ?? now(),
+            ]);
         }
 
         // Ensure customer record exists and is linked to the user
-        \App\Models\Frontend\Customer\Customer::updateOrCreate(
-            ['email' => $email],
+        $customer = \App\Models\Frontend\Customer\Customer::updateOrCreate(
+            ['email' => $user->email],
             [
                 'user_id' => $user->id,
-                'name' => $name,
+                'name' => $name ?: $user->name,
             ]
         );
+
+        // Merge guest cart with logged-in user cart
+        $guestSessionId = session()->get('guest_session_id') ?: session()->getId();
+        if ($customer && $guestSessionId) {
+            $guestBuffer = \App\Models\Frontend\Buffer\Buffer::where('session_id', $guestSessionId)
+                ->whereNull('customer_id')
+                ->first();
+                
+            if ($guestBuffer) {
+                $userBuffer = \App\Models\Frontend\Buffer\Buffer::where('customer_id', $customer->id)->first();
+                if ($userBuffer) {
+                    foreach ($guestBuffer->items as $guestItem) {
+                        $existingItem = \App\Models\Frontend\Buffer\BufferItem::where('buffer_id', $userBuffer->id)
+                            ->where('product_id', $guestItem->product_id)
+                            ->where('product_variant_id', $guestItem->product_variant_id)
+                            ->first();
+                            
+                        if ($existingItem) {
+                            $existingItem->update([
+                                'quantity' => $existingItem->quantity + $guestItem->quantity,
+                                'total' => $existingItem->unit_price * ($existingItem->quantity + $guestItem->quantity)
+                            ]);
+                            $guestItem->delete();
+                        } else {
+                            $guestItem->update([
+                                'buffer_id' => $userBuffer->id
+                            ]);
+                        }
+                    }
+                    $userItems = $userBuffer->items()->get();
+                    $subtotal = $userItems->sum(fn($item) => (float) $item->unit_price * (int) $item->quantity);
+                    $discount = $userItems->sum(function ($item) {
+                        $itemTotal = (float) $item->unit_price * (int) $item->quantity;
+                        $discountNominal = (float) $item->discount_nominal;
+                        $discountPercent = $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
+                        return $discountNominal + $discountPercent;
+                    });
+                    $userBuffer->update([
+                        'subtotal' => $subtotal,
+                        'discount' => $discount,
+                        'total' => $subtotal - $discount,
+                        'session_id' => $guestSessionId,
+                    ]);
+                    $guestBuffer->delete();
+                } else {
+                    $guestBuffer->update([
+                        'customer_id' => $customer->id,
+                        'customer_name' => $customer->name,
+                        'customer_email' => $customer->email,
+                        'creator' => $user->id,
+                        'editor' => $user->id,
+                    ]);
+                }
+            }
+        }
 
         session()->put('is_logged_in', true);
         session()->put('access_token', $data['access_token']);
         session()->put('refresh_token', $data['refresh_token']);
         session()->put('user', [
             'id' => $user->id,
-            'name' => $name,
-            'email' => $email,
+            'name' => $user->name,
+            'email' => $user->email,
             'type' => 'Google Member',
         ]);
 
@@ -314,10 +375,11 @@ class AuthController extends Controller
             'email' => ['required', 'email'],
         ]);
 
-        $response = \Illuminate\Support\Facades\Http::post(url('/api/auth/forgot-password'), [
-            'email' => $request->email,
-            'channel' => 'email',
-        ]);
+        try {
+            app(\App\Http\Controllers\Api\PasswordResetController::class)->forgot($request);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Process forgot password error: ' . $e->getMessage());
+        }
 
         return redirect()->route('reset-password.show', ['email' => $request->email]);
     }
