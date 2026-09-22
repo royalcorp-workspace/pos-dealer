@@ -20,18 +20,31 @@ class HomeController extends Controller
     public function index()
     {
         $bestsellers = Product::where('deleted', false)
+            ->where(function ($q) {
+                $q->where('is_bundle', false)
+                  ->orWhereNull('is_bundle');
+            })
             ->where('best_seller', true)
             ->with(['brand', 'category', 'images', 'variants', 'tags'])
             ->take(10)
             ->get();
 
         $recommended = Product::where('deleted', false)
+            ->where(function ($q) {
+                $q->where('is_bundle', false)
+                  ->orWhereNull('is_bundle');
+            })
             ->whereNotIn('id', $bestsellers->pluck('id'))
             ->with(['brand', 'category', 'images', 'variants', 'tags'])
             ->take(10)
             ->get();
 
-        $recommendedTotal = Product::where('deleted', false)->count();
+        $recommendedTotal = Product::where('deleted', false)
+            ->where(function ($q) {
+                $q->where('is_bundle', false)
+                  ->orWhereNull('is_bundle');
+            })
+            ->count();
 
         $specialSection = HomepageSection::where('section_key', 'like', '%spesial%')
             ->orWhere('section_key', 'like', '%special%')

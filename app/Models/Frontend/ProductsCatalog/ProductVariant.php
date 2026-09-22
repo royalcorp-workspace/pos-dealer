@@ -32,6 +32,10 @@ class ProductVariant extends Model
         'width',
         'height',
         'weight',
+        'package_length',
+        'package_width',
+        'package_height',
+        'package_weight',
         'shipping_cost',
         'status',
     ];

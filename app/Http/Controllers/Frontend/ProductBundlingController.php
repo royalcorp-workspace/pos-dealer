@@ -46,47 +46,63 @@ class ProductBundlingController extends Controller
             $query->orderBy('created_at', 'desc');
         }
 
-        $bundlings = $query->with(['items.product', 'items.product.brand', 'items.variant'])
+        $bundlings = $query->with(['items.product.variants' => fn($q) => $q->where('deleted', false)->where('sell_price', '>', 0), 'items.product.brand', 'items.variant'])
             ->paginate(12)
             ->withQueryString();
 
         foreach ($bundlings as $bundle) {
-            // Hitung total harga normal produk-produk di dalam bundling
-            $totalProductPrice = 0;
-            if ($bundle->items) {
-                foreach ($bundle->items as $item) {
-                    if ($item->variant) {
-                        $totalProductPrice += (float) $item->variant->sell_price * $item->quantity;
-                    } elseif ($item->product) {
-                        $totalProductPrice += (float) ($item->product->variants->where('status', true)->min('sell_price') ?? 0) * $item->quantity;
-                    }
+            $mainItem = $bundle->items->where('is_suggest', false)->first() ?: $bundle->items->first();
+            $mainProduct = $mainItem?->product;
+            $bundle->main_product = $mainProduct;
+            $bundle->main_product_slug = $mainProduct?->slug;
+
+            $suggestItems = $bundle->items->where('is_suggest', true)->values();
+            if ($suggestItems->isEmpty() && $bundle->items->count() > 1) {
+                $suggestItems = $bundle->items->slice(1)->values();
+            }
+            $bundle->suggest_items = $suggestItems;
+
+            // Hitung total penghematan dari produk-produk pelengkap suggest
+            $totalSavings = 0;
+            $suggestTotalNormal = 0;
+            $suggestTotalBundle = 0;
+            foreach ($suggestItems as $sItem) {
+                $sNorm = (float)($sItem->variant?->sell_price ?: ($sItem->product?->variants->where('deleted', false)->where('sell_price', '>', 0)->min('sell_price') ?: 0));
+                $sPrice = (float)($sItem->bundle_price ?: $sNorm);
+                if ($sItem->discount_percent && !$sItem->bundle_price && $sNorm > 0) {
+                    $sPrice = round($sNorm * (1 - ($sItem->discount_percent / 100)));
+                }
+                $suggestTotalNormal += $sNorm;
+                $suggestTotalBundle += $sPrice;
+                if ($sNorm > $sPrice) {
+                    $totalSavings += ($sNorm - $sPrice);
                 }
             }
+            $bundle->total_savings = $totalSavings;
+            $bundle->suggest_total_normal = $suggestTotalNormal;
+            $bundle->suggest_total_bundle = $suggestTotalBundle;
 
-            // Secara default, harga coret adalah harga bundle itu sendiri (jika tidak ada diskon)
-            $bundle->total_original = (float) $bundle->price;
-
-            // Harga dasar Bundling adalah Harga Fix yang diinput Admin
-            $bundlePrice = (float) $bundle->price;
-            
-            // Cek apakah Bundling ini di-override oleh Price Product Setting (PPS)
-            $ppsPromo = \App\Services\StaticPromoService::forBundling($bundle, $bundlePrice);
-            if ($ppsPromo) {
-                // Potong diskon PPS dari Harga Fix Bundling
-                $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
-                $bundle->pps_label = $ppsPromo['label'];
-                
-                // Jika masuk PPS, harga coretnya ngambil ke total harga produk (sum of items)
-                if ($totalProductPrice > 0) {
-                    $bundle->total_original = $totalProductPrice;
-                }
+            // Hitung rentang harga produk utama
+            if ($mainProduct) {
+                $validVars = $mainProduct->variants->where('deleted', false)->where('sell_price', '>', 0);
+                $minP = (float)($validVars->min('sell_price') ?: $mainProduct->price ?: 0);
+                $maxP = (float)($validVars->max('sell_price') ?: $minP);
+                $bundle->main_min_price = $minP;
+                $bundle->main_max_price = $maxP;
+                $bundle->main_price_range_text = ($minP > 0 && $maxP > $minP)
+                    ? 'Rp ' . number_format($minP, 0, ',', '.') . ' - Rp ' . number_format($maxP, 0, ',', '.')
+                    : 'Rp ' . number_format($minP, 0, ',', '.');
+            } else {
+                $bundle->main_min_price = (float)$bundle->price;
+                $bundle->main_max_price = (float)$bundle->price;
+                $bundle->main_price_range_text = 'Rp ' . number_format((float)$bundle->price, 0, ',', '.');
             }
 
-            $bundle->total_price = $bundlePrice;
-            $bundle->discount_percent = $bundle->total_original > 0
-                ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100, 0)
-                : 0;
-            $bundle->thumbnail_url = $bundle->items->first()?->product?->thumbnail_url;
+            // Total paket mulai dari
+            $bundle->start_price = $bundle->main_min_price + $suggestTotalBundle;
+            $bundle->start_original_price = $bundle->main_min_price + $suggestTotalNormal;
+
+            $bundle->thumbnail_url = $bundle->image_url ? cms_asset($bundle->image_url) : ($bundle->banner_image ? cms_asset($bundle->banner_image) : $mainProduct?->thumbnail_url);
         }
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -106,63 +122,76 @@ class ProductBundlingController extends Controller
             abort(404);
         }
 
-        if (!empty($bundle->slug)) {
-            session()->put('last_checkout_product_url', route('bundling.show', $bundle->slug));
-        }
-
         $bundle->load([
-            'items.product.variants',
+            'items.product.variants' => fn($q) => $q->where('deleted', false)->where('sell_price', '>', 0),
             'items.product.brand',
             'items.product.images',
             'items.variant',
         ]);
 
-        // Hitung total harga normal produk-produk di dalam bundling
-        $totalProductPrice = 0;
-        if ($bundle->items) {
-            foreach ($bundle->items as $item) {
-                if ($item->variant) {
-                    $totalProductPrice += (float) $item->variant->price * $item->quantity;
-                } elseif ($item->product) {
-                    $totalProductPrice += (float) ($item->product->variants->where('status', true)->min('sell_price') ?? 0) * $item->quantity;
-                }
+        $mainItem = $bundle->items->where('is_suggest', false)->first() ?: $bundle->items->first();
+        $mainProduct = $mainItem?->product;
+        $bundle->main_product = $mainProduct;
+        $bundle->main_product_slug = $mainProduct?->slug;
+
+        $suggestItems = $bundle->items->where('is_suggest', true)->values();
+        if ($suggestItems->isEmpty() && $bundle->items->count() > 1) {
+            $suggestItems = $bundle->items->slice(1)->values();
+        }
+        $bundle->suggest_items = $suggestItems;
+
+        $totalSavings = 0;
+        $suggestTotalNormal = 0;
+        $suggestTotalBundle = 0;
+        foreach ($suggestItems as $sItem) {
+            $sNorm = (float)($sItem->variant?->sell_price ?: ($sItem->product?->variants->where('deleted', false)->where('sell_price', '>', 0)->min('sell_price') ?: 0));
+            $sPrice = (float)($sItem->bundle_price ?: $sNorm);
+            if ($sItem->discount_percent && !$sItem->bundle_price && $sNorm > 0) {
+                $sPrice = round($sNorm * (1 - ($sItem->discount_percent / 100)));
+            }
+            $suggestTotalNormal += $sNorm;
+            $suggestTotalBundle += $sPrice;
+            if ($sNorm > $sPrice) {
+                $totalSavings += ($sNorm - $sPrice);
             }
         }
+        $bundle->total_savings = $totalSavings;
+        $bundle->suggest_total_normal = $suggestTotalNormal;
+        $bundle->suggest_total_bundle = $suggestTotalBundle;
 
-        // Secara default, harga coret adalah harga bundle itu sendiri
-        $bundle->total_original = (float) $bundle->price;
-
-        // Harga dasar Bundling adalah Harga Fix yang diinput Admin
-        $bundlePrice = (float) $bundle->price;
-        
-        // Cek apakah Bundling ini di-override oleh Price Product Setting (PPS)
-        $ppsPromo = \App\Services\StaticPromoService::forBundling($bundle, $bundlePrice);
-        if ($ppsPromo) {
-            // Potong diskon PPS dari Harga Fix Bundling
-            $bundlePrice = \App\Services\StaticPromoService::discountedPrice($bundlePrice, $ppsPromo);
-            $bundle->pps_label = $ppsPromo['label'];
-            
-            // Jika masuk PPS, harga coretnya ngambil ke total harga produk
-            if ($totalProductPrice > 0) {
-                $bundle->total_original = $totalProductPrice;
-            }
+        if ($mainProduct) {
+            $validVars = $mainProduct->variants->where('deleted', false)->where('sell_price', '>', 0);
+            $minP = (float)($validVars->min('sell_price') ?: $mainProduct->price ?: 0);
+            $maxP = (float)($validVars->max('sell_price') ?: $minP);
+            $bundle->main_min_price = $minP;
+            $bundle->main_max_price = $maxP;
+            $bundle->main_price_range_text = ($minP > 0 && $maxP > $minP)
+                ? 'Rp ' . number_format($minP, 0, ',', '.') . ' - Rp ' . number_format($maxP, 0, ',', '.')
+                : 'Rp ' . number_format($minP, 0, ',', '.');
+        } else {
+            $bundle->main_min_price = (float)$bundle->price;
+            $bundle->main_max_price = (float)$bundle->price;
+            $bundle->main_price_range_text = 'Rp ' . number_format((float)$bundle->price, 0, ',', '.');
         }
 
-        $bundle->total_price = $bundlePrice;
-        $bundle->discount_percent = $bundle->total_original > 0
-            ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100, 0)
-            : 0;
+        $bundle->start_price = $bundle->main_min_price + $suggestTotalBundle;
+        $bundle->start_original_price = $bundle->main_min_price + $suggestTotalNormal;
+
+        if (!empty($bundle->slug)) {
+            session()->put('last_checkout_product_url', route('bundling.show', $bundle->slug));
+        }
 
         $relatedProducts = Product::where('deleted', false)
             ->where('status', true)
+            ->where('is_bundle', false)
             ->where('id', '!=', $bundle->id)
-            ->with(['brand', 'category', 'images', 'variants'])
+            ->with(['brand', 'category', 'images', 'variants' => fn($q) => $q->where('deleted', false)->where('sell_price', '>', 0)])
             ->take(8)
             ->get();
 
         $wishlist = session()->get('wishlist', []);
 
-        return view('frontend.bundling.show', compact('bundle', 'relatedProducts', 'wishlist'));
+        return view('frontend.bundling.show', compact('bundle', 'relatedProducts', 'wishlist', 'mainProduct', 'suggestItems'));
     }
 
     public function addToCart(Request $request)
@@ -235,6 +264,37 @@ class ProductBundlingController extends Controller
                     })->toArray(),
                 ]),
             ]);
+        }
+
+        if ($request->has('selected_suggests') && is_array($request->input('selected_suggests'))) {
+            $suggestItemIds = $request->input('selected_suggests');
+            $suggestItems = $bundling->items->whereIn('id', $suggestItemIds);
+            foreach ($suggestItems as $sItem) {
+                $sPrice = (float)($sItem->bundle_price ?: ($sItem->variant?->sell_price ?: ($sItem->product?->variants->min('sell_price') ?: 0)));
+                if ($sItem->discount_percent && !$sItem->bundle_price) {
+                    $normal = (float)($sItem->variant?->sell_price ?: 0);
+                    $sPrice = round($normal * (1 - ($sItem->discount_percent / 100)));
+                }
+
+                $sVariantId = $sItem->variant_id ?: ($sItem->product?->variants->first()?->id);
+                BufferItem::create([
+                    'id' => \Illuminate\Support\Str::uuid()->toString(),
+                    'buffer_id' => $buffer->id,
+                    'product_id' => $sItem->product_id,
+                    'product_variant_id' => $sVariantId,
+                    'name' => ($sItem->product?->name ?? 'Produk Pelengkap') . ($sItem->variant ? ' (' . $sItem->variant->variant_name . ')' : '') . ' [Bundling Hemat]',
+                    'quantity' => (int)($sItem->quantity ?: 1) * $quantity,
+                    'unit_price' => $sPrice,
+                    'total' => $sPrice * ((int)($sItem->quantity ?: 1) * $quantity),
+                    'discount_nominal' => 0,
+                    'discount_percent' => 0,
+                    'item_notes' => json_encode([
+                        'from_bundle_id' => $bundling->id,
+                        'bundle_name' => $bundling->name,
+                        'is_suggest_addon' => true,
+                    ]),
+                ]);
+            }
         }
 
         $this->recalculateBuffer($buffer);

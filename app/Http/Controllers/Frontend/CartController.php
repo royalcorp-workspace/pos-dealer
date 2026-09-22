@@ -156,6 +156,51 @@ class CartController extends Controller
             ]);
         }
 
+        // Handle selected suggest bundle items (Add-on Bundling)
+        if ($request->has('selected_suggests') && is_array($request->input('selected_suggests'))) {
+            $suggestIds = $request->input('selected_suggests');
+            $suggestItems = \App\Models\Frontend\ProductsCatalog\ProductBundlingItem::whereIn('id', $suggestIds)
+                ->with(['product.variants', 'variant'])
+                ->get();
+
+            foreach ($suggestItems as $sItem) {
+                $sProduct = $sItem->product;
+                if (!$sProduct) {
+                    continue;
+                }
+                $sVariant = $sItem->variant ?: $sProduct->variants->first();
+                $sNormalPrice = (float) ($sVariant?->sell_price ?: $sProduct->price ?: 0);
+                $sPrice = (float) ($sItem->bundle_price > 0 ? $sItem->bundle_price : $sNormalPrice);
+                if ($sItem->discount_percent && !$sItem->bundle_price) {
+                    $sPrice = round($sNormalPrice * (1 - ($sItem->discount_percent / 100)));
+                }
+
+                $sVariantId = $sVariant?->id;
+                $sItemQty = (int) ($sItem->quantity ?: 1) * $quantity;
+                $sDiscNominal = max(0.0, $sNormalPrice - $sPrice) * $sItemQty;
+
+                BufferItem::create([
+                    'id' => Str::uuid()->toString(),
+                    'buffer_id' => $buffer->id,
+                    'product_id' => $sItem->product_id,
+                    'product_variant_id' => $sVariantId,
+                    'name' => $sProduct->name . ($sVariant && $sVariant->variant_name && $sVariant->variant_name !== 'Default' ? ' (' . $sVariant->variant_name . ')' : '') . ' [Bundling Hemat]',
+                    'quantity' => $sItemQty,
+                    'unit_price' => $sPrice,
+                    'total' => $sPrice * $sItemQty,
+                    'discount_nominal' => $sDiscNominal,
+                    'discount_percent' => (float) $sItem->discount_percent,
+                    'item_notes' => 'Add-on Bundling Hemat',
+                    'meta' => [
+                        'is_suggest_addon' => true,
+                        'bundling_item_id' => $sItem->id,
+                        'original_price' => $sNormalPrice,
+                        'sell_price' => $sPrice,
+                    ],
+                ]);
+            }
+        }
+
         $this->recalculateBuffer($buffer);
 
         $cart = $this->getBufferCartArray($buffer);

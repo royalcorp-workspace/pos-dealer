@@ -170,76 +170,101 @@
                     </div>
                 @else
             <!-- Grid View -->
-            <div x-show="viewMode === 'grid'" class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
+            <div x-show="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 @foreach($bundlings as $bundle)
                     @php
-                        $discountPercent = ($bundle->total_original > 0 && $bundle->total_price > 0)
-                            ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100)
-                            : 0;
+                        $bundleImg = $bundle->thumbnail_url ?: ($bundle->banner_image ? cms_asset($bundle->banner_image) : 'https://via.placeholder.com/400x300');
+                        $savings = (float)($bundle->total_savings ?? 0);
                     @endphp
-                    <div class="product-card group relative bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 flex flex-col h-full font-sans">
-                        <div class="relative aspect-[4/3] bg-brand-light overflow-hidden">
+                    <div class="product-card group relative bg-white border-2 border-amber-100 hover:border-amber-400 rounded-3xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full font-sans">
+                        <!-- Poster Visual Area -->
+                        <div class="relative aspect-[4/3] bg-gradient-to-br from-amber-50 to-gray-50 overflow-hidden">
                             <a href="{{ route('bundling.show', $bundle->slug) }}" class="block w-full h-full">
-                                @if($bundle->thumbnail_url)
-                                    <img
-                                        src="{{ $bundle->thumbnail_url }}"
-                                        alt="{{ $bundle->name }}"
-                                        class="product-card__image w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                        loading="lazy"
-                                    />
-                                @else
-                                    <div class="w-full h-full flex items-center justify-center bg-gray-200">
-                                        <i class="fa-solid fa-gift w-8 h-8 sm:w-12 sm:h-12 text-gray-300"></i>
-                                    </div>
-                                @endif
+                                <img
+                                    src="{{ $bundleImg }}"
+                                    alt="{{ $bundle->name }}"
+                                    class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                    loading="lazy"
+                                />
                             </a>
 
-                            <!-- Badges -->
-                            <div class="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 flex flex-col gap-1 sm:gap-2 z-10">
-                                @if($discountPercent > 0)
-                                    <span class="bg-red-600 text-white text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                                        Diskon {{ $discountPercent }}%
+                            <!-- Floating Badges -->
+                            <div class="absolute top-2.5 left-2.5 flex flex-col gap-1.5 z-10">
+                                <span class="bg-gradient-to-r from-amber-600 to-amber-500 text-white text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider flex items-center gap-1.5">
+                                    <i class="fa-solid fa-tags text-[9px]"></i> PROMO BUNDLING
+                                </span>
+                                @if($savings > 0)
+                                    <span class="bg-emerald-600 text-white text-[10px] sm:text-xs font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider">
+                                        HEMAT Rp {{ number_format($savings, 0, ',', '.') }}
                                     </span>
                                 @endif
-                                <span class="bg-purple-600 text-white text-[8px] sm:text-[11px] font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-sm shadow-sm tracking-widest sm:tracking-wider uppercase">
-                                    Paket Bundling
-                                </span>
                             </div>
                         </div>
 
-                        <!-- Product Info -->
-                        <div class="p-3 sm:p-5 flex flex-col flex-1">
-                            <div class="mb-1 text-[10px] sm:text-xs font-semibold text-brand-gold-dark uppercase tracking-widest">
-                                <span>Paket Spesial</span>
+                        <!-- Poster Content -->
+                        <div class="p-4 sm:p-5 flex flex-col flex-1">
+                            <div class="mb-1 text-[10px] sm:text-xs font-extrabold text-amber-700 uppercase tracking-widest flex items-center gap-1">
+                                <i class="fa-solid fa-sparkles text-amber-500"></i> Paket Spesial Hemat
                             </div>
 
-                            <h3 class="product-card__title font-semibold text-brand-dark text-sm sm:text-base leading-snug mb-2 hover:text-brand-gold transition-colors cursor-pointer line-clamp-2">
+                            <h3 class="font-extrabold text-brand-dark text-sm sm:text-base leading-snug mb-2 hover:text-amber-700 transition-colors line-clamp-2">
                                 <a href="{{ route('bundling.show', $bundle->slug) }}">
                                     {{ $bundle->name }}
                                 </a>
                             </h3>
 
-                            <div class="flex flex-col gap-0.5 mt-auto">
-                                @if($bundle->total_original > $bundle->total_price)
-                                    <span class="text-[10px] sm:text-xs text-gray-500 line-through">
-                                        Rp {{ number_format($bundle->total_original, 0, ',', '.') }}
-                                    </span>
+                            <!-- Combo Preview Highlights -->
+                            <div class="space-y-1.5 my-2 p-2.5 bg-amber-50/50 rounded-xl border border-amber-100 text-xs">
+                                <div class="text-gray-700 flex items-center gap-1.5 font-medium truncate">
+                                    <i class="fa-solid fa-bed text-amber-700 text-[11px] shrink-0"></i>
+                                    <span class="truncate">Utama: <strong>{{ $bundle->main_product?->name ?? 'Kasur Pilihan' }}</strong></span>
+                                </div>
+                                @if($bundle->suggest_items && $bundle->suggest_items->isNotEmpty())
+                                    <div class="text-amber-900 flex items-center gap-1.5 font-medium truncate">
+                                        <i class="fa-solid fa-gift text-emerald-600 text-[11px] shrink-0"></i>
+                                        <span class="truncate">Pelengkap: <strong>{{ $bundle->suggest_items->pluck('product.name')->filter()->join(', ') }}</strong></span>
+                                    </div>
                                 @endif
-                                <span class="font-bold text-sm sm:text-lg text-red-600 tracking-tight">
-                                    Rp {{ number_format($bundle->total_price, 0, ',', '.') }}
-                                </span>
                             </div>
 
-                            <!-- Action Button -->
-                            <div class="mt-3 sm:mt-5 pt-3 sm:pt-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onclick="addToCartBundling('{{ $bundle->id }}', 1)"
-                                    class="product-card__btn w-full py-1.5 sm:py-2.5 rounded-lg sm:rounded-xl font-bold text-[11px] sm:text-sm flex justify-center items-center gap-1.5 bg-white border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white group-hover:bg-brand-dark group-hover:text-white shadow-sm transition-all duration-300 focus:outline-none"
-                                >
-                                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h15l-1 12h-12L4 4H2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1" fill="currentColor"/><circle cx="18" cy="20" r="1" fill="currentColor"/></svg>
-                                    <span>Tambah ke Keranjang</span>
-                                </button>
+                            <!-- Pricing Block -->
+                            <div class="flex flex-col gap-0.5 mt-auto pt-2">
+                                <span class="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Mulai Dari (Total Paket)</span>
+                                <div class="flex items-baseline gap-2">
+                                    <span class="font-black text-base sm:text-xl text-amber-900 tracking-tight">
+                                        Rp {{ number_format($bundle->start_price ?? 0, 0, ',', '.') }}
+                                    </span>
+                                    @if(($bundle->start_original_price ?? 0) > ($bundle->start_price ?? 0))
+                                        <span class="text-[11px] sm:text-xs text-gray-400 line-through">
+                                            Rp {{ number_format($bundle->start_original_price, 0, ',', '.') }}
+                                        </span>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <!-- Eyecatching Action CTA Button -->
+                            <div class="mt-4 pt-3 border-t border-gray-100 space-y-1.5">
+                                @if(!empty($bundle->main_product_slug))
+                                    <a
+                                        href="{{ route('products.show', $bundle->main_product_slug) }}#bundling-addon"
+                                        class="w-full py-2.5 sm:py-3 rounded-xl font-extrabold text-xs sm:text-sm flex justify-center items-center gap-2 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-400 text-white transition-all duration-300 shadow-md shadow-amber-500/20 transform hover:-translate-y-0.5"
+                                    >
+                                        <i class="fa-solid fa-cart-shopping text-white text-xs"></i>
+                                        <span>Ambil Promo Bundling</span>
+                                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                    </a>
+                                @else
+                                    <a
+                                        href="{{ route('bundling.show', $bundle->slug) }}"
+                                        class="w-full py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm flex justify-center items-center gap-2 bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark transition-all duration-300 shadow-md"
+                                    >
+                                        <span>Lihat Detail Promo</span>
+                                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                    </a>
+                                @endif
+                                <a href="{{ route('bundling.show', $bundle->slug) }}" class="text-[11px] text-center text-gray-500 hover:text-amber-800 font-semibold block transition">
+                                    Detail Rincian Paket →
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -250,58 +275,69 @@
             <div x-show="viewMode === 'list'" class="flex flex-col gap-4" style="display: none;">
                 @foreach($bundlings as $bundle)
                     @php
-                        $discountPercent = ($bundle->total_original > 0 && $bundle->total_price > 0)
-                            ? round((($bundle->total_original - $bundle->total_price) / $bundle->total_original) * 100)
-                            : 0;
+                        $bundleImg = $bundle->thumbnail_url ?: ($bundle->banner_image ? cms_asset($bundle->banner_image) : 'https://via.placeholder.com/400x300');
+                        $savings = (float)($bundle->total_savings ?? 0);
                     @endphp
-                    <div class="bg-white border border-brand-muted rounded-2xl flex gap-4 overflow-hidden hover:shadow-lg transition-shadow">
-                        <div class="w-48 h-48 bg-gray-50 flex-shrink-0 relative">
-                            @if($bundle->thumbnail_url)
-                                <img src="{{ $bundle->thumbnail_url }}" alt="{{ $bundle->name }}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
-                            @else
-                                <div class="w-full h-full flex items-center justify-center text-gray-300">
-                                    <i class="fa-solid fa-gift w-12 h-12"></i>
-                                </div>
-                            @endif
-                            @if($discountPercent > 0)
-                                <div class="absolute top-3 left-3 flex flex-col gap-2">
-                                    <span class="bg-brand-dark text-white text-[11px] font-bold px-2.5 py-1 rounded-sm shadow-sm tracking-wider uppercase">
-                                        -{{ $discountPercent }}%
+                    <div class="bg-white border-2 border-amber-100 hover:border-amber-400 rounded-3xl flex flex-col sm:flex-row gap-4 overflow-hidden shadow-sm hover:shadow-xl transition-all p-3 sm:p-0">
+                        <div class="w-full sm:w-60 aspect-[4/3] sm:aspect-auto bg-gray-50 flex-shrink-0 relative overflow-hidden rounded-2xl sm:rounded-none">
+                            <a href="{{ route('bundling.show', $bundle->slug) }}" class="block w-full h-full">
+                                <img src="{{ $bundleImg }}" alt="{{ $bundle->name }}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
+                            </a>
+                            <div class="absolute top-3 left-3 flex flex-col gap-1.5">
+                                <span class="bg-amber-600 text-white text-[10px] font-black px-2.5 py-1 rounded-lg shadow-md uppercase tracking-wider">
+                                    PROMO BUNDLING
+                                </span>
+                                @if($savings > 0)
+                                    <span class="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-md uppercase tracking-wider">
+                                        HEMAT Rp {{ number_format($savings, 0, ',', '.') }}
                                     </span>
-                                </div>
-                            @endif
+                                @endif
+                            </div>
                         </div>
-                        <div class="flex-1 p-5 flex flex-col justify-between">
+                        <div class="flex-1 p-3 sm:p-6 flex flex-col justify-between">
                             <div>
-                                <span class="text-xs uppercase font-bold tracking-wider text-gray-400">Bundling</span>
-                                <h3 class="font-semibold text-brand-dark text-lg mt-1 line-clamp-2">
-                                    <a href="{{ route('bundling.show', $bundle->slug) }}" class="hover:text-brand-gold">{{ $bundle->name }}</a>
+                                <span class="text-xs uppercase font-extrabold tracking-wider text-amber-700">Paket Hemat Spesial</span>
+                                <h3 class="font-extrabold text-brand-dark text-lg sm:text-xl mt-1 line-clamp-2">
+                                    <a href="{{ route('bundling.show', $bundle->slug) }}" class="hover:text-amber-700">{{ $bundle->name }}</a>
                                 </h3>
-                                <p class="text-sm text-gray-500 mt-2 line-clamp-2">{{ $bundle->description }}</p>
-                                <div class="mt-3 flex flex-col gap-0.5">
-                                    @if($bundle->total_original > $bundle->total_price)
-                                        <span class="text-sm text-gray-500 line-through decoration-gray-300">
-                                            Rp {{ number_format($bundle->total_original, 0, ',', '.') }}
-                                        </span>
+                                @if($bundle->description)
+                                    <p class="text-xs sm:text-sm text-gray-500 mt-2 line-clamp-2">{{ $bundle->description }}</p>
+                                @endif
+
+                                <div class="space-y-1 my-3 p-3 bg-amber-50/50 rounded-xl border border-amber-100 text-xs">
+                                    <div class="text-gray-700 font-medium">🛏️ Produk Utama: <strong>{{ $bundle->main_product?->name ?? 'Kasur Pilihan' }}</strong> ({{ $bundle->main_price_range_text }})</div>
+                                    @if($bundle->suggest_items && $bundle->suggest_items->isNotEmpty())
+                                        <div class="text-amber-900 font-medium">🎁 Produk Pelengkap Diskon: <strong>{{ $bundle->suggest_items->pluck('product.name')->filter()->join(', ') }}</strong></div>
                                     @endif
-                                    <span class="font-bold text-lg text-red-600 tracking-tight">
-                                        Rp {{ number_format($bundle->total_price, 0, ',', '.') }}
-                                    </span>
                                 </div>
                             </div>
-                            
-                            <div class="mt-5 pt-4 border-t border-gray-100 flex gap-3">
-                                <a href="{{ route('bundling.show', $bundle->slug) }}" class="px-5 py-2.5 bg-white border-2 border-brand-dark text-brand-dark hover:bg-brand-dark hover:text-white rounded-xl font-bold text-sm transition-all duration-300">
-                                    Lihat Detail Paket
-                                </a>
-                                <button
-                                    type="button"
-                                    onclick="addToCartBundling('{{ $bundle->id }}', 1)"
-                                    class="px-5 py-2.5 bg-brand-dark text-white hover:bg-brand-dark/90 rounded-xl font-bold text-sm transition-colors flex items-center gap-2"
-                                >
-                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h15l-1 12h-12L4 4H2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1" fill="currentColor"/><circle cx="18" cy="20" r="1" fill="currentColor"/></svg>
-                                    Tambah ke Keranjang
-                                </button>
+
+                            <div class="mt-3 pt-3 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div>
+                                    <span class="text-[10px] uppercase font-bold text-gray-400 block">Mulai Dari (Total Paket)</span>
+                                    <div class="flex items-baseline gap-2">
+                                        <span class="font-black text-xl text-amber-900">
+                                            Rp {{ number_format($bundle->start_price ?? 0, 0, ',', '.') }}
+                                        </span>
+                                        @if(($bundle->start_original_price ?? 0) > ($bundle->start_price ?? 0))
+                                            <span class="text-xs text-gray-400 line-through">
+                                                Rp {{ number_format($bundle->start_original_price, 0, ',', '.') }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 w-full sm:w-auto">
+                                    <a href="{{ route('bundling.show', $bundle->slug) }}" class="px-4 py-2.5 bg-white border border-gray-200 text-gray-700 hover:text-amber-700 rounded-xl font-bold text-xs transition">
+                                        Lihat Poster
+                                    </a>
+                                    @if(!empty($bundle->main_product_slug))
+                                        <a href="{{ route('products.show', $bundle->main_product_slug) }}#bundling-addon" class="flex-1 sm:flex-none px-5 py-2.5 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-400 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transform hover:-translate-y-0.5">
+                                            <i class="fa-solid fa-cart-shopping text-white text-xs"></i>
+                                            <span>Ambil Promo & Beli</span>
+                                            <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                        </a>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                     </div>

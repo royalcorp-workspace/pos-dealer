@@ -41,7 +41,13 @@ namespace App\Providers {
          */
         public function boot(): void
         {
-            if (!app()->environment('local') || env('FORCE_HTTPS', false)) {
+            if (
+                request()->server('HTTP_X_FORWARDED_PROTO') === 'https'
+                || request()->header('X-Forwarded-Proto') === 'https'
+                || request()->isSecure()
+                || !app()->environment('local')
+                || env('FORCE_HTTPS', false)
+            ) {
                 \Illuminate\Support\Facades\URL::forceScheme('https');
             }
         }

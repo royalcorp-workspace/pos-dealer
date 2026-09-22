@@ -374,6 +374,9 @@ document.addEventListener('click', function (e) {
     catalogBtn.style.opacity = '0.6';
 
     const url = new URL(nextPageUrl, window.location.origin);
+    if (window.location.protocol === 'https:') {
+        url.protocol = 'https:';
+    }
     url.searchParams.set('load_more', '1');
 
     fetch(url.toString(), {

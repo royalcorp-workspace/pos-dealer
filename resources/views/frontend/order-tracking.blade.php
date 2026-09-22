@@ -91,6 +91,35 @@
                         </div>
                     </div>
 
+                    @php
+                        $displayEta = $etaLabel ?? ($shipment['eta_label'] ?? null);
+                        $etaSrc = $delivery->eta_source ?? ($shipment['eta_source'] ?? null);
+                        $etaNotes = $delivery->eta_notes ?? ($shipment['eta_notes'] ?? null);
+                    @endphp
+
+                    @if(!empty($displayEta))
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-200/80 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3.5">
+                                <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-lg shadow-sm shrink-0">
+                                    <i class="fa-solid fa-truck-fast"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-blue-600 uppercase tracking-wider">Estimasi Tiba (ETA)</p>
+                                    <p class="text-lg sm:text-xl font-extrabold text-blue-950 mt-0.5">{{ $displayEta }}</p>
+                                    @if(!empty($etaNotes) && $etaNotes !== $displayEta)
+                                        <p class="text-xs text-blue-700/80 mt-0.5">{{ $etaNotes }}</p>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 self-start sm:self-auto">
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white text-blue-800 border border-blue-200 shadow-2xs">
+                                    <i class="fa-solid {{ $etaSrc === 'biteship' ? 'fa-satellite-dish text-emerald-600' : ($etaSrc === 'store' ? 'fa-store text-amber-600' : 'fa-clock text-blue-600') }} text-[11px]"></i>
+                                    {{ $etaSrc === 'biteship' ? 'Biteship (Ekspedisi)' : ($etaSrc === 'store' ? 'Jadwal Toko' : 'Estimasi Pengiriman') }}
+                                </span>
+                            </div>
+                        </div>
+                    @endif
+
                     @if($shipment)
                         <div class="bg-white border border-brand-muted rounded-3xl p-6 shadow-sm">
                             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">

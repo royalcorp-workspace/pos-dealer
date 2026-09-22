@@ -132,64 +132,107 @@ class GoogleAuthController extends Controller
 
     private function verifyGoogleIdTokenAndLogin(string $idToken, Request $request, bool $redirect, string $firebaseToken): mixed
     {
+        $googleId = '';
+        $email = '';
+        $name = '';
+
         try {
             $verifiedIdToken = app('firebase.auth')->verifyIdToken($idToken);
             $googleId = (string) $verifiedIdToken->claims()->get('sub');
             $email = (string) $verifiedIdToken->claims()->get('email');
             $name = (string) $verifiedIdToken->claims()->get('name');
         } catch (\Throwable $e) {
-            return response()->json([
-                'message' => 'Token Firebase tidak valid: ' . $e->getMessage(),
-            ], 401);
+            // Fallback: direct Google OAuth tokeninfo check
+            try {
+                $googleUser = Http::get('https://oauth2.googleapis.com/tokeninfo', [
+                    'id_token' => $idToken,
+                ]);
+                if ($googleUser->successful()) {
+                    $payload = $googleUser->json();
+                    $googleId = (string) ($payload['sub'] ?? '');
+                    $email = (string) ($payload['email'] ?? '');
+                    $name = (string) ($payload['name'] ?? '');
+                } else {
+                    return response()->json([
+                        'message' => 'Token tidak valid: ' . $e->getMessage(),
+                    ], 401);
+                }
+            } catch (\Throwable $ex) {
+                return response()->json([
+                    'message' => 'Token tidak valid: ' . $e->getMessage(),
+                ], 401);
+            }
         }
+
+        $email = trim($email);
+        $googleId = trim($googleId);
 
         if ($googleId === '' || $email === '') {
             return response()->json([
-                'message' => 'Token Firebase tidak valid.',
+                'message' => 'Token tidak mengandung informasi user yang valid.',
             ], 401);
         }
 
+        $normalizedEmail = strtolower($email);
+
+        // Cari user berdasarkan google_id, firebase_uid, atau email (case-insensitive)
         $user = User::query()
             ->where('google_id', $googleId)
+            ->orWhere('firebase_uid', $googleId)
+            ->orWhereRaw('LOWER(email) = ?', [$normalizedEmail])
             ->first();
 
-        if (!$user) {
-            $user = User::query()
-                ->where('email', $email)
-                ->first();
-        }
-
         if ($user) {
-            if (empty($user->google_id)) {
-                $user->update([
-                    'google_id' => $googleId,
-                    'firebase_token' => $firebaseToken !== '' ? $firebaseToken : $user->firebase_token,
-                    'email_verified' => true,
-                    'email_verified_at' => now(),
-                ]);
-            } elseif ($user->google_id !== $googleId) {
-                return response()->json([
-                    'action' => 'conflict',
-                    'message' => 'Email ini sudah terdaftar dengan akun Google lain. Silakan login dengan akun Google yang sesuai.',
-                ], 409);
-            } elseif ($firebaseToken !== '') {
-                $user->update([
-                    'firebase_token' => $firebaseToken,
-                    'email_verified' => true,
-                    'email_verified_at' => now(),
-                ]);
+            // User sudah terdaftar (baik via register biasa/non-google maupun google sebelumnya)
+            $updateData = [
+                'google_id' => $googleId,
+                'firebase_uid' => $user->firebase_uid ?: $googleId,
+                'email_verified' => true,
+                'email_verified_at' => $user->email_verified_at ?? now(),
+            ];
+
+            if ($firebaseToken !== '') {
+                $updateData['firebase_token'] = $firebaseToken;
+            }
+
+            $user->update($updateData);
+
+            // Pastikan data customer juga sinkron
+            try {
+                \App\Models\Frontend\Customer\Customer::updateOrCreate(
+                    ['email' => $user->email],
+                    [
+                        'user_id' => $user->id,
+                        'name' => $user->name ?: ($name ?: $user->email),
+                    ]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Failed to sync customer on Google login: ' . $e->getMessage());
             }
         } else {
-            return response()->json([
-                'action' => 'register',
-                'message' => 'Akun belum terdaftar. Silakan lengkapi pendaftaran.',
-                'user' => [
-                    'email' => $email,
-                    'name' => $name,
-                    'google_id' => $googleId,
-                    'firebase_token' => $firebaseToken,
-                ]
-            ], 404);
+            // User baru -> langsung daftarkan akun dan customer secara otomatis tanpa 404
+            $userName = $name !== '' ? $name : explode('@', $email)[0];
+
+            $user = User::create([
+                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'name' => $userName,
+                'email' => $email,
+                'google_id' => $googleId,
+                'firebase_uid' => $googleId,
+                'firebase_token' => $firebaseToken !== '' ? $firebaseToken : null,
+                'email_verified' => true,
+                'email_verified_at' => now(),
+            ]);
+
+            try {
+                \App\Models\Frontend\Customer\Customer::create([
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to create customer on Google auto-register: ' . $e->getMessage());
+            }
         }
 
         $deviceId = $this->deviceSessions->deviceId($request);

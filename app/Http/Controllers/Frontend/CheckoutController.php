@@ -618,6 +618,8 @@ class CheckoutController extends Controller
         $dbDiscount = $voucherDiscount;
         $dbTotal = max(0, $dbSubtotal - $dbDiscount + $shippingCost);
 
+        $shippingCalc = $this->calculateShippingDetails($request->courier, (string) ($finalSubDistrictId ?? $subDistrictId ?? ''), $cart);
+
         // Update Buffer without creating Order in orders table!
         $bufferMeta = array_merge($buffer->meta ?? [], [
             'shipping_address' => $shippingAddressData,
@@ -633,6 +635,13 @@ class CheckoutController extends Controller
             ],
             'courier' => $request->courier,
             'courier_id' => $courierModel?->id,
+            'shipping_eta_label' => $shippingCalc['eta_label'] ?? null,
+            'shipping_duration' => $shippingCalc['duration'] ?? null,
+            'shipping_eta_source' => $shippingCalc['eta_source'] ?? null,
+            'shipping_eta_dates' => $shippingCalc['eta_dates'] ?? null,
+            'shipping_service_name' => $shippingCalc['service_name'] ?? null,
+            'shipping_service_code' => $shippingCalc['service_code'] ?? null,
+            'courier_service_type' => $shippingCalc['service_code'] ?? null,
             'applied_vouchers' => $appliedVouchers,
             'voucher_codes' => $voucherCodes,
             'voucher_code' => implode(',', $voucherCodes),
@@ -747,6 +756,9 @@ class CheckoutController extends Controller
                 'courier' => $meta['courier'] ?? 'kurir',
                 'courier_id' => $buffer->courier_id,
                 'shipping_cost' => (float) $buffer->shipping_cost,
+                'eta_label' => $meta['shipping_eta_label'] ?? ($meta['eta_label'] ?? null),
+                'shipping_duration' => $meta['shipping_duration'] ?? null,
+                'shipping_eta_source' => $meta['shipping_eta_source'] ?? null,
                 'subtotal' => (float) $buffer->subtotal,
                 'price_product_setting_discount' => (float) ($meta['price_product_setting_discount'] ?? 0),
                 'voucher_discount' => (float) ($buffer->voucher_nominal ?? 0),
@@ -981,12 +993,24 @@ class CheckoutController extends Controller
                 }
 
                 // 2. Prepare Order Metadata
+                $selectedCourierCode = $buffer->courier?->code ?? '';
+                $shippingCalc = $this->calculateShippingDetails($selectedCourierCode, (string) ($shippingAddressData['sub_district_id'] ?? ''), $cart);
+                $etaData = $shippingCalc['eta_dates'] ?? null;
+                $etaDuration = $shippingCalc['duration'] ?? '1-2 hari';
+                $etaSource = $shippingCalc['eta_source'] ?? ($selectedCourierCode === 'kurir_toko' ? 'store' : 'biteship');
+
                 $orderMeta = array_merge(
                     $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
                     [
                         'customer' => $customerData,
                         'platform' => 'website',
                         'payment_started_at' => now()->toIso8601String(),
+                        'shipping_eta_label' => $shippingCalc['eta_label'] ?? null,
+                        'shipping_duration' => $etaDuration,
+                        'shipping_eta_source' => $etaSource,
+                        'shipping_service_name' => $shippingCalc['service_name'] ?? null,
+                        'shipping_service_code' => $shippingCalc['service_code'] ?? null,
+                        'courier_service_type' => $shippingCalc['service_code'] ?? null,
                     ]
                 );
 
@@ -1019,6 +1043,24 @@ class CheckoutController extends Controller
                     'creator' => $customer ? $customer->name : 'Customer Web',
                     'editor' => $customer ? $customer->name : 'Customer Web',
                 ]);
+
+                // 3b. Create initial Delivery record in deliveries table
+                try {
+                    \App\Models\Frontend\Shipping\Delivery::create([
+                        'id' => Str::uuid()->toString(),
+                        'order_id' => $order->id,
+                        'courier_id' => $order->courier_id,
+                        'status' => 1, // pending
+                        'estimated_delivery_at' => $etaData['estimated_at'] ?? null,
+                        'estimated_delivery_min' => $etaData['min_date'] ?? null,
+                        'estimated_delivery_max' => $etaData['max_date'] ?? null,
+                        'estimated_delivery_duration' => $etaDuration,
+                        'eta_source' => $etaSource,
+                        'eta_notes' => $shippingCalc['eta_label'] ?? null,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning("Gagal membuat initial delivery record #{$order->order_number}: " . $e->getMessage());
+                }
 
                 // 4. Create OrderItems & Allocate Inventory
                 if (!empty($resolvedItems)) {
@@ -1795,10 +1837,10 @@ class CheckoutController extends Controller
                             $totalFixedShippingCost += ($vShip * $bQty);
                         } else {
                             $hasDimensionItems = true;
-                            $bLen = (float) ($v->length ?? $p->length ?? ($v->attributes['length'] ?? 0));
-                            $bWid = (float) ($v->width ?? $p->width ?? ($v->attributes['width'] ?? 0));
-                            $bHei = (float) ($v->height ?? $p->height ?? ($v->attributes['height'] ?? 0));
-                            $bWei = (float) ($v->weight ?? $p->weight ?? ($v->attributes['weight'] ?? 0));
+                            $bLen = (float) ($v->package_length ?: ($v->length ?? $p->length ?? ($v->attributes['length'] ?? 0)));
+                            $bWid = (float) ($v->package_width ?: ($v->width ?? $p->width ?? ($v->attributes['width'] ?? 0)));
+                            $bHei = (float) ($v->package_height ?: ($v->height ?? $p->height ?? ($v->attributes['height'] ?? 0)));
+                            $bWei = (float) ($v->package_weight ?: ($v->weight ?? $p->weight ?? ($v->attributes['weight'] ?? 0)));
 
                             if ($bWei > 0 || ($bLen > 0 && $bWid > 0 && $bHei > 0)) {
                                 $hasAnyDimensionOrWeight = true;
@@ -1851,10 +1893,10 @@ class CheckoutController extends Controller
                 $weight = 0.0;
 
                 if ($variantModel) {
-                    $length = (float) ($variantModel->length ?? $productModel->length ?? ($variantModel->attributes['length'] ?? 0));
-                    $width = (float) ($variantModel->width ?? $productModel->width ?? ($variantModel->attributes['width'] ?? 0));
-                    $height = (float) ($variantModel->height ?? $productModel->height ?? ($variantModel->attributes['height'] ?? 0));
-                    $weight = (float) ($variantModel->weight ?? $productModel->weight ?? ($variantModel->attributes['weight'] ?? 0));
+                    $length = (float) ($variantModel->package_length ?: ($variantModel->length ?? $productModel->length ?? ($variantModel->attributes['length'] ?? 0)));
+                    $width = (float) ($variantModel->package_width ?: ($variantModel->width ?? $productModel->width ?? ($variantModel->attributes['width'] ?? 0)));
+                    $height = (float) ($variantModel->package_height ?: ($variantModel->height ?? $productModel->height ?? ($variantModel->attributes['height'] ?? 0)));
+                    $weight = (float) ($variantModel->package_weight ?: ($variantModel->weight ?? $productModel->weight ?? ($variantModel->attributes['weight'] ?? 0)));
                 } elseif ($productModel) {
                     $length = (float) ($productModel->length ?? 0);
                     $width = (float) ($productModel->width ?? 0);
@@ -2023,6 +2065,7 @@ class CheckoutController extends Controller
             }
 
             $totalShippingCost = $fixedShippingCost + $dimensionCost;
+            $etaToko = \App\Services\EtaService::calculateEta('1-2 hari');
 
             return [
                 'shipping_cost' => $totalShippingCost,
@@ -2040,7 +2083,10 @@ class CheckoutController extends Controller
                 'has_dimension_items' => $hasDimensionItems,
                 'service_name' => 'Kurir Toko',
                 'duration' => '1-2 Hari',
+                'eta_label' => $etaToko['formatted_label'],
+                'eta_dates' => $etaToko,
                 'source' => 'internal',
+                'eta_source' => 'store',
                 'courier_type' => 'toko',
             ];
         }
@@ -2077,9 +2123,11 @@ class CheckoutController extends Controller
             $biteshipRate = $biteshipService->getBestRateForCourier($courierModel->code, $cart, (string) $destPostalCode);
         }
 
+        $shippingServiceCode = null;
         if ($biteshipRate && isset($biteshipRate['price'])) {
             $expeditionCost = (int) $biteshipRate['price'];
             $shippingServiceName = $biteshipRate['service_name'] ?? null;
+            $shippingServiceCode = $biteshipRate['service_code'] ?? ($biteshipRate['type'] ?? 'reg');
             $shippingEtd = $biteshipRate['duration'] ?? null;
             $shippingSource = 'biteship';
         } elseif ($hasDimensionItems) {
@@ -2094,6 +2142,7 @@ class CheckoutController extends Controller
         }
 
         $totalShippingCost = $fixedShippingCost + $expeditionCost;
+        $etaExpedisi = \App\Services\EtaService::calculateEta($shippingEtd ?: '1-2 hari');
 
         return [
             'shipping_cost' => $totalShippingCost,
@@ -2107,9 +2156,13 @@ class CheckoutController extends Controller
             'actual_weight' => $weightDetails['actual_weight'],
             'volumetric_weight' => $weightDetails['volumetric_weight'],
             'has_dimension_items' => $hasDimensionItems,
-            'service_name' => $shippingServiceName,
-            'duration' => $shippingEtd,
+            'service_name' => $shippingServiceName ?: 'Reguler',
+            'service_code' => $shippingServiceCode ?: 'reg',
+            'duration' => $shippingEtd ?: $etaExpedisi['duration'],
+            'eta_label' => $etaExpedisi['formatted_label'],
+            'eta_dates' => $etaExpedisi,
             'source' => $shippingSource,
+            'eta_source' => $biteshipRate ? 'biteship' : 'manual',
             'courier_type' => 'expedisi',
         ];
     }
