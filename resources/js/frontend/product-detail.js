@@ -271,6 +271,7 @@ function findMatchingVariant() {
                     if (stockPill) stockPill.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border-red-200/80 text-red-800 border text-[11px] font-bold shadow-2xs transition-all';
                 }
             }
+            updateSpecAvailability(stockQty);
             
             const priceLabel = document.getElementById('price-label');
             if (priceLabel) {
@@ -490,8 +491,24 @@ window.selectVariantCard = function(el) {
         }
     }
 
+    updateSpecAvailability(stock);
+
     checkSelection();
 };
+
+function updateSpecAvailability(stockQty) {
+    const specEl = document.getElementById('spec-availability');
+    if (specEl) {
+        if (stockQty > 0) {
+            specEl.textContent = 'Ready Stock';
+            specEl.className = 'mt-0.5 font-bold text-emerald-700 text-sm';
+        } else {
+            specEl.textContent = 'Stok Habis';
+            specEl.className = 'mt-0.5 font-bold text-red-600 text-sm';
+        }
+    }
+}
+window.updateSpecAvailability = updateSpecAvailability;
 
 window.selectVariantFromDropdown = function(selectEl) {
     if (!selectEl) return;
@@ -563,6 +580,8 @@ window.selectVariantFromDropdown = function(selectEl) {
             stockText.textContent = 'Stok Habis';
         }
     }
+
+    updateSpecAvailability(stock);
 
     checkSelection();
 };

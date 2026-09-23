@@ -758,7 +758,12 @@
                 
                 init() {
                     if (this.isLoggedIn) {
-                        this.fetchMessages(true); // Silent fetch, do NOT connect to Pusher yet
+                        this.fetchMessages(true);
+                        setInterval(() => {
+                            if (this.isLoggedIn && (this.isOpen || this.conversationId)) {
+                                this.fetchMessages(true);
+                            }
+                        }, 4000);
                     }
                 },
                 
@@ -786,6 +791,13 @@
                     }
                 },
                 
+                sortMessages() {
+                    this.messages.sort((a, b) => {
+                        const diff = new Date(a.created_at) - new Date(b.created_at);
+                        return diff !== 0 ? diff : ((a.id || 0) - (b.id || 0));
+                    });
+                },
+
                 formatTime(isoString) {
                     if (!isoString) return '';
                     const d = new Date(isoString);
@@ -811,12 +823,13 @@
                         });
                         const data = await response.json();
                         if (data.success) {
-                            this.messages = data.messages;
+                            this.messages = data.messages || [];
+                            this.sortMessages();
                             this.conversationId = data.conversation_id;
                             if (!silent && this.isOpen) {
                                 this.initPusher();
                             }
-                            if (!silent) setTimeout(() => this.scrollToBottom(), 100);
+                            if (!silent || this.isOpen) setTimeout(() => this.scrollToBottom(), 100);
                         }
                     } catch (e) {
                         console.error('Failed to load messages', e);
@@ -840,6 +853,7 @@
                         sender_type: 'customer',
                         created_at: new Date().toISOString()
                     });
+                    this.sortMessages();
                     setTimeout(() => this.scrollToBottom(), 50);
                     
                     try {
@@ -859,7 +873,11 @@
                             const idx = this.messages.findIndex(m => m.id === tempId);
                             if (idx !== -1) {
                                 this.messages.splice(idx, 1, data.message);
+                            } else {
+                                const exists = this.messages.find(m => m.id === data.message.id);
+                                if (!exists) this.messages.push(data.message);
                             }
+                            this.sortMessages();
                         }
                     } catch (e) {
                         console.error('Failed to send', e);
@@ -883,6 +901,7 @@
                         const exists = this.messages.find(m => m.id === data.id);
                         if (!exists) {
                             this.messages.push(data);
+                            this.sortMessages();
                             if (this.isOpen) {
                                 setTimeout(() => this.scrollToBottom(), 100);
                             } else {

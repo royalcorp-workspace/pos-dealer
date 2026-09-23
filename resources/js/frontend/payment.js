@@ -1,9 +1,34 @@
 window.processPayment = function () {
     var selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+    var validationAlert = document.getElementById('payment-method-validation-error');
+    var accordionsWrapper = document.getElementById('payment-accordions-wrapper');
+
     if (!selectedMethod) {
-        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: 'Pilih metode pembayaran terlebih dahulu' } }));
+        if (validationAlert) {
+            validationAlert.classList.remove('hidden');
+            validationAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        if (accordionsWrapper) {
+            accordionsWrapper.classList.add('p-2.5', 'rounded-2xl', 'border-2', 'border-red-400', 'bg-red-50/20');
+        }
+        window.dispatchEvent(new CustomEvent('show-toast', { 
+            detail: { type: 'warning', message: 'Silakan pilih saluran metode pembayaran terlebih dahulu.' } 
+        }));
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Pilih Metode Pembayaran',
+                text: 'Silakan pilih salah satu saluran pembayaran (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan.',
+                confirmButtonColor: '#1e3a8a',
+                confirmButtonText: 'Mengerti'
+            });
+        }
         return;
     }
+
+    // Clear validation if method is selected
+    if (validationAlert) validationAlert.classList.add('hidden');
+    if (accordionsWrapper) accordionsWrapper.classList.remove('p-2.5', 'border-2', 'border-red-400', 'bg-red-50/20');
 
     var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
 
@@ -13,6 +38,7 @@ window.processPayment = function () {
     var orderId = container ? container.dataset.orderId : '';
 
     var body, headers;
+    var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     if (isManualTransfer) {
         var fileInput = document.getElementById('payment_proof');
@@ -25,8 +51,9 @@ window.processPayment = function () {
         }
 
         headers = {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            'Accept': 'application/json'
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
         };
     } else {
         window.showLoading();
@@ -36,28 +63,68 @@ window.processPayment = function () {
         });
         headers = {
             'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            'Accept': 'application/json'
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
         };
     }
 
-    fetch(processUrl, { method: 'POST', headers: headers, body: body })
-    .then(function (response) { return response.json(); })
-    .then(function (data) {
+    fetch(processUrl, { 
+        method: 'POST', 
+        headers: headers, 
+        body: body,
+        credentials: 'same-origin'
+    })
+    .then(async function (response) {
+        var data = {};
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = { success: false, message: 'Respon server tidak dapat diproses (' + response.status + ')' };
+        }
+        return { ok: response.ok, status: response.status, data: data };
+    })
+    .then(function (res) {
         window.hideLoading();
-        if (data.success) {
+        var data = res.data;
+        if (res.ok && data && data.success) {
             localStorage.removeItem('selectedCartCoupon');
             localStorage.removeItem('selectedCartCoupons');
-            
-            // Redirect biasa (tanpa Iframe Snap)
             window.location.href = data.redirect_url || thankYouUrl;
         } else {
-            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: data.message || 'Gagal memproses pembayaran.' } }));
+            var errorMsg = (data && data.message) ? data.message : 'Terjadi kendala saat memproses pembayaran.';
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: errorMsg } }));
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Pembayaran Belum Berhasil',
+                    text: errorMsg,
+                    confirmButtonColor: '#1e3a8a',
+                    confirmButtonText: 'Tutup'
+                }).then(function() {
+                    if (data && data.redirect_url) {
+                        window.location.href = data.redirect_url;
+                    }
+                });
+            } else if (data && data.redirect_url) {
+                setTimeout(function() { window.location.href = data.redirect_url; }, 1800);
+            }
         }
     })
-    .catch(function () {
+    .catch(function (err) {
         window.hideLoading();
-        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Gagal memproses pembayaran.' } }));
+        console.error('Payment process error:', err);
+        var msg = 'Terjadi gangguan koneksi ke server saat memproses transaksi. Silakan coba kembali.';
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: msg } }));
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Gangguan Jaringan',
+                text: msg,
+                confirmButtonColor: '#1e3a8a',
+                confirmButtonText: 'Coba Lagi'
+            });
+        }
     });
 };
 
@@ -228,7 +295,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     radios.forEach(function(radio) {
-        radio.addEventListener('change', toggleDetails);
+        radio.addEventListener('change', function() {
+            var validationAlert = document.getElementById('payment-method-validation-error');
+            var accordionsWrapper = document.getElementById('payment-accordions-wrapper');
+            if (validationAlert) validationAlert.classList.add('hidden');
+            if (accordionsWrapper) accordionsWrapper.classList.remove('p-2.5', 'border-2', 'border-red-400', 'bg-red-50/20');
+            toggleDetails();
+        });
     });
     
     // Accordion toggle click listener

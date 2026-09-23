@@ -106,11 +106,26 @@
                     </div>
                     
                     <div class="space-y-4">
+                        <!-- Validation Error Banner (Point 9) -->
+                        <div id="payment-method-validation-error" class="hidden p-4 rounded-xl bg-red-50 border-2 border-red-300 text-red-800 text-xs sm:text-sm font-medium shadow-sm transition-all duration-300">
+                            <div class="flex items-start gap-3">
+                                <div class="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-red-600 mt-0.5">
+                                    <i class="fa-solid fa-circle-exclamation text-base"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-bold text-red-900 text-sm mb-0.5">Metode Pembayaran Belum Dipilih</h4>
+                                    <p class="text-xs text-red-700 leading-relaxed">
+                                        Silakan pilih salah satu saluran pembayaran di bawah ini (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan ke proses pembayaran.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
                         @php
                             $groupedMethods = collect($paymentMethods)->groupBy('type');
                         @endphp
                         
-                        <div class="space-y-3.5" id="payment-accordions-wrapper">
+                        <div class="space-y-3.5 transition-all duration-300" id="payment-accordions-wrapper">
                             @foreach($groupedMethods as $type => $methods)
                                 @php
                                     $typeLower = strtolower($type);

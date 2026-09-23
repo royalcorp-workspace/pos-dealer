@@ -15,21 +15,88 @@
 @push('styles')
 <style>
 @media print {
-    header, nav, footer, #floating-whatsapp, .no-print, [x-data*="toast"] {
+    @page {
+        size: auto;
+        margin: 10mm 12mm;
+    }
+
+    /* 1. Reset root layout and prevent overflow clipping */
+    html, body {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #111827 !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+        min-height: auto !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+        position: static !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    main, #main-content {
+        display: block !important;
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        position: static !important;
+        float: none !important;
+    }
+
+    /* 2. Hide all non-printable chrome and fixed overlays */
+    header, nav, footer, aside, #floating-whatsapp, .no-print, [x-data*="toast"], 
+    #loading-overlay, .loading-overlay, div.fixed, [role="dialog"], #auth-modal, #cart-drawer, #review-modal,
+    button:not(.print-keep), .sticky, a[href*="whatsapp"] {
         display: none !important;
     }
-    body {
-        background: #fff !important;
-        color: #000 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
-    .print-receipt-wrapper {
+
+    /* 3. Make wrappers full width and linear */
+    .container {
         max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: auto !important;
+    }
+
+    .print-receipt-wrapper {
+        display: block !important;
+        max-width: 100% !important;
+        width: 100% !important;
         margin: 0 !important;
         padding: 0 !important;
         border: none !important;
         box-shadow: none !important;
+    }
+
+    .lg\:col-span-8, .lg\:col-span-4 {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        position: static !important;
+        padding: 0 !important;
+        margin: 0 0 16px 0 !important;
+    }
+
+    /* 4. Ensure cards break cleanly across pages */
+    .bg-white {
+        background: #ffffff !important;
+        border: 1px solid #e5e7eb !important;
+        box-shadow: none !important;
+        border-radius: 8px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .print-invoice-header {
+        display: block !important;
     }
 }
 </style>
@@ -78,6 +145,24 @@
             </div>
         </div>
 
+        <!-- Official Printable Invoice Header (Visible ONLY on print preview) -->
+        <div class="print-invoice-header hidden mb-6 pb-4 border-b-2 border-gray-900">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-2xl font-black tracking-tight text-gray-900 font-serif">IMG STORE</h1>
+                    <p class="text-xs text-gray-600 font-semibold tracking-wide">INVOICE PEMBELIAN RESMI</p>
+                    <p class="text-[11px] text-gray-500 mt-0.5">Dokumen ini merupakan bukti transaksi yang sah</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm font-extrabold text-gray-900">NO. PESANAN: <span class="font-mono text-base">{{ $order->order_number }}</span></p>
+                    <p class="text-xs text-gray-600 mt-0.5">Tanggal: {{ $order->created_at ? $order->created_at->format('d/m/Y, H:i') : date('d/m/Y, H:i') }} WIB</p>
+                    <span class="inline-block mt-1 px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider border border-gray-400 bg-gray-100 text-gray-800">
+                        STATUS: {{ $statusLabel }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-6xl mx-auto print-receipt-wrapper">
             
             <!-- Left Column: Order Journey, Products, Delivery Details -->
@@ -85,7 +170,7 @@
                 
                 <!-- Hero Banner Card -->
                 <div class="bg-white rounded-3xl shadow-sm border border-gray-200/80 overflow-hidden">
-                    <div class="text-center pt-8 pb-6 px-6 sm:px-8">
+                    <div class="text-center pt-8 pb-6 px-6 sm:px-8 no-print">
                         <div class="inline-flex items-center justify-center w-20 h-20 bg-emerald-50 border-2 border-emerald-200 rounded-full mb-4 shadow-sm">
                             <div class="w-14 h-14 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-sm">
                                 <i class="fa-solid fa-check text-2xl"></i>
@@ -99,7 +184,7 @@
 
                     <!-- Payment Deadline Countdown Notice (If Unpaid) -->
                     @if($status == 1)
-                        <div class="bg-gradient-to-r from-amber-50 via-amber-50/80 to-amber-50 border-y border-amber-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div class="bg-gradient-to-r from-amber-50 via-amber-50/80 to-amber-50 border-y border-amber-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 no-print">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
                                     <i class="fa-solid fa-clock text-sm"></i>
@@ -224,10 +309,14 @@
                                 <div>
                                     <span class="text-xs text-gray-500 font-semibold block mb-1">Nomor Virtual Account:</span>
                                     <div class="flex items-center justify-between gap-2 p-3 bg-blue-50/40 rounded-xl border border-blue-100">
-                                        <span class="font-mono font-black text-blue-800 text-xl sm:text-2xl tracking-widest select-all">{{ $vaNumber }}</span>
-                                        <button type="button" onclick="navigator.clipboard.writeText('{{ $vaNumber }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'Nomor Virtual Account {{ $vaNumber }} berhasil disalin!' } }));" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 shadow-2xs shrink-0 cursor-pointer">
-                                            <i class="fa-regular fa-copy text-xs"></i> Salin VA
+                                        <span class="font-mono font-black text-blue-800 text-xl sm:text-2xl tracking-widest select-all" id="va-number-text">{{ $vaNumber }}</span>
+                                        <button type="button" id="btn-copy-va" onclick="copyVaNumber('{{ $vaNumber }}', this)" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 shadow-2xs shrink-0 cursor-pointer">
+                                            <i class="fa-regular fa-copy text-xs"></i> <span>Salin VA</span>
                                         </button>
+                                    </div>
+                                    <div id="va-copy-success-message" class="hidden mt-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                        <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                        <span>Nomor Virtual Account <strong>{{ $vaNumber }}</strong> berhasil disalin ke clipboard!</span>
                                     </div>
                                 </div>
 
@@ -623,6 +712,67 @@
         // Hapus data form checkout agar pesanan berikutnya tidak terisi data lama
         sessionStorage.removeItem('checkout_form_data');
     });
+
+    window.copyVaNumber = function(text, btn) {
+        if (!text) return;
+        
+        function onSuccess() {
+            if (btn) {
+                var originalHtml = btn.dataset.originalHtml || btn.innerHTML;
+                btn.dataset.originalHtml = originalHtml;
+                btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Tersalin!</span>';
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                
+                setTimeout(function() {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                    btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                }, 3000);
+            }
+
+            var successMsg = document.getElementById('va-copy-success-message');
+            if (successMsg) {
+                successMsg.classList.remove('hidden');
+                setTimeout(function() {
+                    successMsg.classList.add('hidden');
+                }, 4000);
+            }
+
+            window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { type: 'success', message: 'Nomor Virtual Account ' + text + ' berhasil disalin!', duration: 3500 } 
+            }));
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
+                fallbackCopyText(text, onSuccess);
+            });
+        } else {
+            fallbackCopyText(text, onSuccess);
+        }
+    };
+
+    function fallbackCopyText(text, cb) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.top = "-9999px";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            if (cb) cb();
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+            window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { type: 'info', message: 'Silakan salin nomor VA secara manual: ' + text } 
+            }));
+        }
+        document.body.removeChild(textArea);
+    }
 </script>
 
 <script>
