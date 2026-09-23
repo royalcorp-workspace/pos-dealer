@@ -50,8 +50,17 @@
                                 <i class="fa-solid fa-building-columns text-blue-500"></i> Informasi Virtual Account
                             </h4>
                             <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
-                                <p class="text-gray-500 text-sm mb-1">Nomor Virtual Account</p>
-                                <p class="font-mono font-extrabold text-blue-700 text-3xl tracking-widest select-all">{{ $vaNumber }}</p>
+                                <p class="text-gray-500 text-xs mb-1">Nomor Virtual Account</p>
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <p class="font-mono font-extrabold text-blue-700 text-2xl sm:text-3xl tracking-widest select-all">{{ $vaNumber }}</p>
+                                    <button type="button" onclick="copyVaNumber('{{ $vaNumber }}', this)" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 shadow-2xs shrink-0 cursor-pointer">
+                                        <i class="fa-regular fa-copy text-xs"></i> <span>Salin VA</span>
+                                    </button>
+                                </div>
+                                <div id="va-copy-success-message" class="hidden mt-2 text-xs font-semibold text-emerald-800 bg-emerald-100/70 border border-emerald-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                    <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                                    <span>Nomor Virtual Account <strong>{{ $vaNumber }}</strong> berhasil disalin ke clipboard!</span>
+                                </div>
                             </div>
                             
                             @if(is_array($instructions) && count($instructions) > 0)
@@ -269,6 +278,68 @@
 @endsection
 
 @push('scripts')
+<script>
+    window.copyVaNumber = function(text, btn) {
+        if (!text) return;
+        
+        function onSuccess() {
+            if (btn) {
+                var originalHtml = btn.dataset.originalHtml || btn.innerHTML;
+                btn.dataset.originalHtml = originalHtml;
+                btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Tersalin!</span>';
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                
+                setTimeout(function() {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                    btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                }, 3000);
+            }
+
+            var successMsg = document.getElementById('va-copy-success-message');
+            if (successMsg) {
+                successMsg.classList.remove('hidden');
+                setTimeout(function() {
+                    successMsg.classList.add('hidden');
+                }, 4000);
+            }
+
+            window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { type: 'success', message: 'Nomor Virtual Account ' + text + ' berhasil disalin!', duration: 3500 } 
+            }));
+        }
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
+                fallbackCopyText(text, onSuccess);
+            });
+        } else {
+            fallbackCopyText(text, onSuccess);
+        }
+    };
+
+    function fallbackCopyText(text, cb) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.top = "-9999px";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            if (cb) cb();
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+            window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { type: 'info', message: 'Silakan salin nomor VA secara manual: ' + text } 
+            }));
+        }
+        document.body.removeChild(textArea);
+    }
+</script>
 @if($isUnpaid)
 <script>
     document.addEventListener('DOMContentLoaded', function() {

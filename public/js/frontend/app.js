@@ -212,11 +212,15 @@ window.toggleWishlist = function (el) {
     }
     el.disabled = true;
 
-    const routeCartToggleWishlist = document.body.dataset.routeCartToggleWishlist;
+    const routeCartToggleWishlist = document.body.dataset.routeCartToggleWishlist || '/cart/toggle-wishlist';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') 
+        || document.querySelector('input[name="_token"]')?.value 
+        || '';
+
     fetch(routeCartToggleWishlist, {
         method: 'POST',
         headers: {
-            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
+            'X-CSRF-TOKEN': csrfToken,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
         },
@@ -241,14 +245,41 @@ window.toggleWishlist = function (el) {
             return;
         }
 
+        // Update all buttons and icons for this product on the page
+        const matchingButtons = document.querySelectorAll(`[data-product-id="${productId}"]`);
+        matchingButtons.forEach(btn => {
+            const btnIcon = btn.querySelector('i');
+            if (btnIcon) {
+                if (data.in_wishlist) {
+                    btnIcon.className = 'fa-solid fa-heart text-brand-gold';
+                } else {
+                    btnIcon.className = 'fa-regular fa-heart text-gray-400';
+                }
+            }
+        });
+
         if (icon) {
             if (data.in_wishlist) {
                 icon.className = 'fa-solid fa-heart text-brand-gold';
             } else {
-                icon.className = 'fa-regular fa-heart';
+                icon.className = 'fa-regular fa-heart text-gray-400';
             }
         }
-        updateWishlistBadge(data.in_wishlist ? 1 : -1);
+
+        if (typeof data.count === 'number') {
+            const countBadge = $('#wishlist-count-badge');
+            const currentCount = countBadge ? parseInt(countBadge.textContent || '0', 10) : 0;
+            updateWishlistBadge(data.count - currentCount);
+        } else {
+            updateWishlistBadge(data.in_wishlist ? 1 : -1);
+        }
+
+        window.dispatchEvent(new CustomEvent('show-toast', { 
+            detail: { 
+                type: 'success', 
+                message: data.in_wishlist ? 'Berhasil ditambahkan ke wishlist' : 'Berhasil dihapus dari wishlist' 
+            } 
+        }));
     })
     .catch((err) => { 
         el.disabled = false;

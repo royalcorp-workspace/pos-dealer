@@ -735,14 +735,35 @@ class CheckoutController extends Controller
         $buffer = $this->getCurrentBuffer();
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
-        if (empty($cart) || !$buffer) {
+        // Check if user is navigating back to payment or continuing an existing unpaid order
+        $existingOrderId = $request->query('order_id') 
+            ?? session()->get('last_created_order_id') 
+            ?? session()->get('thankyou_order_id');
+
+        $existingOrder = null;
+        if ($existingOrderId) {
+            $existingOrder = $this->getOrderFromIdentifier($existingOrderId);
+        }
+
+        // If buffer is empty/missing, check if there is an existing UNPAID order to resume payment
+        if ((empty($cart) || !$buffer) && $existingOrder && (int)$existingOrder->payment_status === 1 && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+            $orderData = $this->formatOrderDataFromModel($existingOrder);
+            session()->put('order_data', $orderData);
+            session()->put('last_created_order_id', $existingOrder->id);
+        } elseif (empty($cart) || !$buffer) {
             $lastProductUrl = $this->getLastProductUrl();
             return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda kosong.');
         }
 
         $orderData = session()->get('order_data');
 
-        if (empty($orderData) || ($orderData['id'] ?? '') !== $buffer->id) {
+        // Check if existing order matches orderData in session
+        if ($existingOrder && (int)$existingOrder->payment_status === 1 && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+            if (empty($orderData) || ($orderData['id'] ?? '') !== $existingOrder->id) {
+                $orderData = $this->formatOrderDataFromModel($existingOrder);
+                session()->put('order_data', $orderData);
+            }
+        } elseif ($buffer && (empty($orderData) || ($orderData['id'] ?? '') !== $buffer->id)) {
             $meta = $buffer->meta ?? [];
             if (empty($meta['customer'])) {
                 return redirect()->route('checkout')->with('warning', 'Silakan lengkapi formulir pengiriman terlebih dahulu.');
@@ -831,21 +852,74 @@ class CheckoutController extends Controller
         if (!$paymentMethod) {
             return response()->json([
                 'success' => false,
-                'message' => 'Silakan pilih metode pembayaran.'
-            ], 400);
+                'message' => 'Silakan pilih saluran metode pembayaran terlebih dahulu.'
+            ], 422);
         }
+
+        $sessionOrderData = session()->get('order_data', []);
 
         $buffer = $this->getCurrentBuffer();
         if (!$buffer && $orderId) {
             $buffer = Buffer::find($orderId);
+        }
+        if (!$buffer && !empty($sessionOrderData['id'])) {
+            $buffer = Buffer::find($sessionOrderData['id']);
         }
 
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
         // Check if an order was already created previously for this ID
         $existingOrder = $this->getOrderFromIdentifier($orderId);
+        if (!$existingOrder && !empty($sessionOrderData['id'])) {
+            $existingOrder = $this->getOrderFromIdentifier($sessionOrderData['id']);
+        }
+        if (!$existingOrder) {
+            $sessionOrderId = session()->get('last_created_order_id') ?? session()->get('thankyou_order_id');
+            if ($sessionOrderId) {
+                $existingOrder = $this->getOrderFromIdentifier($sessionOrderId);
+            }
+        }
 
-        if (!$buffer && !$existingOrder) {
+        // If order already exists and is already paid, redirect to thankyou immediately
+        if ($existingOrder && (int)$existingOrder->payment_status === 2) {
+            return response()->json([
+                'success' => true,
+                'redirect_url' => route('thankyou', ['order_id' => $existingOrder->id]),
+                'message' => 'Pesanan ini sudah dibayar.'
+            ]);
+        }
+
+        // Recover cart from buffer meta or session order_data if buffer_items table was cleared or detached
+        if (empty($cart) && !$existingOrder) {
+            $metaResolved = $buffer?->meta['resolved_items'] ?? ($sessionOrderData['resolved_items'] ?? []);
+            if (!empty($metaResolved)) {
+                $cart = array_map(function ($r) {
+                    $item = $r['item'] ?? [];
+                    return [
+                        'id' => $item['id'] ?? Str::uuid()->toString(),
+                        'product_id' => $item['product_id'] ?? null,
+                        'variant_id' => $r['variant_id'] ?? ($item['variant_id'] ?? null),
+                        'name' => $item['name'] ?? 'Produk',
+                        'brand' => $item['brand'] ?? '',
+                        'image' => $item['image'] ?? '',
+                        'base_price' => (float) ($r['base_price'] ?? ($item['base_price'] ?? 0)),
+                        'sell_price' => (float) ($r['sell_price'] ?? ($item['sell_price'] ?? 0)),
+                        'original_price' => (float) ($r['original_price'] ?? ($item['original_price'] ?? 0)),
+                        'quantity' => (int) ($item['quantity'] ?? 1),
+                        'item_note' => $item['item_note'] ?? '',
+                        'color_id' => $item['color_id'] ?? null,
+                        'color_name' => $item['color_name'] ?? null,
+                        'color_code' => $item['color_code'] ?? null,
+                        'type' => $item['type'] ?? 'product',
+                        'bundle_data' => $item['bundle_data'] ?? [],
+                    ];
+                }, $metaResolved);
+            } elseif (!empty($sessionOrderData['items'])) {
+                $cart = $sessionOrderData['items'];
+            }
+        }
+
+        if (!$buffer && !$existingOrder && empty($cart)) {
             $lastProductUrl = $this->getLastProductUrl();
             return response()->json([
                 'success' => false,
@@ -879,14 +953,14 @@ class CheckoutController extends Controller
         }
 
         $bufferMeta = $buffer ? ($buffer->meta ?? []) : [];
-        $customerData = $bufferMeta['customer'] ?? [];
-        $shippingAddressData = $bufferMeta['shipping_address'] ?? null;
-        $resolvedItems = $bufferMeta['resolved_items'] ?? [];
-        $appliedVouchers = $bufferMeta['applied_vouchers'] ?? [];
-        $itemNotes = $bufferMeta['item_notes'] ?? [];
+        $customerData = !empty($bufferMeta['customer']) ? $bufferMeta['customer'] : ($sessionOrderData['customer'] ?? []);
+        $shippingAddressData = !empty($bufferMeta['shipping_address']) ? $bufferMeta['shipping_address'] : ($sessionOrderData['shipping_address'] ?? null);
+        $resolvedItems = !empty($bufferMeta['resolved_items']) ? $bufferMeta['resolved_items'] : ($sessionOrderData['resolved_items'] ?? []);
+        $appliedVouchers = !empty($bufferMeta['applied_vouchers']) ? $bufferMeta['applied_vouchers'] : ($sessionOrderData['applied_vouchers'] ?? []);
+        $itemNotes = !empty($bufferMeta['item_notes']) ? $bufferMeta['item_notes'] : ($sessionOrderData['item_notes'] ?? []);
 
         $charge = 0;
-        $baseTotal = $existingOrder ? (float)$existingOrder->total : (float)$buffer->total;
+        $baseTotal = $existingOrder ? (float)$existingOrder->total : (float)($buffer?->total ?? ($sessionOrderData['total'] ?? 0));
         if ($paymentMethodModel && $paymentMethodModel->has_charge) {
             $charge = (int) $paymentMethodModel->charge_type === 1 
                 ? ($baseTotal * $paymentMethodModel->charge_value / 100) 
@@ -904,9 +978,9 @@ class CheckoutController extends Controller
                     ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) 
                     : ($customerData['user_id'] ?? null);
 
-                $inputEmail = strtolower(trim($customerData['email'] ?? ''));
-                $inputPhone = trim($customerData['phone'] ?? '');
-                $inputName = trim($customerData['name'] ?? 'Pelanggan');
+                $inputEmail = strtolower(trim($customerData['email'] ?? ($buffer?->customer_email ?? '')));
+                $inputPhone = trim($customerData['phone'] ?? ($buffer?->customer_phone ?? ''));
+                $inputName = trim($customerData['name'] ?? ($buffer?->customer_name ?? 'Pelanggan'));
 
                 // Customer unique by email (case-insensitive)
                 $customer = !empty($inputEmail)
@@ -918,9 +992,8 @@ class CheckoutController extends Controller
                 }
 
                 if ($customer) {
-                    // Jika emailnya sama dan nomor hapenya sama, yg berubah hanya namanya saja, jadi emailnya unique
                     $updateFields = [
-                        'name' => $inputName,
+                        'name' => $inputName ?: $customer->name,
                     ];
                     if ($userId && empty($customer->user_id)) {
                         $updateFields['user_id'] = $userId;
@@ -930,18 +1003,26 @@ class CheckoutController extends Controller
                     }
                     $customer->update($updateFields);
                 } else {
+                    $fallbackEmail = !empty($inputEmail) ? $inputEmail : ('guest_' . Str::random(8) . '@imgstore.local');
                     $customer = Customer::create([
                         'id' => Str::uuid()->toString(),
                         'user_id' => $userId,
-                        'email' => $inputEmail ?: 'guest@example.com',
-                        'name' => $inputName,
+                        'email' => $fallbackEmail,
+                        'name' => $inputName ?: 'Pelanggan',
                         'phone' => $inputPhone,
                     ]);
                 }
 
-                if ($customer && !empty($customerData['sub_district_id'])) {
+                if (!$customer) {
+                    throw new \Exception('Gagal menyiapkan data pelanggan untuk transaksi pesanan.');
+                }
+
+                $orderShippingAddressId = null;
+
+                if (!empty($customerData['sub_district_id'])) {
                     if (!empty($customerData['selected_address_id'])) {
                         Address::where('id', $customerData['selected_address_id'])->update(['is_primary' => true]);
+                        $orderShippingAddressId = $customerData['selected_address_id'];
                     } else {
                         $subDistrict = SubDistrict::withoutGlobalScopes()->find($customerData['sub_district_id']) ?? SubDistrict::find($customerData['sub_district_id']);
                         if ($subDistrict) {
@@ -964,8 +1045,9 @@ class CheckoutController extends Controller
                                     'postal_code' => $customerData['postal_code'] ?? ($subDistrict->postal_code ?? $existingAddr->postal_code),
                                     'is_primary' => true,
                                 ]);
+                                $orderShippingAddressId = $existingAddr->id;
                             } else {
-                                Address::create([
+                                $newAddr = Address::create([
                                     'id' => Str::uuid()->toString(),
                                     'customer_id' => $customer->id,
                                     'user_id' => $userId,
@@ -978,6 +1060,7 @@ class CheckoutController extends Controller
                                     'postal_code' => $customerData['postal_code'] ?? $subDistrict->postal_code,
                                     'is_primary' => true,
                                 ]);
+                                $orderShippingAddressId = $newAddr->id;
                             }
                         }
                     }
@@ -993,7 +1076,7 @@ class CheckoutController extends Controller
                 }
 
                 // 2. Prepare Order Metadata
-                $selectedCourierCode = $buffer->courier?->code ?? '';
+                $selectedCourierCode = $bufferMeta['courier'] ?? ($sessionOrderData['courier'] ?? ($buffer?->courier?->code ?? ''));
                 $shippingCalc = $this->calculateShippingDetails($selectedCourierCode, (string) ($shippingAddressData['sub_district_id'] ?? ''), $cart);
                 $etaData = $shippingCalc['eta_dates'] ?? null;
                 $etaDuration = $shippingCalc['duration'] ?? '1-2 hari';
@@ -1002,6 +1085,7 @@ class CheckoutController extends Controller
                 $orderMeta = array_merge(
                     $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
                     [
+                        'buffer_id' => $buffer?->id ?? ($sessionOrderData['id'] ?? null),
                         'customer' => $customerData,
                         'platform' => 'website',
                         'payment_started_at' => now()->toIso8601String(),
@@ -1020,24 +1104,30 @@ class CheckoutController extends Controller
 
                 // 3. Create Order
                 $orderNumber = 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
+                $orderSubtotal = $buffer?->subtotal ?? ($sessionOrderData['subtotal'] ?? 0);
+                $orderDiscount = $buffer?->discount ?? ($sessionOrderData['total_discount'] ?? 0);
+                $orderShippingCost = $buffer?->shipping_cost ?? ($sessionOrderData['shipping_cost'] ?? 0);
+                $orderShippingSubsidy = $buffer?->shipping_cost_subsidy ?? ($sessionOrderData['shipping_cost_subsidy'] ?? 0);
+                $orderTotal = ($orderSubtotal - $orderDiscount + $orderShippingCost - $orderShippingSubsidy) + $charge;
+
                 $order = Order::create([
                     'id' => Str::uuid()->toString(),
                     'order_number' => $orderNumber,
-                    'customer_id' => $customer ? $customer->id : null,
-                    'courier_id' => $buffer->courier_id,
+                    'customer_id' => $customer->id,
+                    'courier_id' => $buffer?->courier_id ?? ($sessionOrderData['courier_id'] ?? null),
                     'status' => Order::STATUS_PENDING_APPROVAL,
                     'payment_method' => $paymentMethod,
                     'payment_status' => 1,
-                    'subtotal' => $buffer->subtotal,
+                    'subtotal' => $orderSubtotal,
                     'tax' => 0,
-                    'discount' => $buffer->discount,
-                    'total' => $buffer->total + $charge,
+                    'discount' => $orderDiscount,
+                    'total' => $orderTotal,
                     'notes' => null,
-                    'voucher_id' => $buffer->voucher_id,
-                    'voucher_nominal' => $buffer->voucher_nominal ?? 0,
-                    'shipping_cost' => $buffer->shipping_cost,
-                    'shipping_cost_subsidy' => $buffer->shipping_cost_subsidy ?? 0,
-                    'shipping_addresses_id' => $buffer->shipping_addresses_id,
+                    'voucher_id' => $buffer?->voucher_id ?? ($sessionOrderData['voucher_id'] ?? null),
+                    'voucher_nominal' => $buffer?->voucher_nominal ?? ($sessionOrderData['voucher_discount'] ?? 0),
+                    'shipping_cost' => $orderShippingCost,
+                    'shipping_cost_subsidy' => $orderShippingSubsidy,
+                    'shipping_addresses_id' => $orderShippingAddressId ?? ($buffer?->shipping_addresses_id ?? null),
                     'transaction_fee' => $charge,
                     'meta' => $orderMeta,
                     'creator' => $customer ? $customer->name : 'Customer Web',
@@ -1252,6 +1342,7 @@ class CheckoutController extends Controller
 
             $order->payment_method = $paymentMethod;
             $order->transaction_fee = $charge;
+            $order->total = ((float)$order->subtotal - (float)$order->discount + (float)$order->shipping_cost - (float)($order->shipping_cost_subsidy ?? 0)) + $charge;
             $order->meta = $meta;
             $order->save();
 
@@ -1370,6 +1461,7 @@ class CheckoutController extends Controller
 
         session()->forget(['order_data', 'checkout_data', 'selected_voucher_codes', 'cart']);
         session()->put('thankyou_order_id', $order->id);
+        session()->put('last_created_order_id', $order->id);
 
         return response()->json([
             'success' => true,
@@ -2259,11 +2351,25 @@ class CheckoutController extends Controller
      */
     private function getOrderFromIdentifier($identifier): ?Order
     {
+        if (empty($identifier)) {
+            return null;
+        }
+
         $query = Order::with(['customer', 'courier', 'items.product', 'voucher']);
         
         if (\Illuminate\Support\Str::isUuid($identifier)) {
-            return $query->where('id', $identifier)->first();
+            $order = (clone $query)->where('id', $identifier)->first();
+            if ($order) {
+                return $order;
+            }
+
+            // Also check if this identifier matches buffer_id stored in meta
+            $orderByBuffer = (clone $query)->where('meta->buffer_id', $identifier)->latest('created_at')->first();
+            if ($orderByBuffer) {
+                return $orderByBuffer;
+            }
         }
+
         return $query->where('order_number', $identifier)->first();
     }
 
@@ -2297,8 +2403,13 @@ class CheckoutController extends Controller
                 'phone' => $order->customer?->phone ?? '',
                 'user_id' => $order->customer?->user_id,
             ],
+            'shipping_address' => $order->meta['shipping_address'] ?? null,
             'courier' => $order->courier?->code ?? '',
+            'courier_id' => $order->courier_id,
             'shipping_cost' => (float) $order->shipping_cost,
+            'eta_label' => $order->meta['shipping_eta_label'] ?? ($order->meta['eta_label'] ?? null),
+            'shipping_duration' => $order->meta['shipping_duration'] ?? null,
+            'shipping_eta_source' => $order->meta['shipping_eta_source'] ?? null,
             'subtotal' => (float) $order->subtotal,
             'price_product_setting_discount' => 0.0,
             'voucher_discount' => (float) ($order->voucher_nominal ?? 0),

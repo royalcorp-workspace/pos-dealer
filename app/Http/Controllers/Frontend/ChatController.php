@@ -29,7 +29,10 @@ class ChatController extends Controller
             ['status' => 'open']
         );
 
-        $messages = $conversation->messages()->orderBy('created_at', 'asc')->get();
+        $messages = $conversation->messages()
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
 
         return response()->json([
             'success' => true,

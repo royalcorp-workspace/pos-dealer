@@ -311,15 +311,25 @@
                                         </div>
 
                                         <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                            @if(in_array($order->status, [0, 1, 2]))
-                                                <!-- Cancel order button removed per user request -->
+                                            {{-- Action: Lihat Detail for ALL orders --}}
+                                            <a href="{{ route('track-order.detail', $order->id) }}" class="w-full sm:w-auto px-3.5 py-2 rounded-xl border border-brand-muted bg-white text-brand-dark hover:bg-brand-light font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                                                <i class="fa-regular fa-eye text-xs"></i>
+                                                Lihat Detail
+                                            </a>
+
+                                            {{-- Action: Bayar Sekarang for UNPAID orders (payment_status == 1 and not cancelled) --}}
+                                            @if((int)$order->payment_status === 1 && (int)$order->status !== 8)
+                                                <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-gold text-brand-dark hover:bg-brand-dark hover:text-brand-gold font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
+                                                    <i class="fa-solid fa-credit-card text-xs"></i>
+                                                    Bayar Sekarang
+                                                </a>
                                             @endif
 
                                             @if($order->status === 7)
                                                 <form action="{{ route('order.reorder', $order->id) }}" method="POST" onsubmit="return confirm('Order ulang produk dari pesanan ini?');" class="inline">
                                                     @csrf
-                                                    <button type="submit" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-sm transition-colors">
-                                                        <i class="fa-solid fa-rotate-right w-4 h-4 mr-1"></i>
+                                                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5">
+                                                        <i class="fa-solid fa-rotate-right text-xs"></i>
                                                         Order Ulang
                                                     </button>
                                                 </form>

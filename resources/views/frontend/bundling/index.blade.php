@@ -52,7 +52,7 @@
                         @endif
                         
                         <div>
-                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Cari Paket</h3>
+                            <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Cari Bundling</h3>
                             <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari bundling..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-brand-gold focus:border-brand-gold focus:outline-none">
                         </div>
 
@@ -125,7 +125,7 @@
                                     @endif
                                     
                                     <div>
-                                        <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Cari Paket</h3>
+                                        <h3 class="font-bold text-brand-dark mb-3 text-sm uppercase tracking-wider">Cari Bundling</h3>
                                         <input type="text" name="search" value="{{ request('search') }}" placeholder="Cari bundling..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-brand-gold focus:border-brand-gold focus:outline-none">
                                     </div>
 

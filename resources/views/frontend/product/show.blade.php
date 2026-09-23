@@ -779,7 +779,9 @@
                                 </div>
                                 <div class="p-3 bg-gray-50 rounded-xl">
                                     <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Ketersediaan') }}</dt>
-                                    <dd class="mt-0.5 font-bold text-emerald-700 text-sm">{{ __('Ready Stock') }}</dd>
+                                    <dd id="spec-availability" class="mt-0.5 font-bold {{ $totalAvailableStock > 0 ? 'text-emerald-700' : 'text-red-600' }} text-sm">
+                                        {{ $totalAvailableStock > 0 ? __('Ready Stock') : __('Stok Habis') }}
+                                    </dd>
                                 </div>
                                 @php
                                     $dimP = (float) ($product->length ?? 0);
