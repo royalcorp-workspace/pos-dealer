@@ -491,7 +491,7 @@
                         <span class="text-xs uppercase tracking-[0.25em] text-brand-gold-dark font-bold">{{ __('Koleksi Terlengkap') }}</span>
                     </div>
                     <h2 class="text-2xl sm:text-3xl lg:text-[36px] font-extrabold text-brand-dark tracking-tight font-serif leading-tight">
-                        {{ __('Pilih Sesuai Kebutuhan Istirahat') }}
+                        {{ $sectionTitles['kategori'] ?? __('Pilih Sesuai Kebutuhan Istirahat') }}
                     </h2>
                 </div>
                 <div class="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest pb-1 shrink-0">
@@ -500,32 +500,28 @@
                 </div>
             </div>
             
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                @php
-                    $quickCategories = $categories ?? collect();
-                    $categoryVisuals = [
-                        'kasur-spring-bed' => [
-                            'image' => 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=600&h=400',
-                            
-                            'chips' => ['Pocket Spring', 'Orthopedic', 'Pillow Top'],
-                        ],
-                        'kasur-busa-foam' => [
-                            'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&q=80&w=600&h=400',
-                            
-                            'chips' => ['High Density', 'Anti-Kempes', 'Sanitized'],
-                        ],
-                        'bantal-guling' => [
-                            'image' => 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&q=80&w=600&h=400',
-                            
-                            'chips' => ['Microfiber', 'Memory Foam', 'Silikon'],
-                        ],
-                        'aksesoris-tidur' => [
-                            'image' => 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600&h=400',
-                            
-                            'chips' => ['Matras Topper', 'Sprei Katun', 'Pelindung Kasur'],
-                        ],
-                    ];
-                @endphp
+            @php
+                $quickCategories = $categories ?? collect();
+                $categoryVisuals = [
+                    'kasur-spring-bed' => [
+                        'image' => 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=600&h=400',
+                        'chips' => ['Pocket Spring', 'Orthopedic', 'Pillow Top'],
+                    ],
+                    'kasur-busa-foam' => [
+                        'image' => 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&q=80&w=600&h=400',
+                        'chips' => ['High Density', 'Anti-Kempes', 'Sanitized'],
+                    ],
+                    'bantal-guling' => [
+                        'image' => 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?auto=format&fit=crop&q=80&w=600&h=400',
+                        'chips' => ['Microfiber', 'Memory Foam', 'Silikon'],
+                    ],
+                    'aksesoris-tidur' => [
+                        'image' => 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=600&h=400',
+                        'chips' => ['Matras Topper', 'Sprei Katun', 'Pelindung Kasur'],
+                    ],
+                ];
+            @endphp
+            <div class="grid grid-cols-2 {{ count($quickCategories) === 3 ? 'lg:grid-cols-3' : (count($quickCategories) === 2 ? 'lg:grid-cols-2' : (count($quickCategories) === 1 ? 'lg:grid-cols-1 max-w-md mx-auto' : 'lg:grid-cols-4')) }} gap-4 sm:gap-6">
                 @foreach($quickCategories as $index => $cat)
                     @php
                         $visual = $categoryVisuals[$cat->slug] ?? [
@@ -573,11 +569,19 @@
 
                             <!-- Subcategory Chips (Visual Clue) -->
                             <div class="flex flex-wrap gap-1 pt-1 border-t border-gray-100/80">
-                                @foreach($visual['chips'] as $chip)
-                                    <span class="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md bg-brand-light/50 text-brand-dark/70 font-medium group-hover:bg-brand-gold/10 group-hover:text-brand-gold-dark transition-colors">
-                                        {{ $chip }}
-                                    </span>
-                                @endforeach
+                                @if($cat->children && $cat->children->isNotEmpty())
+                                    @foreach($cat->children->take(4) as $child)
+                                        <span class="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md bg-brand-light/50 text-brand-dark/70 font-medium group-hover:bg-brand-gold/10 group-hover:text-brand-gold-dark transition-colors">
+                                            {{ $child->name }}
+                                        </span>
+                                    @endforeach
+                                @else
+                                    @foreach($visual['chips'] as $chip)
+                                        <span class="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md bg-brand-light/50 text-brand-dark/70 font-medium group-hover:bg-brand-gold/10 group-hover:text-brand-gold-dark transition-colors">
+                                            {{ $chip }}
+                                        </span>
+                                    @endforeach
+                                @endif
                             </div>
                         </div>
                     </a>
@@ -607,7 +611,7 @@
                         <span class="text-xs uppercase tracking-[0.25em] text-brand-gold-dark font-bold">{{ __('Koleksi Terpopuler') }}</span>
                     </div>
                     <h2 class="text-2xl sm:text-3xl lg:text-[36px] font-extrabold text-brand-dark tracking-tight font-serif leading-tight">
-                        {{ __('Produk Terlaris') }}
+                        {{ $sectionTitles['best_seller'] ?? __('Produk Terlaris') }}
                     </h2>
                 </div>
 
@@ -674,7 +678,7 @@
                 <!-- Trust Label Left -->
                 <div class="flex items-center gap-2.5 shrink-0">
                     <span class="w-2.5 h-2.5 rounded-full bg-brand-gold shadow-xs animate-pulse"></span>
-                    <span class="text-xs uppercase tracking-[0.22em] font-extrabold text-brand-dark">{{ __('Official Brand Partners') }}</span>
+                    <span class="text-xs uppercase tracking-[0.22em] font-extrabold text-brand-dark">{{ $sectionTitles['pilihan_brand'] ?? __('Official Brand Partners') }}</span>
                     <span class="hidden sm:inline-block text-gray-300">|</span>
                     <span class="hidden sm:inline-block text-xs text-gray-500 font-medium">{{ __('Distributor Resmi Garansi Pabrik') }}</span>
                 </div>
@@ -718,7 +722,7 @@
                         <span>{{ __('Penawaran Spesial') }}</span>
                     </div>
                     <h2 class="text-3xl sm:text-4xl lg:text-[40px] font-extrabold text-brand-dark tracking-tight font-serif leading-[1.15]">
-                        {{ __('Promo Brand Pilihan') }}
+                        {{ $sectionTitles['promo_brand'] ?? __('Promo Brand Pilihan') }}
                     </h2>
                 </div>
 
@@ -853,7 +857,7 @@
         <div class="container mx-auto px-6">
             <div class="flex items-center justify-between mb-8">
                 <div>
-                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">{{ __('Paket Bundling Hemat') }}</h2>
+                    <h2 class="text-2xl font-extrabold text-brand-dark tracking-tight font-serif">{{ $sectionTitles['bundling'] ?? __('Paket Bundling Hemat') }}</h2>
                     <p class="text-gray-500 mt-1">{{ __('Dapatkan kombinasi produk pilihan dengan harga lebih hemat.') }}</p>
                 </div>
                 <a href="{{ route('bundling.index') }}" class="font-bold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1 group">
@@ -914,7 +918,7 @@
                         <span>{{ __('Katalog Pilihan') }}</span>
                     </div>
                     <h2 class="text-3xl sm:text-4xl lg:text-[40px] font-extrabold text-brand-dark tracking-tight font-serif leading-[1.15]">
-                        {{ __('Rekomendasi Lainnya') }}
+                        {{ $sectionTitles['rekomendasi'] ?? __('Rekomendasi Lainnya') }}
                     </h2>
                 </div>
                 <div class="hidden sm:flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest pb-1 shrink-0">
@@ -949,39 +953,65 @@
     @php $htmlBlocks['rekomendasi'] = ob_get_clean(); @endphp
     <!-- Dynamic Section Renderer -->
     @php
+        $hiddenKeys = $hiddenSectionKeys ?? [];
+        $sectionMap = isset($homepageSections) ? $homepageSections->keyBy('section_key') : collect();
         $orderedKeys = isset($homepageSections) ? $homepageSections->pluck('section_key')->toArray() : [];
         $defaultKeys = ['kategori', 'best_seller', 'pilihan_brand', 'promo_brand', 'spesial', 'bundling', 'rekomendasi'];
+        $defaultKeys = array_filter($defaultKeys, function($k) use ($hiddenKeys) {
+            return !in_array(strtolower($k), $hiddenKeys);
+        });
         $finalKeys = array_unique(array_merge($orderedKeys, $defaultKeys));
     @endphp
 
     @foreach($finalKeys as $sectionKey)
-        @php $lowerKey = strtolower($sectionKey); @endphp
+        @php 
+            $lowerKey = strtolower($sectionKey);
+            if (in_array($lowerKey, $hiddenKeys)) {
+                continue;
+            }
+            $currentSection = $sectionMap->get($sectionKey);
+            $platform = 'all';
+            if ($currentSection && $currentSection->meta) {
+                $sMeta = is_array($currentSection->meta) ? $currentSection->meta : (is_string($currentSection->meta) ? json_decode($currentSection->meta, true) : []);
+                $platform = $sMeta['platform'] ?? 'all';
+            }
+            $platformClass = match($platform) {
+                'web' => 'hidden md:block',
+                'mobile' => 'block md:hidden',
+                default => '',
+            };
+        @endphp
         @if((str_contains($lowerKey, 'kategori') || str_contains($lowerKey, 'category')) && isset($htmlBlocks['kategori']))
-            {!! $htmlBlocks['kategori'] !!}
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['kategori'] !!}</div>
             @php unset($htmlBlocks['kategori']); @endphp
-        @elseif((str_contains($lowerKey, 'pilihan') || str_contains($lowerKey, 'Brand') || str_contains($lowerKey, 'merek')) && isset($htmlBlocks['pilihan_brand']))
-            {!! $htmlBlocks['pilihan_brand'] !!}
+        @elseif((str_contains($lowerKey, 'pilihan') || str_contains($lowerKey, 'brand') || str_contains($lowerKey, 'merek')) && isset($htmlBlocks['pilihan_brand']))
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['pilihan_brand'] !!}</div>
             @php unset($htmlBlocks['pilihan_brand']); @endphp
         @elseif(str_contains($lowerKey, 'promo') && isset($htmlBlocks['promo_brand']))
-            {!! $htmlBlocks['promo_brand'] !!}
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['promo_brand'] !!}</div>
             @php unset($htmlBlocks['promo_brand']); @endphp
         @elseif(str_contains($lowerKey, 'best') && isset($htmlBlocks['best_seller']))
-            {!! $htmlBlocks['best_seller'] !!}
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['best_seller'] !!}</div>
             @php unset($htmlBlocks['best_seller']); @endphp
         @elseif((str_contains($lowerKey, 'spesial') || str_contains($lowerKey, 'special') || str_contains($lowerKey, 'sorotan')) && isset($htmlBlocks['spesial']))
-            {!! $htmlBlocks['spesial'] !!}
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['spesial'] !!}</div>
             @php unset($htmlBlocks['spesial']); @endphp
         @elseif((str_contains($lowerKey, 'bundl') || str_contains($lowerKey, 'paket')) && isset($htmlBlocks['bundling']))
-            {!! $htmlBlocks['bundling'] !!}
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['bundling'] !!}</div>
             @php unset($htmlBlocks['bundling']); @endphp
         @elseif((str_contains($lowerKey, 'rekomendasi') || str_contains($lowerKey, 'recommend')) && isset($htmlBlocks['rekomendasi']))
-            {!! $htmlBlocks['rekomendasi'] !!}
+            <div class="{{ $platformClass }}">{!! $htmlBlocks['rekomendasi'] !!}</div>
             @php unset($htmlBlocks['rekomendasi']); @endphp
         @endif
     @endforeach
 
-    {{-- Render any remaining blocks --}}
-    @foreach($htmlBlocks as $remainingHtml)
+    {{-- Render any remaining blocks that are not hidden --}}
+    @foreach($htmlBlocks as $blockKey => $remainingHtml)
+        @php
+            if (in_array(strtolower($blockKey), $hiddenKeys)) {
+                continue;
+            }
+        @endphp
         {!! $remainingHtml !!}
     @endforeach
 

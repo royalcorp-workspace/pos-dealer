@@ -337,10 +337,71 @@ class AuthController extends Controller
         $this->deviceSessions->register($request, $user, $email);
         $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 
+        $isFirstTime = empty($user->password);
+        if ($isFirstTime) {
+            session()->put('must_set_password', true);
+            return response()->json([
+                'success' => true,
+                'redirect' => route('auth.set-password'),
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'redirect' => route('dashboard'),
         ]);
+    }
+
+    public function showSetPassword()
+    {
+        if (!session()->get('is_logged_in')) {
+            return redirect()->route('home')->with('show_login', true);
+        }
+
+        return view('frontend.set-password');
+    }
+
+    public function processSetPassword(Request $request)
+    {
+        if (!session()->get('is_logged_in')) {
+            return redirect()->route('home')->with('show_login', true);
+        }
+
+        $request->validate([
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[a-z]/',
+                'regex:/[A-Z]/',
+                'regex:/[0-9]/',
+                'regex:/[@$!%*?&#^()_+\-=\[\]{};\':",.<>\/]/',
+                'confirmed',
+            ],
+        ], [
+            'password.required' => 'Password baru wajib diisi.',
+            'password.min' => 'Password minimal harus 8 karakter.',
+            'password.regex' => 'Password harus memiliki karakter yang kuat (kombinasi huruf besar, huruf kecil, angka, dan simbol khusus).',
+            'password.confirmed' => 'Konfirmasi password tidak cocok.',
+        ]);
+
+        $sessionUser = session()->get('user', []);
+        $userId = $sessionUser['id'] ?? $sessionUser['sub'] ?? null;
+        $email = $sessionUser['email'] ?? null;
+
+        if ($userId) {
+            \App\Models\User::where('id', $userId)->update([
+                'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+            ]);
+        } elseif ($email) {
+            \App\Models\User::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->update([
+                'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+            ]);
+        }
+
+        session()->forget('must_set_password');
+
+        return redirect()->route('dashboard')->with('success', 'Password akun Anda berhasil dibuat! Anda sekarang dapat masuk menggunakan email dan password.');
     }
 
     private function jwtSecret(): string

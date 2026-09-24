@@ -276,7 +276,7 @@ class OrderTrackingController extends Controller
                       ->orWhereRaw("LOWER(meta->'customer'->>'email') = ?", [$queryEmail])
                       ->orWhereRaw("LOWER(meta->'shipping_address'->>'email') = ?", [$queryEmail]);
                 })
-                ->with(['items.product', 'customer', 'courier'])
+                ->with(['items.product', 'items.variant', 'customer', 'courier'])
                 ->first();
         } elseif (session()->get('is_logged_in')) {
             $user = session()->get('user', []);
@@ -291,7 +291,7 @@ class OrderTrackingController extends Controller
             if ($customer) {
                 $selectedOrder = Order::query()
                     ->where('customer_id', $customer->id)
-                    ->with(['items.product', 'customer', 'courier'])
+                    ->with(['items.product', 'items.variant', 'customer', 'courier'])
                     ->latest()
                     ->first();
             }

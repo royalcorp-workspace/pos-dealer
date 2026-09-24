@@ -1514,7 +1514,35 @@ class CheckoutController extends Controller
 
     public function cancelOrder(Request $request, string $orderId)
     {
-        return redirect()->back()->with('error', 'Sesuai kebijakan, pesanan yang sudah dibuat tidak dapat dibatalkan.');
+        $order = null;
+        if (\Illuminate\Support\Str::isUuid($orderId)) {
+            $order = \App\Models\Frontend\Order::where('id', $orderId)->first();
+        }
+        if (!$order) {
+            $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
+        }
+
+        if (!$order) {
+            return redirect()->back()->with('error', 'Pesanan tidak ditemukan.');
+        }
+
+        if ($order->status === \App\Models\Frontend\Order::STATUS_CANCELLED) {
+            return redirect()->back()->with('info', 'Pesanan ini sudah dibatalkan sebelumnya.');
+        }
+
+        // Only allow cancel if unpaid (payment_status == 1) and not shipped
+        if ((int)$order->payment_status !== 1 && (int)$order->status >= \App\Models\Frontend\Order::STATUS_SHIPPED) {
+            return redirect()->back()->with('error', 'Pesanan yang sudah dibayar atau sedang dikirim tidak dapat dibatalkan secara otomatis.');
+        }
+
+        $order->status = \App\Models\Frontend\Order::STATUS_CANCELLED;
+        $orderMeta = is_array($order->meta) ? $order->meta : [];
+        $orderMeta['cancelled_at'] = now()->toIso8601String();
+        $orderMeta['cancelled_by'] = 'customer';
+        $order->meta = $orderMeta;
+        $order->save();
+
+        return redirect()->back()->with('success', 'Pesanan berhasil dibatalkan. Anda dapat memesan kembali produk kapan saja.');
     }
 
     public function reorder(string $orderId)

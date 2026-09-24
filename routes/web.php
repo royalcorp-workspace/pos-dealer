@@ -67,6 +67,7 @@ Route::get('/wishlist/count', [WishlistController::class, 'count'])->name('wishl
 Route::get('/payment-methods', [PaymentMethodController::class, 'index'])->name('payment-methods');
 
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+Route::put('/dashboard/profile', [DashboardController::class, 'updateProfile'])->name('dashboard.profile.update');
 Route::get('/dashboard/addresses', [DashboardController::class, 'addresses'])->name('dashboard.addresses');
 Route::post('/dashboard/addresses', [DashboardController::class, 'storeAddress'])->name('dashboard.addresses.store');
 Route::put('/dashboard/addresses/{id}', [DashboardController::class, 'updateAddress'])->name('dashboard.addresses.update');
@@ -113,6 +114,8 @@ Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirectToGoo
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 Route::get('/auth/callback', [AuthController::class, 'googleCallback'])->name('auth.callback');
 Route::post('/auth/google/session', [AuthController::class, 'storeGoogleSession'])->name('auth.google.session');
+Route::get('/set-password', [AuthController::class, 'showSetPassword'])->name('auth.set-password');
+Route::post('/set-password', [AuthController::class, 'processSetPassword'])->name('auth.set-password.process');
 
 Route::get('/api/expeditions/providers', [ExpeditionIntegrationController::class, 'providers'])->name('api.expeditions.providers');
 Route::get('/api/expeditions/{provider}/tracking/{awb}', [ExpeditionIntegrationController::class, 'tracking'])->name('api.expeditions.tracking');

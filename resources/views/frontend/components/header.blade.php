@@ -474,33 +474,46 @@
                         x-transition:leave="transition ease-in duration-150"
                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                         x-transition:leave-end="opacity-0 translate-y-2 scale-98"
-                        class="absolute top-full left-0 w-[500px] lg:w-[600px] bg-white shadow-xl border border-brand-muted/80 rounded-2xl p-4 z-50 overflow-hidden"
+                        class="absolute top-full left-0 w-[550px] lg:w-[650px] bg-white shadow-xl border border-brand-muted/80 rounded-2xl p-4 z-50 overflow-hidden"
                     >
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div class="grid grid-cols-2 gap-3">
                             @foreach($categories as $category)
-                                <a 
-                                    href="{{ route('category.show', $category->slug) }}" 
-                                    class="flex items-center justify-between p-2.5 rounded-xl hover:bg-brand-light transition-colors group text-left"
-                                >
-                                    <div>
+                                <div class="p-2.5 rounded-xl hover:bg-brand-light transition-colors group text-left">
+                                    <a 
+                                        href="{{ route('category.show', $category->slug) }}" 
+                                        class="flex items-center justify-between"
+                                    >
                                         <span class="font-bold text-brand-dark text-sm group-hover:text-brand-gold-dark transition-colors block">
                                             {{ html_entity_decode($category->name) }}
                                         </span>
-                                        @if($category->description)
-                                            <span class="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
-                                                {{ $category->description }}
-                                            </span>
-                                        @endif
-                                    </div>
-                                    <svg class="w-4 h-4 text-gray-300 group-hover:text-brand-gold group-hover:translate-x-0.5 transition-all" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                </a>
+                                        <svg class="w-4 h-4 text-gray-300 group-hover:text-brand-gold group-hover:translate-x-0.5 transition-all" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </a>
+                                    @if($category->children && $category->children->count() > 0)
+                                        <div class="flex flex-wrap gap-1.5 mt-1.5">
+                                            @foreach($category->children->take(4) as $child)
+                                                <a href="{{ route('category.show', $child->slug) }}" class="text-[11px] text-gray-500 hover:text-brand-gold-dark hover:underline bg-gray-50 hover:bg-brand-light px-2 py-0.5 rounded-md border border-gray-100 transition-colors">
+                                                    {{ html_entity_decode($child->name) }}
+                                                </a>
+                                            @endforeach
+                                            @if($category->children->count() > 4)
+                                                <a href="{{ route('category.show', $category->slug) }}" class="text-[10px] text-brand-gold-dark font-semibold self-center hover:underline">
+                                                    +{{ $category->children->count() - 4 }} lagi
+                                                </a>
+                                            @endif
+                                        </div>
+                                    @elseif($category->description)
+                                        <span class="text-[11px] text-gray-500 line-clamp-1 mt-0.5 block">
+                                            {{ $category->description }}
+                                        </span>
+                                    @endif
+                                </div>
                             @endforeach
-                            <div class="pt-2 border-t border-brand-muted/50 mt-2">
-                                <a href="{{ route('categories') }}" class="flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
-                                    <span>{{ __('Semua Kategori Produk') }}</span>
-                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                </a>
-                            </div>
+                        </div>
+                        <div class="pt-2 border-t border-brand-muted/50 mt-2">
+                            <a href="{{ route('categories') }}" class="flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
+                                <span>{{ __('Semua Kategori Produk') }}</span>
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </a>
                         </div>
                     </div>
                 </li>
@@ -633,15 +646,31 @@
                     </span>
                     <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <div x-show="openSection === 'categories'"  class="bg-brand-light/50 border-t border-brand-muted/40 p-2 space-y-1">
+                <div x-show="openSection === 'categories'" class="bg-brand-light/50 border-t border-brand-muted/40 p-2 space-y-1">
                     @foreach($categories as $category)
-                        <a 
-                            href="{{ route('category.show', $category->slug) }}" 
-                            class="block p-2.5 rounded-lg text-sm text-gray-700 font-medium hover:bg-white hover:text-brand-gold-dark transition-colors text-left"
-                            @click="isMobileMenuOpen = false"
-                        >
-                            {{ html_entity_decode($category->name) }}
-                        </a>
+                        <div class="space-y-0.5">
+                            <a 
+                                href="{{ route('category.show', $category->slug) }}" 
+                                class="flex items-center justify-between p-2.5 rounded-lg text-sm text-gray-800 font-bold hover:bg-white hover:text-brand-gold-dark transition-colors text-left"
+                                @click="isMobileMenuOpen = false"
+                            >
+                                <span>{{ html_entity_decode($category->name) }}</span>
+                                <svg class="w-3.5 h-3.5 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </a>
+                            @if($category->children && $category->children->count() > 0)
+                                <div class="pl-4 pr-1 py-1 space-y-1 border-l-2 border-brand-gold/30 ml-3">
+                                    @foreach($category->children as $child)
+                                        <a 
+                                            href="{{ route('category.show', $child->slug) }}" 
+                                            class="block py-1 px-2 rounded text-xs text-gray-600 hover:text-brand-gold-dark hover:bg-white transition-colors text-left"
+                                            @click="isMobileMenuOpen = false"
+                                        >
+                                            {{ html_entity_decode($child->name) }}
+                                        </a>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
                     @endforeach
                     <a href="{{ route('categories') }}" class="block p-2.5 text-xs font-bold text-brand-gold-dark text-left" @click="isMobileMenuOpen = false">
                         {{ __('Lihat Semua Kategori &rarr;') }}

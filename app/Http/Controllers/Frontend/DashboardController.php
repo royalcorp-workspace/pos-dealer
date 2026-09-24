@@ -30,6 +30,10 @@ class DashboardController extends Controller
             return redirect()->route('home')->with('show_login', true);
         }
 
+        if (session()->get('must_set_password')) {
+            return redirect()->route('auth.set-password');
+        }
+
         $mockProduct = $this->productService->all()[0];
         $user = session()->get('user', []);
         
@@ -48,7 +52,116 @@ class DashboardController extends Controller
 
         $orderStatusLabels = \App\Models\Frontend\Order::statusLabels();
 
-        return view('frontend.dashboard', compact('mockProduct', 'activeDeviceSessions', 'orders', 'addresses', 'orderStatusLabels'));
+        $customer = null;
+        if ($userId) {
+            $customer = Customer::where('user_id', $userId)->first();
+        }
+        if (!$customer && !empty($user['email'])) {
+            $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($user['email']))])->first();
+        }
+
+        return view('frontend.dashboard', compact('mockProduct', 'activeDeviceSessions', 'orders', 'addresses', 'orderStatusLabels', 'customer'));
+    }
+
+    public function updateProfile(Request $request)
+    {
+        if (!session()->get('is_logged_in')) {
+            return redirect()->route('home')->with('show_login', true);
+        }
+
+        $sessionUser = session()->get('user', []);
+        $userId = $sessionUser['id'] ?? $sessionUser['sub'] ?? null;
+        $email = $sessionUser['email'] ?? null;
+
+        $userModel = $userId ? \App\Models\User::find($userId) : null;
+        if (!$userModel && $email) {
+            $userModel = \App\Models\User::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
+        }
+
+        $rules = [
+            'name' => 'required|string|max:100',
+            'phone' => 'nullable|string|max:25',
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ];
+
+        if ($request->filled('new_password')) {
+            $rules['current_password'] = 'required_with:new_password';
+            $rules['new_password'] = [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[a-z]/',
+                'regex:/[A-Z]/',
+                'regex:/[0-9]/',
+                'regex:/[!@#$%^&*(),.?":{}|<>\-+=_\[\]\\\/~`]/',
+            ];
+            $rules['new_password_confirmation'] = 'required_with:new_password|same:new_password';
+        }
+
+        $messages = [
+            'new_password.min' => 'Password baru minimal harus 8 karakter.',
+            'new_password.regex' => 'Password baru harus mengandung setidaknya 1 huruf besar, 1 huruf kecil, 1 angka, dan 1 simbol khusus.',
+            'new_password_confirmation.same' => 'Konfirmasi password baru tidak cocok.',
+            'current_password.required_with' => 'Password saat ini diperlukan untuk mengubah password.',
+            'avatar.max' => 'Ukuran foto profil maksimal 2MB.',
+            'avatar.image' => 'File foto profil harus berupa gambar (JPG, PNG, WEBP).',
+        ];
+
+        $request->validate($rules, $messages);
+
+        if ($request->filled('new_password')) {
+            if ($userModel && !empty($userModel->password)) {
+                if (!\Illuminate\Support\Facades\Hash::check($request->current_password, $userModel->password)) {
+                    return back()->withInput()->withErrors(['current_password' => 'Password saat ini tidak sesuai.']);
+                }
+            }
+        }
+
+        $avatarUrl = null;
+        if ($request->hasFile('avatar')) {
+            $avatarFile = $request->file('avatar');
+            $filename = 'avatar_' . ($userId ?: uniqid()) . '_' . time() . '.' . $avatarFile->getClientOriginalExtension();
+            $path = $avatarFile->storeAs('avatars', $filename, 'public');
+            $avatarUrl = asset('storage/' . $path);
+        }
+
+        $userUpdates = [
+            'name' => $request->name,
+            'phone' => $request->phone,
+        ];
+        if ($avatarUrl) {
+            $userUpdates['avatar'] = $avatarUrl;
+            $userUpdates['photo_url'] = $avatarUrl;
+        }
+        if ($request->filled('new_password')) {
+            $userUpdates['password'] = \Illuminate\Support\Facades\Hash::make($request->new_password);
+        }
+
+        if ($userModel) {
+            $userModel->update($userUpdates);
+        } elseif ($userId) {
+            \App\Models\User::where('id', $userId)->update($userUpdates);
+        }
+
+        $customerUpdates = [
+            'name' => $request->name,
+            'phone' => $request->phone,
+        ];
+        if ($userId) {
+            Customer::where('user_id', $userId)->update($customerUpdates);
+        } elseif ($email) {
+            Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->update($customerUpdates);
+        }
+
+        $sessionUser['name'] = $request->name;
+        $sessionUser['phone'] = $request->phone;
+        if ($avatarUrl) {
+            $sessionUser['avatar'] = $avatarUrl;
+            $sessionUser['photo_url'] = $avatarUrl;
+        }
+        session()->put('user', $sessionUser);
+
+        return redirect()->route('dashboard', ['tab' => 'profile'])->with('success', 'Profil berhasil diperbarui.');
     }
 
     public function addresses()

@@ -19,32 +19,82 @@ class HomeController extends Controller
 {
     public function index()
     {
-        $bestsellers = Product::where('deleted', false)
-            ->where(function ($q) {
-                $q->where('is_bundle', false)
-                  ->orWhereNull('is_bundle');
-            })
-            ->where('best_seller', true)
-            ->with(['brand', 'category', 'images', 'variants', 'tags'])
-            ->take(10)
+        $homepageSections = HomepageSection::where('is_visible', true)
+            ->orderBy('sort_order', 'asc')
             ->get();
 
-        $recommended = Product::where('deleted', false)
-            ->where(function ($q) {
-                $q->where('is_bundle', false)
-                  ->orWhereNull('is_bundle');
-            })
-            ->whereNotIn('id', $bestsellers->pluck('id'))
-            ->with(['brand', 'category', 'images', 'variants', 'tags'])
-            ->take(10)
-            ->get();
+        $hiddenSectionKeys = HomepageSection::where('is_visible', false)->pluck('section_key')->map(fn($k) => strtolower($k))->toArray();
 
-        $recommendedTotal = Product::where('deleted', false)
-            ->where(function ($q) {
-                $q->where('is_bundle', false)
-                  ->orWhereNull('is_bundle');
-            })
-            ->count();
+        // 1. Best Sellers: check if specific products are selected in homepage section
+        $bestsellerSection = $homepageSections->first(function ($s) {
+            return in_array($s->section_key, ['best_seller', 'bestseller'])
+                || str_contains(strtolower($s->section_key), 'best');
+        });
+        $bestsellerMeta = $bestsellerSection && is_array($bestsellerSection->meta)
+            ? $bestsellerSection->meta
+            : (is_string($bestsellerSection?->meta) ? json_decode($bestsellerSection->meta, true) : []);
+        $selectedBestsellerIds = $bestsellerMeta['selected_products'] ?? [];
+
+        if (!empty($selectedBestsellerIds) && is_array($selectedBestsellerIds)) {
+            $bestsellers = Product::where('deleted', false)
+                ->whereIn('id', $selectedBestsellerIds)
+                ->with(['brand', 'category', 'images', 'variants', 'tags'])
+                ->get()
+                ->sortBy(function($p) use ($selectedBestsellerIds) {
+                    return array_search($p->id, $selectedBestsellerIds);
+                })
+                ->values();
+        } else {
+            $bestsellers = Product::where('deleted', false)
+                ->where(function ($q) {
+                    $q->where('is_bundle', false)
+                      ->orWhereNull('is_bundle');
+                })
+                ->where('best_seller', true)
+                ->with(['brand', 'category', 'images', 'variants', 'tags'])
+                ->take(10)
+                ->get();
+        }
+
+        // 2. Recommendations: check if specific products are selected in homepage section
+        $rekomendasiSection = $homepageSections->first(function ($s) {
+            return in_array($s->section_key, ['rekomendasi', 'recommended'])
+                || str_contains(strtolower($s->section_key), 'rekomendasi')
+                || str_contains(strtolower($s->section_key), 'recommend');
+        });
+        $rekomendasiMeta = $rekomendasiSection && is_array($rekomendasiSection->meta)
+            ? $rekomendasiSection->meta
+            : (is_string($rekomendasiSection?->meta) ? json_decode($rekomendasiSection->meta, true) : []);
+        $selectedRekomendasiIds = $rekomendasiMeta['selected_products'] ?? [];
+
+        if (!empty($selectedRekomendasiIds) && is_array($selectedRekomendasiIds)) {
+            $recommended = Product::where('deleted', false)
+                ->whereIn('id', $selectedRekomendasiIds)
+                ->with(['brand', 'category', 'images', 'variants', 'tags'])
+                ->get()
+                ->sortBy(function($p) use ($selectedRekomendasiIds) {
+                    return array_search($p->id, $selectedRekomendasiIds);
+                })
+                ->values();
+            $recommendedTotal = $recommended->count();
+        } else {
+            $recommended = Product::where('deleted', false)
+                ->where(function ($q) {
+                    $q->where('is_bundle', false)
+                      ->orWhereNull('is_bundle');
+                })
+                ->whereNotIn('id', $bestsellers->pluck('id'))
+                ->with(['brand', 'category', 'images', 'variants', 'tags'])
+                ->take(10)
+                ->get();
+
+            $recommendedTotal = Product::where('deleted', false)
+                ->where(function ($q) {
+                    $q->where('is_bundle', false)
+                      ->orWhereNull('is_bundle');
+                })
+                ->count();
+        }
 
         $specialSection = HomepageSection::where('section_key', 'like', '%spesial%')
             ->orWhere('section_key', 'like', '%special%')
@@ -65,22 +115,75 @@ class HomeController extends Controller
             $featured = $featuredQuery->where('is_new', true)->first();
         }
 
-        $categories = ProductCategory::where('deleted', false)
-            ->whereNull('parent_id')
-            ->withCount('products')
-            ->take(8)
-            ->get();
+        // 3. Categories: check if specific categories are selected in homepage section
+        $categorySection = $homepageSections->first(function ($s) {
+            $m = is_array($s->meta) ? $s->meta : (is_string($s->meta) ? json_decode($s->meta, true) : []);
+            return in_array($s->section_key, ['kategori', 'category'])
+                || str_contains(strtolower($s->section_key), 'kategori') 
+                || str_contains(strtolower($s->section_key), 'category')
+                || ($m['content_type'] ?? '') === 'category';
+        });
 
-        $brands = Brand::where('deleted', false)
+        $catMeta = $categorySection && is_array($categorySection->meta) 
+            ? $categorySection->meta 
+            : (is_string($categorySection?->meta) ? json_decode($categorySection->meta, true) : []);
+
+        $selectedCatIds = $catMeta['selected_categories'] ?? [];
+
+        if (!empty($selectedCatIds) && is_array($selectedCatIds)) {
+            $categories = ProductCategory::where('deleted', false)
+                ->whereIn('id', $selectedCatIds)
+                ->with(['children' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
+                ->withCount('products')
+                ->get()
+                ->sortBy(function($cat) use ($selectedCatIds) {
+                    return array_search($cat->id, $selectedCatIds);
+                })
+                ->values();
+        } else {
+            $categories = ProductCategory::where('deleted', false)
+                ->whereNull('parent_id')
+                ->with(['children' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
+                ->withCount('products')
+                ->take(8)
+                ->get();
+        }
+
+        // 4. Brands: check if specific brands are selected in homepage section
+        $brandSection = $homepageSections->first(function ($s) {
+            $m = is_array($s->meta) ? $s->meta : (is_string($s->meta) ? json_decode($s->meta, true) : []);
+            return in_array($s->section_key, ['pilihan_brand', 'brand'])
+                || str_contains(strtolower($s->section_key), 'pilihan') 
+                || str_contains(strtolower($s->section_key), 'brand')
+                || str_contains(strtolower($s->section_key), 'merek')
+                || ($m['content_type'] ?? '') === 'brand';
+        });
+
+        $brandMeta = $brandSection && is_array($brandSection->meta) 
+            ? $brandSection->meta 
+            : (is_string($brandSection?->meta) ? json_decode($brandSection->meta, true) : []);
+
+        $selectedBrandIds = $brandMeta['selected_brands'] ?? [];
+
+        $brandsQuery = Brand::where('deleted', false)
             ->where('status', true)
             ->with(['products' => function ($q) {
                 $q->where('deleted', false)
                   ->where('status', true)
                   ->with(['variants', 'images', 'brand', 'category'])
                   ->take(20);
-            }])
-            ->orderBy('sort_order', 'asc')
-            ->get();
+            }]);
+
+        if (!empty($selectedBrandIds) && is_array($selectedBrandIds)) {
+            $brands = $brandsQuery->whereIn('id', $selectedBrandIds)
+                ->get()
+                ->sortBy(function($b) use ($selectedBrandIds) {
+                    return array_search($b->id, $selectedBrandIds);
+                })
+                ->values();
+        } else {
+            $brands = $brandsQuery->orderBy('sort_order', 'asc')->get();
+        }
 
         foreach ($brands as $brand) {
             $brand->top_promo_products = $brand->products->map(function($product) {
@@ -102,10 +205,6 @@ class HomeController extends Controller
             ->get()
             ->groupBy('type');
 
-        $homepageSections = HomepageSection::where('is_visible', true)
-            ->orderBy('sort_order', 'asc')
-            ->get();
-
         $eventPopups = Event::where('is_active', true)
             ->where('deleted', false)
             ->where('start_date', '<=', now())
@@ -117,11 +216,36 @@ class HomeController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $bundles = ProductBundling::where('is_active', true)
-            ->with(['items.product.brand', 'items.product.images', 'items.variant'])
-            ->orderBy('created_at', 'desc')
-            ->take(8)
-            ->get();
+        // Bundling: check if specific bundles are selected in homepage section
+        $bundlingSection = $homepageSections->first(function ($s) {
+            $m = is_array($s->meta) ? $s->meta : (is_string($s->meta) ? json_decode($s->meta, true) : []);
+            return in_array($s->section_key, ['bundling', 'paket_bundling'])
+                || str_contains(strtolower($s->section_key), 'bundl')
+                || !empty($m['selected_bundles']);
+        });
+
+        $bundlingMeta = $bundlingSection && is_array($bundlingSection->meta)
+            ? $bundlingSection->meta
+            : (is_string($bundlingSection?->meta) ? json_decode($bundlingSection->meta, true) : []);
+
+        $selectedBundleIds = $bundlingMeta['selected_bundles'] ?? [];
+
+        $bundlesQuery = ProductBundling::where('is_active', true)
+            ->where('deleted', false)
+            ->with(['items.product.brand', 'items.product.images', 'items.variant']);
+
+        if (!empty($selectedBundleIds) && is_array($selectedBundleIds)) {
+            $bundles = $bundlesQuery->whereIn('id', $selectedBundleIds)
+                ->get()
+                ->sortBy(function($b) use ($selectedBundleIds) {
+                    return array_search($b->id, $selectedBundleIds);
+                })
+                ->values();
+        } else {
+            $bundles = $bundlesQuery->orderBy('created_at', 'desc')
+                ->take(8)
+                ->get();
+        }
 
         foreach ($bundles as $bundle) {
             // Hitung total harga normal produk-produk di dalam bundling
@@ -163,6 +287,8 @@ class HomeController extends Controller
             $bundle->thumbnail_url = $bundle->items->first()?->product?->thumbnail_url;
         }
 
+        $sectionTitles = $homepageSections->pluck('title', 'section_key')->toArray();
+
         return view('frontend.home', compact(
             'bestsellers',
             'recommended',
@@ -172,6 +298,8 @@ class HomeController extends Controller
             'brands',
             'banners',
             'homepageSections',
+            'sectionTitles',
+            'hiddenSectionKeys',
             'eventPopups',
             'notifications',
             'bundles'
