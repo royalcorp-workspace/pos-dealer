@@ -70,11 +70,15 @@
                     </div>
                     <div class="flex justify-between text-sm">
                         <span class="text-gray-400">Phone Number</span>
-                        <span class="font-semibold text-brand-dark">0812-3456-7890</span>
+                        <span class="font-semibold text-brand-dark">{{ $customer->phone ?? $user['phone'] ?? '-' }}</span>
                     </div>
                 </div>
 
                 <div class="border-t border-brand-muted pt-6 space-y-2">
+                    <a href="{{ route('dashboard', ['tab' => 'profile']) }}"
+                        class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'profile' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
+                        <i class="fa-solid fa-user-pen w-4 h-4"></i> Edit Profil
+                    </a>
                     <a href="{{ route('dashboard', ['tab' => 'devices']) }}"
                         class="flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition-colors {{ $activeTab === 'devices' ? 'bg-brand-light text-brand-dark' : 'text-gray-600 hover:bg-brand-light' }}">
                         <i class="fa-solid fa-devices w-4 h-4"></i> Perangkat Aktif
@@ -113,6 +117,133 @@
 
             <!-- Right: Account activity -->
             <div class="w-full lg:w-2/3 space-y-8">
+                @if($activeTab === 'profile')
+                    <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+                        <div>
+                            <h3 class="text-xl font-extrabold text-brand-dark">Edit Profil</h3>
+                            <p class="text-sm text-gray-500 mt-1">Perbarui informasi data diri Anda.</p>
+                        </div>
+
+                        <form action="{{ route('dashboard.profile.update') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
+                            @csrf
+                            @method('PUT')
+
+                            <!-- Avatar Upload Section -->
+                            <div class="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-brand-light/30 border border-brand-muted" x-data="{
+                                avatarPreview: '{{ $user['avatar'] ?? $user['photo_url'] ?? '' }}',
+                                fileChosen(event) {
+                                    const file = event.target.files[0];
+                                    if (file) {
+                                        this.avatarPreview = URL.createObjectURL(file);
+                                    }
+                                }
+                            }">
+                                <div class="relative w-20 h-20 rounded-full overflow-hidden bg-brand-gold/15 border-2 border-brand-gold/40 flex items-center justify-center shrink-0 shadow-inner">
+                                    <template x-if="avatarPreview">
+                                        <img :src="avatarPreview" alt="Avatar" class="w-full h-full object-cover">
+                                    </template>
+                                    <template x-if="!avatarPreview">
+                                        <span class="text-2xl font-black text-brand-dark uppercase">
+                                            {{ substr($user['name'] ?? 'U', 0, 1) }}
+                                        </span>
+                                    </template>
+                                </div>
+                                <div class="flex-1 text-center sm:text-left space-y-1.5">
+                                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider">Foto Profil</label>
+                                    <p class="text-xs text-gray-500">Upload foto profil terbaik Anda. Format: JPG, PNG, atau WEBP (Maksimal 2MB).</p>
+                                    <div class="pt-1">
+                                        <input type="file" name="avatar" id="avatar" accept="image/png, image/jpeg, image/jpg, image/webp" @change="fileChosen" class="hidden">
+                                        <label for="avatar" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-brand-muted hover:border-brand-gold text-xs font-bold text-brand-dark cursor-pointer transition-colors shadow-2xs hover:bg-brand-light/50">
+                                            <i class="fa-solid fa-camera"></i>
+                                            <span>Pilih Foto Baru</span>
+                                        </label>
+                                    </div>
+                                    @error('avatar')
+                                        <p class="text-xs text-red-500 font-semibold">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <!-- Identitas Profil (Hanya Identitas, Tanpa Alamat) -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Nama Lengkap <span class="text-red-500">*</span></label>
+                                    <input type="text" name="name" value="{{ old('name', $customer->name ?? $user['name'] ?? '') }}" required class="w-full bg-brand-light/40 border border-brand-muted rounded-xl px-4 py-3 text-sm text-brand-dark font-medium focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:bg-white transition-all">
+                                    @error('name')
+                                        <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Nomor Telepon / WhatsApp</label>
+                                    <input type="tel" name="phone" value="{{ old('phone', $customer->phone ?? $user['phone'] ?? '') }}" placeholder="Contoh: 08123456789" class="w-full bg-brand-light/40 border border-brand-muted rounded-xl px-4 py-3 text-sm text-brand-dark font-medium focus:outline-none focus:ring-2 focus:ring-brand-gold/50 focus:bg-white transition-all">
+                                    @error('phone')
+                                        <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                                    @enderror
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Email Address</label>
+                                    <input type="email" value="{{ $user['email'] ?? '' }}" disabled class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-500 cursor-not-allowed">
+                                    <p class="text-[11px] text-gray-400 mt-1">Email terhubung dengan akun login Anda.</p>
+                                </div>
+                            </div>
+
+                            <!-- Ubah Password (Opsional) -->
+                            <div class="border-t border-brand-muted pt-5" x-data="{ changePw: {{ $errors->has('current_password') || $errors->has('new_password') ? 'true' : 'false' }} }">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h4 class="text-sm font-bold text-brand-dark">Keamanan & Password</h4>
+                                        <p class="text-xs text-gray-500">Ubah password akun login Anda jika diperlukan.</p>
+                                    </div>
+                                    <button type="button" @click="changePw = !changePw" class="px-3.5 py-1.5 rounded-lg border border-brand-muted text-xs font-bold text-brand-dark hover:bg-brand-light transition-colors">
+                                        <span x-text="changePw ? 'Batal Ubah Password' : 'Ubah Password'"></span>
+                                    </button>
+                                </div>
+
+                                <div x-show="changePw" x-cloak class="mt-4 space-y-4 p-4 rounded-2xl bg-gray-50 border border-gray-200">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Password Saat Ini</label>
+                                        <input type="password" name="current_password" placeholder="Masukkan password saat ini" class="w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-gold/50">
+                                        @error('current_password')
+                                            <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                                        @enderror
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Password Baru</label>
+                                            <input type="password" name="new_password" placeholder="Minimal 8 karakter" class="w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-gold/50">
+                                            @error('new_password')
+                                                <p class="text-xs text-red-500 font-semibold mt-1">{{ $message }}</p>
+                                            @enderror
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Konfirmasi Password Baru</label>
+                                            <input type="password" name="new_password_confirmation" placeholder="Ulangi password baru" class="w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-gold/50">
+                                        </div>
+                                    </div>
+                                    <div class="text-[11px] text-gray-500 bg-white p-3 rounded-lg border border-gray-200 space-y-0.5">
+                                        <p class="font-semibold text-gray-700">Syarat password baru:</p>
+                                        <ul class="list-disc list-inside text-gray-500 space-y-0.5">
+                                            <li>Minimal 8 karakter</li>
+                                            <li>Mengandung huruf besar (A-Z) dan huruf kecil (a-z)</li>
+                                            <li>Mengandung angka (0-9) dan simbol khusus (!@#$%^&* dll)</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="pt-2">
+                                <button type="submit" class="px-7 py-3 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-sm transition-all shadow-sm cursor-pointer inline-flex items-center gap-2">
+                                    <i class="fa-solid fa-check"></i>
+                                    <span>Simpan Perubahan</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                @endif
+
                 @if($activeTab === 'addresses')
                     <div class="bg-white border border-brand-muted rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
                         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -317,18 +448,25 @@
                                                 Lihat Detail
                                             </a>
 
-                                            {{-- Action: Bayar Sekarang for UNPAID orders (payment_status == 1 and not cancelled) --}}
-                                            @if((int)$order->payment_status === 1 && (int)$order->status !== 8)
+                                            {{-- Action: Bayar Sekarang & Batalkan for UNPAID orders --}}
+                                            @if((int)$order->payment_status === 1 && (int)$order->status !== 6 && (int)$order->status !== 8)
                                                 <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-gold text-brand-dark hover:bg-brand-dark hover:text-brand-gold font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm">
                                                     <i class="fa-solid fa-credit-card text-xs"></i>
                                                     Bayar Sekarang
                                                 </a>
+                                                <form action="{{ route('order.cancel', $order->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin membatalkan pesanan ini agar dapat memesan kembali?');" class="inline">
+                                                    @csrf
+                                                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer" title="Batalkan pesanan yang belum dibayar">
+                                                        <i class="fa-solid fa-ban text-xs"></i>
+                                                        Batalkan
+                                                    </button>
+                                                </form>
                                             @endif
 
-                                            @if($order->status === 7)
+                                            @if((int)$order->status === 6 || (int)$order->status === 7 || (int)$order->status === 8)
                                                 <form action="{{ route('order.reorder', $order->id) }}" method="POST" onsubmit="return confirm('Order ulang produk dari pesanan ini?');" class="inline">
                                                     @csrf
-                                                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5">
+                                                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
                                                         <i class="fa-solid fa-rotate-right text-xs"></i>
                                                         Order Ulang
                                                     </button>

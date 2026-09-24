@@ -115,6 +115,24 @@
                                 {{ $category->description }}
                             </p>
                         @endif
+
+                        @if($category->children && $category->children->isNotEmpty())
+                            <div class="mt-3 pt-3 border-t border-[#EFEBE4]/60">
+                                <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider block mb-1.5">{{ __('Subkategori:') }}</span>
+                                <div class="flex flex-wrap gap-1">
+                                    @foreach($category->children->take(4) as $child)
+                                        <span class="inline-block text-[10px] px-2 py-0.5 rounded-md bg-[#FAF8F5] text-stone-700 font-medium border border-[#E5DFC9]/50 group-hover:bg-brand-gold/15 group-hover:text-brand-dark transition-colors">
+                                            {{ $child->name }}
+                                        </span>
+                                    @endforeach
+                                    @if($category->children->count() > 4)
+                                        <span class="inline-block text-[10px] px-1.5 py-0.5 rounded-md bg-stone-100 text-stone-500 font-semibold">
+                                            +{{ $category->children->count() - 4 }}
+                                        </span>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
                     </div>
 
                     <!-- Bottom Action Link -->

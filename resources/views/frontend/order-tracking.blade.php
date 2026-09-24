@@ -71,22 +71,41 @@
                             @endif
                         </div>
 
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+                        @php
+                            $courierName = $order->courier?->name 
+                                ?? data_get($order->meta, 'biteship_shipment.courier.company') 
+                                ?? data_get($order->meta, 'biteship_payload.courier_company') 
+                                ?? ($shipment['courier'] ?? null);
+                            $voucherNom = (float) ($order->voucher_nominal ?? 0);
+                        @endphp
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
                             <div class="rounded-2xl bg-brand-light p-4">
-                                <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Nama</p>
-                                <p class="font-semibold text-brand-dark mt-1">{{ $order->customer->name ?? '-' }}</p>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Nama</p>
+                                <p class="font-semibold text-brand-dark text-sm mt-1 truncate" title="{{ $order->customer->name ?? '-' }}">{{ $order->customer->name ?? '-' }}</p>
                             </div>
                             <div class="rounded-2xl bg-brand-light p-4">
-                                <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Email</p>
-                                <p class="font-semibold text-brand-dark mt-1">{{ $order->customer->email ?? '-' }}</p>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Email</p>
+                                <p class="font-semibold text-brand-dark text-sm mt-1 truncate" title="{{ $order->customer->email ?? '-' }}">{{ $order->customer->email ?? '-' }}</p>
                             </div>
                             <div class="rounded-2xl bg-brand-light p-4">
-                                <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Total</p>
-                                <p class="font-semibold text-brand-dark mt-1">{{ $formatRupiah($order->total ?? 0) }}</p>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Kurir</p>
+                                <p class="font-semibold text-brand-dark text-sm mt-1 uppercase">{{ $courierName ? strtoupper($courierName) : '-' }}</p>
                             </div>
                             <div class="rounded-2xl bg-brand-light p-4">
-                                <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Items</p>
-                                <p class="font-semibold text-brand-dark mt-1">{{ $order->items->count() }} Produk</p>
+                                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Ongkir</p>
+                                <p class="font-semibold text-brand-dark text-sm mt-1">{{ $formatRupiah($order->shipping_cost ?? 0) }}</p>
+                            </div>
+                            <div class="rounded-2xl bg-brand-light p-4">
+                                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Voucher</p>
+                                @if($voucherNom > 0)
+                                    <p class="font-semibold text-emerald-600 text-sm mt-1">-{{ $formatRupiah($voucherNom) }}</p>
+                                @else
+                                    <p class="font-semibold text-gray-400 text-sm mt-1">-</p>
+                                @endif
+                            </div>
+                            <div class="rounded-2xl bg-brand-light p-4">
+                                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Total</p>
+                                <p class="font-extrabold text-brand-dark text-sm mt-1">{{ $formatRupiah($order->total ?? 0) }}</p>
                             </div>
                         </div>
                     </div>
@@ -212,10 +231,33 @@
 
                     <div class="bg-white border border-brand-muted rounded-3xl p-6 shadow-sm">
                         <h2 class="text-xl font-bold text-brand-dark mb-5">Detail Pesanan</h2>
-                        <div class="space-y-4">
+                        <div class="space-y-5">
                             @foreach($order->items as $item)
-                                <div class="flex gap-4 border-b border-brand-muted pb-4 last:border-0 last:pb-0">
-                                    <div class="w-16 h-16 rounded-xl bg-brand-light overflow-hidden flex-shrink-0">
+                                @php
+                                    $variantName = $item->variant?->name 
+                                        ?? $item->variant?->variant_name
+                                        ?? data_get($item->meta, 'variant_name') 
+                                        ?? data_get($item->meta, 'variation_name');
+                                    $sku = $item->variant?->sku 
+                                        ?? data_get($item->meta, 'sku') 
+                                        ?? $item->product?->code;
+
+                                    $basePrice = (float) ($item->variant?->base_price ?? data_get($item->meta, 'base_price') ?? 0);
+                                    $sellPrice = (float) ($item->variant?->sell_price ?? data_get($item->meta, 'sell_price') ?? $item->unit_price ?? 0);
+                                    $unitPrice = (float) ($item->unit_price ?? $sellPrice);
+                                    $qty = max(1, (int) ($item->quantity ?? 1));
+
+                                    $discNominal = (float) ($item->discount_nominal ?? 0);
+                                    $discPercent = (float) ($item->discount_percent ?? 0);
+                                    $adjAmount = (float) (data_get($item->meta, 'adjustment_amount') ?? 0);
+                                    $hasBaseDiff = ($basePrice > 0 && $basePrice > $sellPrice);
+
+                                    $subtotalRaw = (float) ($item->total ?? ($unitPrice * $qty));
+                                    $totalDisc = ($subtotalRaw * $discPercent / 100) + $discNominal + $adjAmount;
+                                    $finalPrice = max(0, $subtotalRaw - $totalDisc);
+                                @endphp
+                                <div class="flex flex-col sm:flex-row sm:items-start gap-4 border-b border-brand-muted pb-5 last:border-0 last:pb-0">
+                                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-brand-light overflow-hidden shrink-0 border border-brand-muted/60">
                                         @if($item->product?->thumbnail_url)
                                             <img src="{{ $item->product->thumbnail_url }}" alt="{{ $item->name }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                                         @else
@@ -225,14 +267,63 @@
                                         @endif
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <p class="font-bold text-brand-dark">{{ $item->name }}</p>
-                                        <p class="text-sm text-gray-500 mt-1">Qty {{ $item->quantity }} × {{ $formatRupiah($item->unit_price ?? 0) }}</p>
-                                        @if(($item->discount_percent ?? 0) > 0)
-                                            <p class="text-xs text-red-500 mt-1">Diskon {{ $item->discount_percent }}%</p>
+                                        <p class="font-bold text-brand-dark text-base">{{ $item->name }}</p>
+                                        @if($variantName || $sku)
+                                            <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                                                @if($variantName)
+                                                    <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-gold-dark bg-brand-light/80 px-2 py-0.5 rounded-md border border-brand-gold/20">
+                                                        <i class="fa-solid fa-layer-group text-[10px]"></i>
+                                                        <span>Variasi: {{ $variantName }}</span>
+                                                    </span>
+                                                @endif
+                                                @if($sku)
+                                                    <span class="inline-flex items-center text-[10px] font-mono text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
+                                                        SKU: {{ $sku }}
+                                                    </span>
+                                                @endif
+                                            </div>
                                         @endif
-                                        @if(($item->discount_nominal ?? 0) > 0)
-                                            <p class="text-xs text-red-500 mt-1">Diskon: -{{ $formatRupiah($item->discount_nominal) }}</p>
-                                        @endif
+
+                                        {{-- Breakdown Harga Produk: Asli, Jual, Diskon/Adjust, Final --}}
+                                        <div class="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/60">
+                                            <div>
+                                                <span class="text-gray-400 block text-[10px] uppercase font-bold">Harga Asli</span>
+                                                <span class="font-semibold text-gray-500 {{ $hasBaseDiff ? 'line-through' : '' }}">
+                                                    {{ $formatRupiah($basePrice > 0 ? $basePrice : $sellPrice) }}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-400 block text-[10px] uppercase font-bold">Harga Jual</span>
+                                                <span class="font-semibold text-brand-dark">
+                                                    {{ $formatRupiah($sellPrice) }}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-400 block text-[10px] uppercase font-bold">Penyesuaian / Diskon</span>
+                                                @if($hasBaseDiff || $discNominal > 0 || $discPercent > 0 || $adjAmount > 0)
+                                                    <span class="font-semibold text-emerald-600">
+                                                        @if($hasBaseDiff && $discNominal == 0 && $discPercent == 0 && $adjAmount == 0)
+                                                            -{{ $formatRupiah($basePrice - $sellPrice) }}
+                                                        @elseif($discPercent > 0)
+                                                            -{{ $discPercent }}%
+                                                        @elseif($discNominal > 0)
+                                                            -{{ $formatRupiah($discNominal) }}
+                                                        @elseif($adjAmount > 0)
+                                                            -{{ $formatRupiah($adjAmount) }}
+                                                        @endif
+                                                    </span>
+                                                @else
+                                                    <span class="text-gray-400 font-medium">-</span>
+                                                @endif
+                                            </div>
+                                            <div>
+                                                <span class="text-gray-400 block text-[10px] uppercase font-bold">Qty × Unit</span>
+                                                <span class="font-semibold text-brand-dark">
+                                                    {{ $qty }} × {{ $formatRupiah($unitPrice) }}
+                                                </span>
+                                            </div>
+                                        </div>
+
                                         @php
                                             $dispNotes = $item->item_notes ?? '';
                                             if (is_string($dispNotes) && (str_starts_with(trim($dispNotes), '{') || str_starts_with(trim($dispNotes), '['))) {
@@ -244,24 +335,59 @@
                                             <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">{{ $dispNotes }}</p>
                                         @endif
                                     </div>
-                                    <div class="text-right">
-                                        @php
-                                            $discountedPrice = max(0, ($item->total ?? 0) - (($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) - ($item->discount_nominal ?? 0));
-                                        @endphp
-                                        @if(($item->discount_percent ?? 0) > 0 || ($item->discount_nominal ?? 0) > 0)
-                                            <p class="text-xs text-gray-500 line-through">{{ $formatRupiah($item->total ?? 0) }}</p>
-                                        @endif
-                                        @if(($item->discount_percent ?? 0) > 0 && ($item->discount_nominal ?? 0) > 0)
-                                            <p class="text-xs text-red-500">-{{ $formatRupiah(($item->total ?? 0) * ($item->discount_percent ?? 0) / 100 + ($item->discount_nominal ?? 0)) }}</p>
-                                        @elseif(($item->discount_percent ?? 0) > 0)
-                                            <p class="text-xs text-red-500">-{{ $formatRupiah(($item->total ?? 0) * ($item->discount_percent ?? 0) / 100) }}</p>
-                                        @elseif(($item->discount_nominal ?? 0) > 0)
-                                            <p class="text-xs text-red-500">-{{ $formatRupiah($item->discount_nominal) }}</p>
-                                        @endif
-                                        <p class="font-bold text-brand-dark">{{ $formatRupiah($discountedPrice) }}</p>
+                                    <div class="sm:text-right shrink-0 flex sm:flex-col justify-between items-center sm:items-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                                        <span class="text-xs text-gray-400 sm:block">Total Item:</span>
+                                        <div>
+                                            @if($totalDisc > 0 || ($basePrice * $qty > $finalPrice))
+                                                <p class="text-xs text-gray-400 line-through sm:text-right">
+                                                    {{ $formatRupiah($hasBaseDiff ? ($basePrice * $qty) : $subtotalRaw) }}
+                                                </p>
+                                            @endif
+                                            <p class="font-extrabold text-base sm:text-lg text-brand-dark">{{ $formatRupiah($finalPrice) }}</p>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach
+                        </div>
+
+                        {{-- Ringkasan Biaya Keseluruhan --}}
+                        <div class="mt-6 pt-5 border-t border-brand-muted/80 space-y-2 text-sm">
+                            <div class="flex justify-between text-gray-600">
+                                <span>Subtotal Produk</span>
+                                <span class="font-semibold text-brand-dark">{{ $formatRupiah($order->subtotal ?? 0) }}</span>
+                            </div>
+                            <div class="flex justify-between text-gray-600">
+                                <span>Biaya Pengiriman ({{ $courierName ? strtoupper($courierName) : 'Kurir' }})</span>
+                                <span class="font-semibold text-brand-dark">{{ $formatRupiah($order->shipping_cost ?? 0) }}</span>
+                            </div>
+                            @if(($order->shipping_cost_subsidy ?? 0) > 0)
+                                <div class="flex justify-between text-emerald-600">
+                                    <span>Subsidi Pengiriman</span>
+                                    <span class="font-semibold">-{{ $formatRupiah($order->shipping_cost_subsidy) }}</span>
+                                </div>
+                            @endif
+                            @if(($order->voucher_nominal ?? 0) > 0)
+                                <div class="flex justify-between text-emerald-600">
+                                    <span>Diskon Voucher</span>
+                                    <span class="font-semibold">-{{ $formatRupiah($order->voucher_nominal) }}</span>
+                                </div>
+                            @endif
+                            @if(($order->tax ?? 0) > 0)
+                                <div class="flex justify-between text-gray-600">
+                                    <span>Pajak (Tax)</span>
+                                    <span class="font-semibold text-brand-dark">{{ $formatRupiah($order->tax) }}</span>
+                                </div>
+                            @endif
+                            @if(($order->transaction_fee ?? 0) > 0)
+                                <div class="flex justify-between text-gray-600">
+                                    <span>Biaya Transaksi</span>
+                                    <span class="font-semibold text-brand-dark">{{ $formatRupiah($order->transaction_fee) }}</span>
+                                </div>
+                            @endif
+                            <div class="flex justify-between text-base font-extrabold text-brand-dark pt-3 border-t border-dashed border-brand-muted">
+                                <span>Total Pembayaran</span>
+                                <span class="text-brand-gold-dark text-lg">{{ $formatRupiah($order->total ?? 0) }}</span>
+                            </div>
                         </div>
                     </div>
                 @endif

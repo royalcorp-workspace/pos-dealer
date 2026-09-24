@@ -10,13 +10,25 @@
             <i class="fa-solid fa-chevron-down text-[10px] text-stone-400 group-hover:text-brand-gold transition-transform duration-200" :class="open ? 'rotate-180' : ''"></i>
         </button>
         <div x-show="open" class="mt-2.5 space-y-1.5 max-h-48 overflow-y-auto pr-1">
-            @foreach($categories->take(15) as $category)
-                <label class="flex items-center gap-2.5 py-1 text-xs sm:text-sm cursor-pointer select-none group">
+            @foreach($categories as $category)
+                <label class="flex items-center gap-2.5 py-1 text-xs sm:text-sm cursor-pointer select-none group font-medium">
                     <input type="checkbox" name="categories[]" value="{{ $category->slug }}"
                         {{ in_array($category->slug, $filters['categories'] ?? []) ? 'checked' : '' }}
                         class="rounded border-gray-300 text-brand-gold focus:ring-brand-gold cursor-pointer">
-                    <span class="text-stone-700 group-hover:text-brand-dark transition-colors">{{ $category->name }}</span>
+                    <span class="text-stone-800 group-hover:text-brand-dark transition-colors">{{ $category->name }}</span>
                 </label>
+                @if($category->children && $category->children->isNotEmpty())
+                    <div class="pl-3.5 space-y-1 my-0.5 border-l-2 border-[#E5DFC9]/60 ml-2">
+                        @foreach($category->children as $child)
+                            <label class="flex items-center gap-2 py-0.5 text-xs cursor-pointer select-none group">
+                                <input type="checkbox" name="categories[]" value="{{ $child->slug }}"
+                                    {{ in_array($child->slug, $filters['categories'] ?? []) ? 'checked' : '' }}
+                                    class="rounded border-gray-300 text-brand-gold focus:ring-brand-gold cursor-pointer">
+                                <span class="text-stone-600 group-hover:text-brand-dark transition-colors">{{ $child->name }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                @endif
             @endforeach
         </div>
     </div>
