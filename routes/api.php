@@ -15,7 +15,8 @@ Route::prefix('media')->group(function () {
 
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->middleware(\Illuminate\Session\Middleware\StartSession::class);
-    Route::post('verify-email', [AuthController::class, 'verifyEmail']);
+    Route::match(['get', 'post'], 'verify-email', [AuthController::class, 'verifyEmail']);
+    Route::post('resend-verification', [\App\Http\Controllers\Frontend\PageController::class, 'resendVerification']);
 
     Route::post('login', [AuthController::class, 'login'])->middleware('web');
     Route::post('refresh', [AuthController::class, 'refresh']);

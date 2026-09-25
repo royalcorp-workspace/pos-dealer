@@ -53,10 +53,14 @@ class AuthController extends Controller
             if ($request->expectsJson() || $request->is('login')) {
                 return response()->json([
                     'success' => false,
+                    'is_unverified' => true,
+                    'email' => $email,
                     'message' => 'Akun belum diverifikasi. Silakan periksa email Anda untuk melakukan verifikasi akun terlebih dahulu.'
                 ], 403);
             }
-            return redirect()->route('home')->with('error', 'Akun belum diverifikasi. Silakan periksa email Anda untuk melakukan verifikasi akun terlebih dahulu.');
+            return redirect()->route('home', ['show_login' => 1])
+                ->with('error', 'Akun belum diverifikasi. Silakan periksa email Anda untuk melakukan verifikasi akun terlebih dahulu.')
+                ->with('unverified_email', $email);
         }
 
         session()->put('is_logged_in', true);

@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         
         $middleware->validateCsrfTokens(except: [
             'v1.0/transfer-va/*',
+            'resend-verification',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -102,14 +102,95 @@ public function help()
         return view('frontend.help', compact('about', 'contacts', 'faqs'));
     }
 
-    public function verifyEmail()
+    public function verifyEmail(Request $request)
     {
+        $token = $request->query('token');
+        if ($token) {
+            $verification = \App\Models\EmailVerification::where('token', $token)->first();
+            if (!$verification) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Token verifikasi tidak valid.');
+            }
+            if ($verification->used) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Token verifikasi sudah pernah digunakan.');
+            }
+            if ($verification->expires_at && $verification->expires_at->getTimestamp() < time()) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Token verifikasi telah kedaluwarsa.');
+            }
+            $verification->update(['used' => true]);
+            $user = \App\Models\User::find($verification->user_id);
+            if ($user) {
+                $user->update([
+                    'email_verified' => true,
+                    'email_verified_at' => now(),
+                ]);
+            }
+            return redirect()->route('home', ['show_login' => 1])->with('success', 'Email berhasil diverifikasi! Silakan masuk ke akun Anda.');
+        }
+
         return view('frontend.verify-email');
     }
 
-    public function resendVerification()
+    public function resendVerification(Request $request)
     {
-        return response()->json(['message' => 'Verification email resent']);
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $email = strtolower(trim($request->input('email')));
+        $user = \App\Models\User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Alamat email tidak terdaftar dalam sistem.'
+            ], 404);
+        }
+
+        $isVerified = ($user->email_verified == true) || !is_null($user->email_verified_at);
+        if ($isVerified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun ini sudah terverifikasi. Silakan langsung login.'
+            ], 400);
+        }
+
+        // Check recent verification request (cooldown 60s)
+        $recent = \App\Models\EmailVerification::where('user_id', $user->id)
+            ->where('created_at', '>=', now()->subSeconds(60))
+            ->latest()
+            ->first();
+
+        if ($recent) {
+            $remaining = 60 - now()->diffInSeconds($recent->created_at);
+            return response()->json([
+                'success' => false,
+                'message' => 'Email verifikasi baru saja dikirim. Silakan tunggu ' . max(1, $remaining) . ' detik sebelum meminta kembali.'
+            ], 429);
+        }
+
+        $token = \Illuminate\Support\Str::random(64);
+        \App\Models\EmailVerification::create([
+            'user_id' => $user->id,
+            'token' => $token,
+            'expires_at' => now()->addHours(24),
+            'used' => false,
+        ]);
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($user->email)
+                ->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to resend verification email: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim email verifikasi. Silakan coba beberapa saat lagi.'
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Link verifikasi baru telah dikirimkan ke ' . $user->email . '. Silakan periksa kotak masuk atau spam.'
+        ]);
     }
 
     public function error400()

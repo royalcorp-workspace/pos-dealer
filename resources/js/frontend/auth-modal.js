@@ -212,6 +212,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     }, 1000);
                     return;
                 }
+                if (result.data && result.data.is_unverified) {
+                    window.dispatchEvent(new CustomEvent('auth-unverified-login', {
+                        detail: { 
+                            email: result.data.email || formData.get('email') || '',
+                            message: result.data.message || ''
+                        }
+                    }));
+                    return;
+                }
                 var msg = result.data.message || 'Login gagal. Periksa email dan password Anda.';
                 if (result.data.errors) {
                     var fieldErrors = [];

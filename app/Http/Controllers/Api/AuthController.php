@@ -171,22 +171,33 @@ class AuthController extends Controller
 
     public function verifyEmail(Request $request)
     {
-        $data = $request->validate([
-            'token' => ['required', 'string', 'max:255'],
-        ]);
-
-        $token = $data['token'];
+        $token = $request->input('token') ?: $request->query('token');
+        if (!$token) {
+            if (!$request->expectsJson()) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Token verifikasi tidak ditemukan.');
+            }
+            return response()->json(['message' => 'Token required'], 422);
+        }
 
         $verification = EmailVerification::query()->where('token', $token)->first();
         if (!$verification) {
+            if (!$request->expectsJson()) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Link verifikasi tidak valid.');
+            }
             return response()->json(['message' => 'Invalid token'], 422);
         }
 
         if ($verification->used) {
+            if (!$request->expectsJson()) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Link verifikasi sudah pernah digunakan.');
+            }
             return response()->json(['message' => 'Token already used'], 422);
         }
 
         if ($verification->expires_at->getTimestamp() < time()) {
+            if (!$request->expectsJson()) {
+                return redirect()->route('home', ['show_login' => 1])->with('error', 'Link verifikasi telah kedaluwarsa.');
+            }
             return response()->json(['message' => 'Token expired'], 422);
         }
 
@@ -197,6 +208,10 @@ class AuthController extends Controller
             'email_verified' => true,
             'email_verified_at' => now(),
         ]);
+
+        if (!$request->expectsJson()) {
+            return redirect()->route('home', ['show_login' => 1])->with('success', 'Email berhasil diverifikasi! Silakan masuk ke akun Anda.');
+        }
 
         return response()->json(['message' => 'Email verified successfully']);
     }
