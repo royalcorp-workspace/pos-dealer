@@ -522,7 +522,8 @@ class ProductCatalogController extends Controller
             'name_asc' => 'name ASC',
             'name_desc' => 'name DESC',
             'rating' => 'average_rating DESC NULLS LAST, created_at DESC',
-            default => 'best_seller DESC, created_at DESC',
+            'display_web', 'urutan' => 'CASE WHEN products.sort_order > 0 THEN products.sort_order ELSE 999999 END ASC, products.best_seller DESC, products.created_at DESC',
+            default => 'CASE WHEN products.sort_order > 0 THEN products.sort_order ELSE 999999 END ASC, products.best_seller DESC, products.created_at DESC',
         };
     }
 }

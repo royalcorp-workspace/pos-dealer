@@ -410,6 +410,7 @@
                         @endif
                     @endforeach
                     <select name="sort" onchange="this.form.submit()" class="border border-[#E5DFC9] rounded-xl px-3.5 py-2 text-xs sm:text-sm font-semibold text-brand-dark bg-[#FAF8F5] focus:ring-2 focus:ring-brand-gold/30 focus:border-brand-gold cursor-pointer focus:outline-none shadow-2xs">
+                        <option value="display_web" {{ ($sort === 'display_web' || empty($sort)) ? 'selected' : '' }}>{{ __('Urutan Rekomendasi') }}</option>
                         <option value="best_seller" {{ $sort === 'best_seller' ? 'selected' : '' }}>{{ __('Terlaris') }}</option>
                         <option value="newest" {{ $sort === 'newest' ? 'selected' : '' }}>{{ __('Terbaru') }}</option>
                         <option value="price_asc" {{ $sort === 'price_asc' ? 'selected' : '' }}>{{ __('Harga: Terendah') }}</option>
