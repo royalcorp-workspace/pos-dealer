@@ -793,8 +793,10 @@
                 
                 sortMessages() {
                     this.messages.sort((a, b) => {
-                        const diff = new Date(a.created_at) - new Date(b.created_at);
-                        return diff !== 0 ? diff : ((a.id || 0) - (b.id || 0));
+                        const timeA = new Date(a.created_at).getTime() || 0;
+                        const timeB = new Date(b.created_at).getTime() || 0;
+                        if (timeA !== timeB) return timeA - timeB;
+                        return String(a.id || '').localeCompare(String(b.id || ''));
                     });
                 },
 

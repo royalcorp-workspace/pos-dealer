@@ -1017,12 +1017,12 @@ class CheckoutController extends Controller
                     throw new \Exception('Gagal menyiapkan data pelanggan untuk transaksi pesanan.');
                 }
 
-                $orderShippingAddressId = null;
+                $savedCustomerAddressId = null;
 
                 if (!empty($customerData['sub_district_id'])) {
                     if (!empty($customerData['selected_address_id'])) {
                         Address::where('id', $customerData['selected_address_id'])->update(['is_primary' => true]);
-                        $orderShippingAddressId = $customerData['selected_address_id'];
+                        $savedCustomerAddressId = $customerData['selected_address_id'];
                     } else {
                         $subDistrict = SubDistrict::withoutGlobalScopes()->find($customerData['sub_district_id']) ?? SubDistrict::find($customerData['sub_district_id']);
                         if ($subDistrict) {
@@ -1045,7 +1045,7 @@ class CheckoutController extends Controller
                                     'postal_code' => $customerData['postal_code'] ?? ($subDistrict->postal_code ?? $existingAddr->postal_code),
                                     'is_primary' => true,
                                 ]);
-                                $orderShippingAddressId = $existingAddr->id;
+                                $savedCustomerAddressId = $existingAddr->id;
                             } else {
                                 $newAddr = Address::create([
                                     'id' => Str::uuid()->toString(),
@@ -1060,7 +1060,7 @@ class CheckoutController extends Controller
                                     'postal_code' => $customerData['postal_code'] ?? $subDistrict->postal_code,
                                     'is_primary' => true,
                                 ]);
-                                $orderShippingAddressId = $newAddr->id;
+                                $savedCustomerAddressId = $newAddr->id;
                             }
                         }
                     }
@@ -1087,6 +1087,7 @@ class CheckoutController extends Controller
                     [
                         'buffer_id' => $buffer?->id ?? ($sessionOrderData['id'] ?? null),
                         'customer' => $customerData,
+                        'customer_address_id' => $savedCustomerAddressId,
                         'platform' => 'website',
                         'payment_started_at' => now()->toIso8601String(),
                         'shipping_eta_label' => $shippingCalc['eta_label'] ?? null,
@@ -1103,6 +1104,29 @@ class CheckoutController extends Controller
                 }
 
                 // 3. Create Order
+                // shipping_addresses_id on orders table references shipping_addresses (courier rate zone), NOT addresses table.
+                $actualShippingAddressesId = null;
+                $candidateShippingAddressId = $buffer?->shipping_addresses_id ?? ($sessionOrderData['shipping_addresses_id'] ?? null);
+                if (!empty($candidateShippingAddressId)) {
+                    if (\App\Models\Frontend\Shipping\ShippingAddress::where('id', $candidateShippingAddressId)->exists()) {
+                        $actualShippingAddressesId = $candidateShippingAddressId;
+                    }
+                }
+                if (!$actualShippingAddressesId && !empty($buffer?->courier_id) && !empty($customerData['sub_district_id'])) {
+                    $sdId = $customerData['sub_district_id'];
+                    $subDistrictModel = SubDistrict::withoutGlobalScopes()->find($sdId) ?? SubDistrict::find($sdId);
+                    $destCityId = $subDistrictModel?->city_id;
+                    $actualShippingAddressesId = \App\Models\Frontend\Shipping\ShippingAddress::where('courier_id', $buffer->courier_id)
+                        ->where(function ($q) use ($sdId, $destCityId) {
+                            $q->where('sub_district_id', $sdId);
+                            if ($destCityId) {
+                                $q->orWhere('city_id', $destCityId);
+                            }
+                        })
+                        ->orderByRaw('sub_district_id IS NOT NULL DESC')
+                        ->value('id');
+                }
+
                 $orderNumber = 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
                 $orderSubtotal = $buffer?->subtotal ?? ($sessionOrderData['subtotal'] ?? 0);
                 $orderDiscount = $buffer?->discount ?? ($sessionOrderData['total_discount'] ?? 0);
@@ -1127,7 +1151,7 @@ class CheckoutController extends Controller
                     'voucher_nominal' => $buffer?->voucher_nominal ?? ($sessionOrderData['voucher_discount'] ?? 0),
                     'shipping_cost' => $orderShippingCost,
                     'shipping_cost_subsidy' => $orderShippingSubsidy,
-                    'shipping_addresses_id' => $orderShippingAddressId ?? ($buffer?->shipping_addresses_id ?? null),
+                    'shipping_addresses_id' => $actualShippingAddressesId,
                     'transaction_fee' => $charge,
                     'meta' => $orderMeta,
                     'creator' => $customer ? $customer->name : 'Customer Web',

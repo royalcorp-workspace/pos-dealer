@@ -25,6 +25,7 @@
 
     let currentCartTotal = getLatestCartTotal();
     window.currentCartTotal = currentCartTotal;
+    let selectedCartCoupons = [];
     let selectedCartCoupon = null;
     const defaultShipping = 0;
 
@@ -49,35 +50,94 @@
         return discount;
     }
 
+    function isShippingCouponType(dt) {
+        return dt === 'shipping' || dt == 3 || dt === '3' || dt === 'Gratis Ongkir';
+    }
+
+    function calculateTotalDiscount() {
+        currentCartTotal = getLatestCartTotal();
+        window.currentCartTotal = currentCartTotal;
+        let totalDiscount = 0;
+
+        selectedCartCoupons.forEach(function (coupon) {
+            if (!isShippingCouponType(coupon.discountType)) {
+                totalDiscount += calculateDiscount(coupon, currentCartTotal);
+            }
+        });
+
+        return Math.min(totalDiscount, currentCartTotal);
+    }
+
     function applySelectedCoupon() {
         currentCartTotal = getLatestCartTotal();
         window.currentCartTotal = currentCartTotal;
 
-        if (!selectedCartCoupon) {
+        if (!selectedCartCoupons || selectedCartCoupons.length === 0) {
+            selectedCartCoupon = null;
             const selectedEl = document.getElementById('cart-selected-coupon');
             const discountRow = document.getElementById('cart-coupon-discount-row');
             const totalEl = document.getElementById('cart-total-with-discount');
             if (selectedEl) selectedEl.classList.add('hidden');
             if (discountRow) discountRow.classList.add('hidden');
             if (totalEl) totalEl.textContent = formatRupiah(currentCartTotal);
+
+            const couponTriggerTitle = document.getElementById('cart-coupon-trigger-title');
+            const couponTriggerCode = document.getElementById('cart-coupon-trigger-code');
+            const selectedTitle = document.getElementById('cart-selected-title');
+            const selectedDiscount = document.getElementById('cart-selected-discount');
+            const couponDiscount = document.getElementById('cart-coupon-discount');
+            if (couponTriggerTitle) couponTriggerTitle.textContent = 'Pilih Kupon yang tersedia';
+            if (couponTriggerCode) couponTriggerCode.textContent = 'Klik untuk melihat kupon aktif';
+            if (selectedTitle) selectedTitle.textContent = '';
+            if (selectedDiscount) selectedDiscount.textContent = '';
+            if (couponDiscount) couponDiscount.textContent = '';
             return;
         }
 
-        const discount = calculateDiscount(selectedCartCoupon);
+        selectedCartCoupon = selectedCartCoupons[0];
+        const regularDiscount = calculateTotalDiscount();
         const selectedDiscountEl = document.getElementById('cart-selected-discount');
         const couponDiscountEl = document.getElementById('cart-coupon-discount');
         const totalEl = document.getElementById('cart-total-with-discount');
         const selectedCouponEl = document.getElementById('cart-selected-coupon');
         const discountRow = document.getElementById('cart-coupon-discount-row');
+        const couponTriggerTitle = document.getElementById('cart-coupon-trigger-title');
+        const couponTriggerCode = document.getElementById('cart-coupon-trigger-code');
+        const selectedTitle = document.getElementById('cart-selected-title');
 
-        if (selectedDiscountEl) selectedDiscountEl.textContent = '- ' + formatRupiah(discount);
-        if (couponDiscountEl) couponDiscountEl.textContent = '- ' + formatRupiah(discount);
-        if (totalEl) totalEl.textContent = formatRupiah(Math.max(0, currentCartTotal - discount));
+        const regularCoupons = selectedCartCoupons.filter(function (c) { return !isShippingCouponType(c.discountType); });
+        const shippingCoupons = selectedCartCoupons.filter(function (c) { return isShippingCouponType(c.discountType); });
+
+        let discountSummary = '';
+        if (regularCoupons.length > 0 && shippingCoupons.length > 0) {
+            discountSummary = '- ' + formatRupiah(regularDiscount) + ' + Gratis Ongkir';
+        } else if (regularCoupons.length > 0) {
+            discountSummary = '- ' + formatRupiah(regularDiscount);
+        } else {
+            discountSummary = 'Gratis Ongkir';
+        }
+
+        if (selectedCartCoupons.length === 1) {
+            const c = selectedCartCoupons[0];
+            if (couponTriggerTitle) couponTriggerTitle.textContent = c.title;
+            if (couponTriggerCode) couponTriggerCode.textContent = c.code;
+            if (selectedTitle) selectedTitle.textContent = c.title;
+        } else {
+            const codes = selectedCartCoupons.map(function (c) { return c.code; }).join(', ');
+            if (couponTriggerTitle) couponTriggerTitle.textContent = selectedCartCoupons.length + ' Kupon Diterapkan';
+            if (couponTriggerCode) couponTriggerCode.textContent = codes;
+            if (selectedTitle) selectedTitle.textContent = codes + ' (' + selectedCartCoupons.length + ' kupon)';
+        }
+
+        if (selectedDiscountEl) selectedDiscountEl.textContent = discountSummary;
+        if (couponDiscountEl) couponDiscountEl.textContent = discountSummary;
+        if (totalEl) totalEl.textContent = formatRupiah(Math.max(0, currentCartTotal - regularDiscount));
         if (selectedCouponEl) selectedCouponEl.classList.remove('hidden');
         if (discountRow) discountRow.classList.remove('hidden');
     }
 
     window.deselectCartCoupon = function () {
+        selectedCartCoupons = [];
         selectedCartCoupon = null;
         localStorage.removeItem('selectedCartCoupon');
         localStorage.removeItem('selectedCartCoupons');
@@ -111,9 +171,26 @@
         currentCartTotal = getLatestCartTotal();
         window.currentCartTotal = currentCartTotal;
 
-        if (selectedCartCoupon && selectedCartCoupon.code === button.dataset.code) {
-            window.deselectCartCoupon();
-            return;
+        const code = button.dataset.code;
+        const isNewShipping = isShippingCouponType(button.dataset.discountType);
+
+        // Check if already selected -> toggle off
+        const existingIdx = selectedCartCoupons.findIndex(function (c) { return c.code === code; });
+        if (existingIdx !== -1) {
+            selectedCartCoupons.splice(existingIdx, 1);
+            button.classList.remove('border-brand-gold', 'bg-brand-light');
+            const label = button.querySelector('.coupon-option-label');
+            if (label) label.textContent = 'Pilih';
+
+            if (selectedCartCoupons.length === 0) {
+                window.deselectCartCoupon();
+                return;
+            } else {
+                localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCartCoupons));
+                localStorage.setItem('selectedCartCoupon', JSON.stringify(selectedCartCoupons[0]));
+                applySelectedCoupon();
+                return;
+            }
         }
 
         const discountTypeNum = button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : 3);
@@ -124,39 +201,30 @@
             discount: button.dataset.discount,
             discountType: discountTypeNum,
             discountValue: parseFloat(button.dataset.discountValue) || 0,
-            maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined
+            maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
+            allow_stacking: button.dataset.allowStacking === '1' ? 1 : 0
         };
 
+        // Kombinasi: maksimal 1 voucher gratis ongkir dan 1 voucher diskon biasa
+        selectedCartCoupons = selectedCartCoupons.filter(function (c) {
+            const isCurrentShipping = isShippingCouponType(c.discountType);
+            return isNewShipping ? !isCurrentShipping : isCurrentShipping;
+        });
+        selectedCartCoupons.push(coupon);
+
         $$('.coupon-option').forEach(function (item) {
-            item.classList.remove('border-brand-gold', 'bg-brand-light');
+            const isSelected = selectedCartCoupons.some(function (c) { return c.code === item.dataset.code; });
+            item.classList.toggle('border-brand-gold', isSelected);
+            item.classList.toggle('bg-brand-light', isSelected);
             const label = item.querySelector('.coupon-option-label');
-            if (label) label.textContent = 'Pilih';
+            if (label) label.textContent = isSelected ? 'Dipilih' : 'Pilih';
         });
 
-        button.classList.add('border-brand-gold', 'bg-brand-light');
-        const label = button.querySelector('.coupon-option-label');
-        if (label) label.textContent = 'Dipilih';
+        localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCartCoupons));
+        localStorage.setItem('selectedCartCoupon', JSON.stringify(selectedCartCoupons[0]));
+        selectedCartCoupon = selectedCartCoupons[0];
 
-        const discount = calculateDiscount(coupon);
-        selectedCartCoupon = coupon;
-        localStorage.setItem('selectedCartCoupon', JSON.stringify(coupon));
-
-        const couponTriggerTitle = document.getElementById('cart-coupon-trigger-title');
-        const couponTriggerCode = document.getElementById('cart-coupon-trigger-code');
-        const selectedTitle = document.getElementById('cart-selected-title');
-        const selectedDiscount = document.getElementById('cart-selected-discount');
-        const couponDiscount = document.getElementById('cart-coupon-discount');
-
-        if (couponTriggerTitle) couponTriggerTitle.textContent = coupon.title;
-        if (couponTriggerCode) couponTriggerCode.textContent = coupon.code;
-        if (selectedTitle) selectedTitle.textContent = coupon.title;
-        if (selectedDiscount) selectedDiscount.textContent = '- ' + formatRupiah(discount);
-        if (couponDiscount) couponDiscount.textContent = '- ' + formatRupiah(discount);
         applySelectedCoupon();
-        const selectedCouponEl = document.getElementById('cart-selected-coupon');
-        const discountRow = document.getElementById('cart-coupon-discount-row');
-        if (selectedCouponEl) selectedCouponEl.classList.remove('hidden');
-        if (discountRow) discountRow.classList.remove('hidden');
     };
 
     window.toggleCartCouponPanel = function () {
@@ -273,12 +341,6 @@
                     window.selectCartCoupon(existingButton);
                     if (feedback) feedback.innerHTML = '<span class="text-green-600">Voucher berhasil diterapkan!</span>';
                 } else {
-                    $$('.coupon-option').forEach(function (item) {
-                        item.classList.remove('border-brand-gold', 'bg-brand-light');
-                        const label = item.querySelector('.coupon-option-label');
-                        if (label) label.textContent = 'Pilih';
-                    });
-
                     var discount = data.voucher ? (data.voucher.discount || 0) : 0;
                     var discountType = '1';
                     if (data.voucher && data.voucher.type) {
@@ -286,6 +348,7 @@
                         else if (data.voucher.type === 'Fixed' || data.voucher.type === 'Nominal') discountType = '2';
                         else if (data.voucher.type === 'Shipping' || data.voucher.type === 'Gratis Ongkir') discountType = '3';
                     }
+                    var allowStacking = (data.voucher && (data.voucher.allow_stacking || data.voucher.allowStacking)) ? 1 : 0;
                     var coupon = {
                         code: code,
                         title: data.voucher ? (data.voucher.title || code) : code,
@@ -293,28 +356,30 @@
                         discount: discount,
                         discountType: discountType,
                         discountValue: parseFloat(data.voucher ? data.voucher.value : 0) || 0,
-                        maxDiscount: (data.voucher && data.voucher.max_discount && Number(data.voucher.max_discount) > 0) ? Number(data.voucher.max_discount) : Infinity
+                        maxDiscount: (data.voucher && data.voucher.max_discount && Number(data.voucher.max_discount) > 0) ? Number(data.voucher.max_discount) : Infinity,
+                        allow_stacking: allowStacking
                     };
-                    selectedCartCoupon = coupon;
-                    localStorage.setItem('selectedCartCoupon', JSON.stringify(coupon));
 
-                    const couponTriggerTitle = document.getElementById('cart-coupon-trigger-title');
-                    const couponTriggerCode = document.getElementById('cart-coupon-trigger-code');
-                    const selectedTitle = document.getElementById('cart-selected-title');
-                    if (couponTriggerTitle) couponTriggerTitle.textContent = coupon.title;
-                    if (couponTriggerCode) couponTriggerCode.textContent = coupon.code;
-                    if (selectedTitle) selectedTitle.textContent = coupon.title;
+                    var isNewShipping = isShippingCouponType(discountType);
+                    selectedCartCoupons = selectedCartCoupons.filter(function (c) {
+                        const isCurrentShipping = isShippingCouponType(c.discountType);
+                        return isNewShipping ? !isCurrentShipping : isCurrentShipping;
+                    });
+                    selectedCartCoupons.push(coupon);
 
-                    const selectedDiscountEl = document.getElementById('cart-selected-discount');
-                    const couponDiscountEl = document.getElementById('cart-coupon-discount');
-                    const totalEl = document.getElementById('cart-total-with-discount');
-                    const selectedCouponEl = document.getElementById('cart-selected-coupon');
-                    const discountRow = document.getElementById('cart-coupon-discount-row');
-                    if (selectedDiscountEl) selectedDiscountEl.textContent = '- ' + formatRupiah(discount);
-                    if (couponDiscountEl) couponDiscountEl.textContent = '- ' + formatRupiah(discount);
-                    if (totalEl) totalEl.textContent = formatRupiah(Math.max(0, currentCartTotal - discount));
-                    if (selectedCouponEl) selectedCouponEl.classList.remove('hidden');
-                    if (discountRow) discountRow.classList.remove('hidden');
+                    $$('.coupon-option').forEach(function (item) {
+                        const isSelected = selectedCartCoupons.some(function (c) { return c.code === item.dataset.code; });
+                        item.classList.toggle('border-brand-gold', isSelected);
+                        item.classList.toggle('bg-brand-light', isSelected);
+                        const label = item.querySelector('.coupon-option-label');
+                        if (label) label.textContent = isSelected ? 'Dipilih' : 'Pilih';
+                    });
+
+                    selectedCartCoupon = selectedCartCoupons[0];
+                    localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCartCoupons));
+                    localStorage.setItem('selectedCartCoupon', JSON.stringify(selectedCartCoupons[0]));
+
+                    applySelectedCoupon();
 
                     if (feedback) feedback.innerHTML = '<span class="text-green-600">Voucher berhasil diterapkan!</span>';
                 }
@@ -336,43 +401,46 @@
         if (currentCartTotal <= 0) {
             localStorage.removeItem('selectedCartCoupon');
             localStorage.removeItem('selectedCartCoupons');
+            selectedCartCoupons = [];
+            selectedCartCoupon = null;
             return;
         }
 
-        const saved = localStorage.getItem('selectedCartCoupon');
+        const saved = localStorage.getItem('selectedCartCoupons') || localStorage.getItem('selectedCartCoupon');
         if (!saved) return;
 
         try {
-            const coupon = JSON.parse(saved);
-            const button = document.querySelector('.coupon-option[data-code="' + coupon.code + '"]');
-            if (button) {
-                selectedCartCoupon = {
-                    code: button.dataset.code,
-                    title: button.dataset.title,
-                    description: button.dataset.description,
-                    discount: button.dataset.discount,
-                    discountType: button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : (button.dataset.discountType === 'shipping' ? 3 : 4)),
-                    discountValue: parseFloat(button.dataset.discountValue) || 0,
-                    maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined
-                };
-                button.classList.add('border-brand-gold', 'bg-brand-light');
-                const label = button.querySelector('.coupon-option-label');
-                if (label) label.textContent = 'Dipilih';
-                const couponTriggerTitle = document.getElementById('cart-coupon-trigger-title');
-                const couponTriggerCode = document.getElementById('cart-coupon-trigger-code');
-                const selectedTitle = document.getElementById('cart-selected-title');
-                if (couponTriggerTitle) couponTriggerTitle.textContent = selectedCartCoupon.title;
-                if (couponTriggerCode) couponTriggerCode.textContent = selectedCartCoupon.code;
-                if (selectedTitle) selectedTitle.textContent = selectedCartCoupon.title;
-                applySelectedCoupon();
-            } else {
-                selectedCartCoupon = coupon;
-                const couponTriggerTitle = document.getElementById('cart-coupon-trigger-title');
-                const couponTriggerCode = document.getElementById('cart-coupon-trigger-code');
-                const selectedTitle = document.getElementById('cart-selected-title');
-                if (couponTriggerTitle) couponTriggerTitle.textContent = selectedCartCoupon.title;
-                if (couponTriggerCode) couponTriggerCode.textContent = selectedCartCoupon.code;
-                if (selectedTitle) selectedTitle.textContent = selectedCartCoupon.title;
+            let parsed = JSON.parse(saved);
+            if (!Array.isArray(parsed)) {
+                parsed = (parsed && parsed.code) ? [parsed] : [];
+            }
+            selectedCartCoupons = [];
+
+            parsed.forEach(function (coupon) {
+                const button = document.querySelector('.coupon-option[data-code="' + coupon.code + '"]');
+                if (button) {
+                    const allowStacking = button.dataset.allowStacking === '1' || button.dataset.allowStacking === 1 || button.dataset.allowStacking === 'true';
+                    const c = {
+                        code: button.dataset.code,
+                        title: button.dataset.title,
+                        description: button.dataset.description,
+                        discount: button.dataset.discount,
+                        discountType: button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : (button.dataset.discountType === 'shipping' ? 3 : 4)),
+                        discountValue: parseFloat(button.dataset.discountValue) || 0,
+                        maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
+                        allow_stacking: allowStacking ? 1 : 0
+                    };
+                    selectedCartCoupons.push(c);
+                    button.classList.add('border-brand-gold', 'bg-brand-light');
+                    const label = button.querySelector('.coupon-option-label');
+                    if (label) label.textContent = 'Dipilih';
+                } else if (coupon && coupon.code) {
+                    selectedCartCoupons.push(coupon);
+                }
+            });
+
+            if (selectedCartCoupons.length > 0) {
+                selectedCartCoupon = selectedCartCoupons[0];
                 applySelectedCoupon();
             }
         } catch (e) {}

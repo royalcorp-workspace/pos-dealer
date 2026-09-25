@@ -134,7 +134,7 @@ class Voucher extends Model
 
     public function isStackable(): bool
     {
-        // Hanya voucher diskon ongkir (type = 3) yang dapat di-stack
+        // Voucher diskon ongkir (type = 3) dengan allow_stacking = true dapat digabung dengan voucher biasa
         return (int) $this->type === 3 && (bool) $this->allow_stacking;
     }
 
@@ -147,11 +147,8 @@ class Voucher extends Model
         $isThisShipping = (int) $this->type === 3;
         $isOtherShipping = (int) $other->type === 3;
 
-        if (!$isThisShipping && !$isOtherShipping) {
-            return false;
-        }
-
-        if ($isThisShipping && $isOtherShipping) {
+        // Harus 1 voucher gratis ongkir dan 1 voucher biasa
+        if ($isThisShipping === $isOtherShipping) {
             return false;
         }
 

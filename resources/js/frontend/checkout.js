@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function restoreCartCoupon() {
-        var saved = localStorage.getItem('selectedCartCoupon');
+        var saved = localStorage.getItem('selectedCartCoupons') || localStorage.getItem('selectedCartCoupon');
         if (!saved) return;
         try {
             var coupons = JSON.parse(saved);
@@ -245,21 +245,33 @@ document.addEventListener('DOMContentLoaded', function () {
         courierSelect.addEventListener('change', fetchAndUpdateShippingCost);
     }
 
+    function isShippingCouponType(dt) {
+        return dt === 'shipping' || dt == 3 || dt === '3' || dt === 'Gratis Ongkir';
+    }
+
+    function checkCouponIsShipping(code) {
+        var card = document.querySelector('.coupon-card[data-code="' + code + '"]');
+        if (card) {
+            return isShippingCouponType(card.dataset.discountType);
+        }
+        if (manualCouponsData[code]) {
+            return isShippingCouponType(manualCouponsData[code].discountType);
+        }
+        return false;
+    }
+
     window.selectCoupon = function (button) {
         var code = button.dataset.code;
-        var allowStacking = button.dataset.allowStacking === '1';
+        var isNewShipping = isShippingCouponType(button.dataset.discountType);
 
         if (selectedCoupons.includes(code)) {
             selectedCoupons = selectedCoupons.filter(function (selectedCode) { return selectedCode !== code; });
         } else {
-            var hasNonStackable = selectedCoupons.some(function (selectedCode) {
-                var item = document.querySelector('.coupon-card[data-code="' + selectedCode + '"]');
-                return item && item.dataset.allowStacking !== '1';
+            // Kombinasi: maksimal 1 voucher gratis ongkir dan 1 voucher biasa
+            selectedCoupons = selectedCoupons.filter(function (selectedCode) {
+                var isCurrentShipping = checkCouponIsShipping(selectedCode);
+                return isNewShipping ? !isCurrentShipping : isCurrentShipping;
             });
-
-            if (!allowStacking || hasNonStackable) {
-                selectedCoupons = [];
-            }
             selectedCoupons.push(code);
         }
 
@@ -442,32 +454,32 @@ document.addEventListener('DOMContentLoaded', function () {
                 var discountType = data.voucher.type == '1' || data.voucher.type === 'percentage' ? 1 : (data.voucher.type == '2' || data.voucher.type === 'fixed' ? 2 : (data.voucher.type == '3' || data.voucher.type === 'shipping' ? 3 : 4));
                 var maxDiscount = data.voucher.max_discount && Number(data.voucher.max_discount) > 0 ? Number(data.voucher.max_discount) : Infinity;
 
+                var allowStacking = (data.voucher.allow_stacking || data.voucher.allowStacking) ? 1 : 0;
                 manualCouponsData[code] = {
                     discountType: discountType,
                     discountValue: discountVal,
                     maxDiscount: maxDiscount,
+                    allowStacking: allowStacking,
                     products: data.voucher.products || []
                 };
 
-                var allowStacking = data.voucher.allow_stacking ? 1 : 0;
-                var hasNonStackable = selectedCoupons.some(function (selectedCode) {
-                    var item = document.querySelector('.coupon-card[data-code="' + selectedCode + '"]');
-                    if (item && item.dataset.allowStacking !== '1') return true;
-                    return true;
+                var isNewShipping = isShippingCouponType(discountType);
+                selectedCoupons = selectedCoupons.filter(function (selectedCode) {
+                    var isCurrentShipping = checkCouponIsShipping(selectedCode);
+                    return isNewShipping ? !isCurrentShipping : isCurrentShipping;
                 });
-
-                if (!allowStacking || hasNonStackable) {
-                    selectedCoupons = [];
-                    document.querySelectorAll('.coupon-card').forEach(function (item) {
-                        item.classList.remove('border-brand-gold', 'bg-brand-light');
-                        var label = item.querySelector('.select-coupon-label');
-                        if (label) label.textContent = 'Pilih';
-                    });
-                }
 
                 if (!selectedCoupons.includes(code)) {
                     selectedCoupons.push(code);
                 }
+
+                document.querySelectorAll('.coupon-card').forEach(function (item) {
+                    var isSelected = selectedCoupons.includes(item.dataset.code);
+                    item.classList.toggle('border-brand-gold', isSelected);
+                    item.classList.toggle('bg-brand-light', isSelected);
+                    var label = item.querySelector('.select-coupon-label');
+                    if (label) label.textContent = isSelected ? 'Dipilih' : 'Pilih';
+                });
 
                 updateSelectedCouponDisplay();
                 updateTotal();
