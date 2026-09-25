@@ -473,6 +473,7 @@
                                     data-discount-type="{{ $voucher->type == 1 ? 'percentage' : ($voucher->type == 2 ? 'fixed' : ($voucher->type == 3 ? 'shipping' : 'bonus')) }}"
                                     data-discount-value="{{ floatval($voucher->value) }}"
                                     data-max-discount="{{ $voucher->max_discount ?? '' }}"
+                                    data-min-purchase="{{ (float)($voucher->min_purchase ?? 0) }}"
                                     data-allow-stacking="{{ $voucher->allow_stacking ? 1 : 0 }}"
                                     data-products="[]">
                                     <div class="flex items-start justify-between gap-2">
@@ -491,6 +492,11 @@
                                         <span class="inline-flex items-center rounded-md {{ $voucher->allow_stacking ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-600 border-gray-200' }} border px-2 py-0.5 text-[10px] font-bold">
                                             {{ $voucher->allow_stacking ? 'Bisa Digabung' : 'Single' }}
                                         </span>
+                                        @if((float)($voucher->min_purchase ?? 0) > 0)
+                                            <span class="inline-flex items-center rounded-md bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[10px] font-bold">
+                                                Min. Rp {{ number_format($voucher->min_purchase, 0, ',', '.') }}
+                                            </span>
+                                        @endif
                                     </div>
                                     <div class="mt-3 pt-2.5 border-t border-dashed border-gray-200 flex items-center justify-between">
                                         <span class="font-mono text-xs font-bold text-brand-dark bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{{ $voucher->code }}</span>

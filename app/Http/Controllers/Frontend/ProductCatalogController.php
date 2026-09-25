@@ -255,6 +255,12 @@ class ProductCatalogController extends Controller
 
     public function show(Product $product)
     {
+        // 301 Permanent Redirect if accessed via an old/previous slug
+        $requestedSlug = request()->segment(2);
+        if (!empty($requestedSlug) && $requestedSlug !== $product->slug) {
+            return redirect()->route('products.show', $product->slug, 301);
+        }
+
         if ($product->is_bundle) {
             return redirect()->route('bundling.show', $product->slug);
         }

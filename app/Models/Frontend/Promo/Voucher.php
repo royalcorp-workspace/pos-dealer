@@ -210,6 +210,8 @@ class Voucher extends Model
     public function categories(): BelongsToMany
     {
         return $this->belongsToMany(\App\Models\Frontend\ProductsCatalog\ProductCategory::class, 'voucher_categories', 'voucher_id', 'category_id')
+            ->wherePivot('deleted', false)
+            ->where('product_category.deleted', false)
             ->withPivot('creator', 'editor', 'deleted');
     }
 

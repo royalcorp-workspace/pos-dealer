@@ -72,6 +72,36 @@
         currentCartTotal = getLatestCartTotal();
         window.currentCartTotal = currentCartTotal;
 
+        // Auto-drop vouchers that no longer meet min_purchase
+        let droppedAny = false;
+        selectedCartCoupons = selectedCartCoupons.filter(function (c) {
+            if (c.minPurchase && c.minPurchase > 0 && currentCartTotal < c.minPurchase) {
+                droppedAny = true;
+                if (typeof addToast === 'function') {
+                    addToast('warning', 'Voucher ' + c.code + ' dilepas karena total belanja kurang dari ' + formatRupiah(c.minPurchase));
+                }
+                return false;
+            }
+            return true;
+        });
+
+        if (droppedAny) {
+            localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCartCoupons));
+            if (selectedCartCoupons.length > 0) {
+                localStorage.setItem('selectedCartCoupon', JSON.stringify(selectedCartCoupons[0]));
+            } else {
+                localStorage.removeItem('selectedCartCoupon');
+                localStorage.removeItem('selectedCartCoupons');
+            }
+            $$('.coupon-option').forEach(function (item) {
+                const isSelected = selectedCartCoupons.some(function (c) { return c.code === item.dataset.code; });
+                item.classList.toggle('border-brand-gold', isSelected);
+                item.classList.toggle('bg-brand-light', isSelected);
+                const label = item.querySelector('.coupon-option-label');
+                if (label) label.textContent = isSelected ? 'Dipilih' : 'Pilih';
+            });
+        }
+
         if (!selectedCartCoupons || selectedCartCoupons.length === 0) {
             selectedCartCoupon = null;
             const selectedEl = document.getElementById('cart-selected-coupon');
@@ -110,11 +140,15 @@
 
         let discountSummary = '';
         if (regularCoupons.length > 0 && shippingCoupons.length > 0) {
-            discountSummary = '- ' + formatRupiah(regularDiscount) + ' + Gratis Ongkir';
+            if (regularDiscount > 0) {
+                discountSummary = '- ' + formatRupiah(regularDiscount) + ' + Gratis Ongkir';
+            } else {
+                discountSummary = 'Gratis Ongkir (Dihitung saat checkout)';
+            }
         } else if (regularCoupons.length > 0) {
-            discountSummary = '- ' + formatRupiah(regularDiscount);
-        } else {
-            discountSummary = 'Gratis Ongkir';
+            discountSummary = regularDiscount > 0 ? ('- ' + formatRupiah(regularDiscount)) : 'Diskon Kupon Diterapkan';
+        } else if (shippingCoupons.length > 0) {
+            discountSummary = 'Gratis Ongkir (Dihitung saat checkout)';
         }
 
         if (selectedCartCoupons.length === 1) {
@@ -173,6 +207,7 @@
 
         const code = button.dataset.code;
         const isNewShipping = isShippingCouponType(button.dataset.discountType);
+        const minPurchase = parseFloat(button.dataset.minPurchase) || 0;
 
         // Check if already selected -> toggle off
         const existingIdx = selectedCartCoupons.findIndex(function (c) { return c.code === code; });
@@ -193,6 +228,16 @@
             }
         }
 
+        // Validate minimum purchase
+        if (minPurchase > 0 && currentCartTotal < minPurchase) {
+            if (typeof addToast === 'function') {
+                addToast('warning', 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+            } else {
+                alert('Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+            }
+            return;
+        }
+
         const discountTypeNum = button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : 3);
         const coupon = {
             code: button.dataset.code,
@@ -202,6 +247,7 @@
             discountType: discountTypeNum,
             discountValue: parseFloat(button.dataset.discountValue) || 0,
             maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
+            minPurchase: minPurchase,
             allow_stacking: button.dataset.allowStacking === '1' ? 1 : 0
         };
 
@@ -428,6 +474,7 @@
                         discountType: button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : (button.dataset.discountType === 'shipping' ? 3 : 4)),
                         discountValue: parseFloat(button.dataset.discountValue) || 0,
                         maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
+                        minPurchase: parseFloat(button.dataset.minPurchase) || 0,
                         allow_stacking: allowStacking ? 1 : 0
                     };
                     selectedCartCoupons.push(c);

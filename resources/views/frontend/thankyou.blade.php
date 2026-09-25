@@ -563,7 +563,6 @@
                         
                         $fullAddress = trim($addressText . ($subDistrict ? ', Kec. ' . $subDistrict : '') . ($city ? ', ' . $city : '') . ($province ? ', ' . $province : '') . ($postalCode ? ' ' . $postalCode : ''));
                         $courierName = $order->courier?->name ?? strtoupper($order->meta['courier'] ?? 'Ekspedisi');
-                    @php
                         $deliveryRecord = $order->delivery ?? \App\Models\Frontend\Shipping\Delivery::where('order_id', $order->id)->first();
                         $etaLabel = $deliveryRecord?->eta_label ?? ($order->meta['shipping_eta_label'] ?? ($order->meta['eta_label'] ?? null));
                     @endphp
@@ -645,14 +644,6 @@
 
                     <!-- Quick Action Buttons -->
                     <div class="mt-6 pt-5 border-t border-gray-100 space-y-3 no-print">
-                        <button 
-                            type="button" 
-                            onclick="window.print()" 
-                            class="w-full py-3.5 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl font-bold text-sm transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                            <i class="fa-solid fa-print"></i> Cetak / Simpan Invoice (PDF)
-                        </button>
-
                         @if(session()->get('is_logged_in'))
                             <a href="{{ route('dashboard', ['tab' => 'orders']) }}" class="w-full py-3 text-center text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-xs transition-all block">
                                 <i class="fa-solid fa-receipt mr-1"></i> Lihat Riwayat Pesanan
