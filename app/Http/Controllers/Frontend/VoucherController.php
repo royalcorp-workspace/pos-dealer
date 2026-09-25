@@ -41,7 +41,7 @@ class VoucherController extends Controller
         }
 
         $categoryIds = (array) $request->input('category_ids', []);
-        if ((int) $voucher->scope === 3 && $voucher->categories()->where('deleted', false)->pluck('product_category.id')->intersect($categoryIds)->isEmpty()) {
+        if ((int) $voucher->scope === 3 && $voucher->categories()->where('product_category.deleted', false)->pluck('product_category.id')->intersect($categoryIds)->isEmpty()) {
             return response()->json([
                 'valid' => false,
                 'message' => 'Voucher ini hanya berlaku untuk kategori tertentu.',

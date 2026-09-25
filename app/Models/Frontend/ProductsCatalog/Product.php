@@ -76,6 +76,7 @@ class Product extends Model
         'best_seller',
         'is_new',
         'is_bundle',
+        'previous_slugs',
         'sort_order',
         'status',
         'show_on_web',
@@ -88,6 +89,7 @@ class Product extends Model
     {
         return [
             'shipping_cost' => 'decimal:2',
+            'previous_slugs' => 'array',
             'best_seller' => 'boolean',
             'is_new' => 'boolean',
             'is_bundle' => 'boolean',
@@ -98,6 +100,25 @@ class Product extends Model
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $field = $field ?? $this->getRouteKeyName();
+
+        $product = $this->where($field, $value)->first();
+        if ($product) {
+            return $product;
+        }
+
+        if ($field === 'slug') {
+            return $this->where(function ($query) use ($value) {
+                $query->whereJsonContains('previous_slugs', $value)
+                      ->orWhereRaw("previous_slugs::text LIKE ?", ['%"' . $value . '"%']);
+            })->first();
+        }
+
+        return null;
     }
 
     public function getRouteKeyName(): string

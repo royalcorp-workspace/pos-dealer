@@ -116,7 +116,7 @@
         }
 
         if ((int) $coupon->scope === 3) {
-            return $coupon->categories()->where('deleted', false)->whereIn('product_category.id', $cartCategoryIds)->exists();
+            return $coupon->categories()->where('product_category.deleted', false)->whereIn('product_category.id', $cartCategoryIds)->exists();
         }
 
         return true;
@@ -390,6 +390,7 @@
                      data-discount-type="{{ $coupon->type == 1 ? 'percentage' : ($coupon->type == 2 ? 'fixed' : 'shipping') }}"
                      data-discount-value="{{ floatval($coupon->value) }}"
                      data-max-discount="{{ $coupon->max_discount ?? '' }}"
+                     data-min-purchase="{{ (float)($coupon->min_purchase ?? 0) }}"
                      data-allow-stacking="{{ $coupon->allow_stacking ? 1 : 0 }}">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
@@ -401,6 +402,9 @@
                     <div class="mt-3 flex flex-wrap gap-1.5">
                         <span class="inline-flex items-center rounded-full bg-brand-light px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-brand-gold-dark">{{ $coupon->scopeLabel() }}</span>
                         <span class="inline-flex items-center rounded-full {{ $coupon->allow_stacking ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500' }} px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider">{{ $coupon->allow_stacking ? 'Bisa Digabung' : 'Single Voucher' }}</span>
+                        @if((float)($coupon->min_purchase ?? 0) > 0)
+                            <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider">Min. Rp {{ number_format($coupon->min_purchase, 0, ',', '.') }}</span>
+                        @endif
                     </div>
                     <div class="mt-4 flex items-center justify-between">
                         <span class="font-mono text-sm font-bold text-brand-gold-dark">{{ $coupon->code }}</span>

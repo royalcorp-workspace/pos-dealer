@@ -26,7 +26,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateTotal() {
         var total = Math.max(0, subtotal - promoDiscount - productDiscount + currentShippingCost - selectedCouponDiscount);
         if (totalCost) totalCost.textContent = formatRupiah(total);
-        if (voucherDiscount) voucherDiscount.textContent = '- ' + formatRupiah(selectedCouponDiscount);
+        if (voucherDiscount) {
+            if (selectedCouponDiscount > 0) {
+                voucherDiscount.textContent = '- ' + formatRupiah(selectedCouponDiscount);
+            } else if (selectedCoupons.some(function(code) { return checkCouponIsShipping(code); })) {
+                voucherDiscount.textContent = currentShippingCost > 0 ? 'Gratis Ongkir' : 'Gratis Ongkir (Pilih kurir)';
+            } else {
+                voucherDiscount.textContent = '- Rp 0';
+            }
+        }
 
         var productDiscountRow = document.getElementById('product-discount-row');
         if (productDiscountRow) {
@@ -263,10 +271,22 @@ document.addEventListener('DOMContentLoaded', function () {
     window.selectCoupon = function (button) {
         var code = button.dataset.code;
         var isNewShipping = isShippingCouponType(button.dataset.discountType);
+        var minPurchase = parseFloat(button.dataset.minPurchase || 0);
 
         if (selectedCoupons.includes(code)) {
             selectedCoupons = selectedCoupons.filter(function (selectedCode) { return selectedCode !== code; });
         } else {
+            // Check minimum purchase against subtotal
+            var currentBase = Math.max(0, subtotal - promoDiscount - productDiscount);
+            if (minPurchase > 0 && currentBase < minPurchase) {
+                if (typeof addToast === 'function') {
+                    addToast('warning', 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+                } else {
+                    alert('Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+                }
+                return;
+            }
+
             // Kombinasi: maksimal 1 voucher gratis ongkir dan 1 voucher biasa
             selectedCoupons = selectedCoupons.filter(function (selectedCode) {
                 var isCurrentShipping = checkCouponIsShipping(selectedCode);

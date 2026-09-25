@@ -1711,7 +1711,7 @@ class CheckoutController extends Controller
         }
 
         if ((int) $voucher->scope === 3) {
-            return $voucher->categories()->where('deleted', false)->whereIn('product_category.id', $cartCategoryIds)->exists();
+            return $voucher->categories()->where('product_category.deleted', false)->whereIn('product_category.id', $cartCategoryIds)->exists();
         }
 
         return true;
@@ -1790,7 +1790,7 @@ class CheckoutController extends Controller
 
         if ((int) $voucher->scope === 3) {
             $productIds = $voucher->categories()
-                ->where('deleted', false)
+                ->where('product_category.deleted', false)
                 ->with('products')
                 ->get()
                 ->flatMap(fn($category) => $category->products->where('deleted', false)->pluck('id'))

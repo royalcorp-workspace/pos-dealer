@@ -239,7 +239,32 @@ trait BufferCartTrait
     {
         $total = 0.0;
         foreach ($cart as $item) {
-            $total += $item['sell_price'] * $item['quantity'];
+            $isBundle = ($item['type'] ?? null) === 'bundle' || str_starts_with($item['name'] ?? '', 'BUNDLE_');
+            $bundleData = $item['bundle_data'] ?? null;
+
+            if ($isBundle && $bundleData) {
+                $originalPrice = (float) ($bundleData['bundle_price'] ?? ($bundleData['bundle_total_original'] ?? ($item['sell_price'] ?? 0)));
+            } else {
+                $variantId = $item['variant_id'] ?? ($item['id'] !== ($item['product_id'] ?? null) ? $item['id'] : null);
+                $originalPrice = 0.0;
+                if ($variantId) {
+                    $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                    if ($variantModel) {
+                        $originalPrice = (float) $variantModel->sell_price;
+                    }
+                }
+                if ($originalPrice <= 0.0 && !empty($item['product_id'])) {
+                    $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                    if ($productModel) {
+                        $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
+                    }
+                }
+                if ($originalPrice <= 0.0) {
+                    $originalPrice = (float) ($item['sell_price'] ?? 0);
+                }
+            }
+            $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) ($item['quantity'] ?? 1), $originalPrice);
+            $total += (float)$res['promotional_price'] * (int) ($item['quantity'] ?? 1);
         }
         return $total;
     }

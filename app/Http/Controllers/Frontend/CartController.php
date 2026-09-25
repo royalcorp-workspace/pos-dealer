@@ -444,7 +444,8 @@ class CartController extends Controller
                     $eligibleSubtotal = (float) collect($cart)
                         ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
                 } elseif ((int) $voucher->scope === 3) {
-                    $eligibleProductIds = $voucher->categories()->where('deleted', false)
+                    $eligibleProductIds = $voucher->categories()
+                        ->where('product_category.deleted', false)
                         ->with('products')
                         ->get()
                         ->flatMap(fn($category) => $category->products->where('deleted', false)->pluck('id'))
