@@ -150,8 +150,8 @@ window.updateWishlistBadge = function (delta) {
     if (headerIcon) {
         headerIcon.classList.toggle('fa-solid', nextCount > 0);
         headerIcon.classList.toggle('fa-regular', nextCount === 0);
-        headerIcon.classList.toggle('text-brand-gold', nextCount > 0);
-        headerIcon.classList.toggle('text-brand-dark', nextCount === 0);
+        headerIcon.classList.toggle('text-red-500', nextCount > 0);
+        headerIcon.classList.toggle('text-gray-700', nextCount === 0);
     }
 
     if (wishlistLink) {
@@ -163,14 +163,11 @@ window.updateWishlistBadge = function (delta) {
         if (!badge && headerIcon?.parentElement) {
             badge = document.createElement('span');
             badge.id = 'wishlist-count-badge';
-            badge.className = 'absolute -top-1 -right-1 bg-brand-gold text-white text-[10px] font-bold min-w-[1rem] h-4 px-1 rounded-full flex items-center justify-center shadow-sm';
+            badge.className = 'absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-extrabold min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center shadow-xs';
             headerIcon.parentElement.appendChild(badge);
         }
 
-        const drawerCount = document.getElementById('cart-drawer-count');
-    if (drawerCount) drawerCount.textContent = count;
-
-    if (badge) {
+        if (badge) {
             badge.textContent = nextCount;
             badge.classList.remove('hidden');
         }
@@ -249,22 +246,29 @@ window.toggleWishlist = function (el) {
         const matchingButtons = document.querySelectorAll(`[data-product-id="${productId}"]`);
         matchingButtons.forEach(btn => {
             const btnIcon = btn.querySelector('i');
-            if (btnIcon) {
-                if (data.in_wishlist) {
-                    btnIcon.className = 'fa-solid fa-heart text-brand-gold';
-                } else {
-                    btnIcon.className = 'fa-regular fa-heart text-gray-400';
+            if (data.in_wishlist) {
+                if (btnIcon) {
+                    const isLarge = btn.classList.contains('sm:h-13') || btnIcon.classList.contains('text-lg');
+                    btnIcon.className = `fa-solid fa-heart text-red-500 ${isLarge ? 'text-lg' : 'text-xs sm:text-sm'}`;
                 }
+                btn.classList.add('text-red-500');
+                if (btn.classList.contains('sm:h-13') || btn.classList.contains('rounded-2xl')) {
+                    btn.classList.add('border-red-200', 'bg-red-50/40');
+                    btn.classList.remove('border-gray-200');
+                }
+                btn.classList.remove('text-gray-400', 'text-gray-700');
+            } else {
+                if (btnIcon) {
+                    const isLarge = btn.classList.contains('sm:h-13') || btnIcon.classList.contains('text-lg');
+                    btnIcon.className = `fa-regular fa-heart text-gray-400 ${isLarge ? 'text-lg' : 'text-xs sm:text-sm'}`;
+                }
+                btn.classList.remove('text-red-500', 'border-red-200', 'bg-red-50/40');
+                if (btn.classList.contains('sm:h-13') || btn.classList.contains('rounded-2xl')) {
+                    btn.classList.add('border-gray-200');
+                }
+                btn.classList.add('text-gray-400');
             }
         });
-
-        if (icon) {
-            if (data.in_wishlist) {
-                icon.className = 'fa-solid fa-heart text-brand-gold';
-            } else {
-                icon.className = 'fa-regular fa-heart text-gray-400';
-            }
-        }
 
         if (typeof data.count === 'number') {
             const countBadge = $('#wishlist-count-badge');

@@ -95,6 +95,7 @@ class VoucherController extends Controller
                 'max_discount' => $voucher->max_discount,
                 'scope' => $voucher->scope,
                 'scopeLabel' => $voucher->scopeLabel(),
+                'allow_stacking' => $voucher->isStackable(),
                 'allowStacking' => $voucher->isStackable(),
                 'products' => [],
             ],

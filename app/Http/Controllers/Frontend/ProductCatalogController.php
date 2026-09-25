@@ -302,8 +302,8 @@ class ProductCatalogController extends Controller
         $hasAnyNonIgnoredAttr = false;
         
         foreach ($product->variants as $variant) {
-            // Skip invalid variants (0 price)
-            if ((float) $variant->sell_price <= 0) {
+            // Skip invalid or deactivated variants (0 price, status=false, deleted=true)
+            if ((float) $variant->sell_price <= 0 || $variant->status === false || (int)$variant->status === 0 || $variant->deleted === true || (int)$variant->deleted === 1) {
                 continue;
             }
             $variantAttributes = [];
@@ -311,44 +311,65 @@ class ProductCatalogController extends Controller
             if ($rawAttributes) {
                 $variantAttributes = is_string($rawAttributes) ? json_decode($rawAttributes, true) : $rawAttributes;
             }
+            if (!is_array($variantAttributes)) {
+                $variantAttributes = [];
+            }
             
-            if (!empty($variantAttributes) && is_array($variantAttributes)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
-                $addedSomething = false;
-                foreach ($variantAttributes as $key => $value) {
-                    if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
-                        continue;
-                    }
-                    $normKey = $key;
-                    $normValue = (string) $value;
-                    if (strcasecmp($normKey, 'feel') === 0 || strcasecmp($normKey, 'completeness') === 0) {
-                        $normKey = 'Kelengkapan';
-                    }
-                    if (strcasecmp($normValue, 'mattress only') === 0) {
-                        $normValue = 'Kasur Saja';
-                    } elseif (strcasecmp($normValue, 'fullset') === 0 || strcasecmp($normValue, 'full bed set') === 0) {
-                        $normValue = 'Set Kasur + Divan';
-                    }
-
-                    if (!isset($attributeGroups[$normKey])) {
-                        $attributeGroups[$normKey] = [];
-                    }
-                    if (!in_array($normValue, $attributeGroups[$normKey])) {
-                        $attributeGroups[$normKey][] = $normValue;
-                    }
-                    $addedSomething = true;
-                    $hasAnyNonIgnoredAttr = true;
+            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
+            foreach ($variantAttributes as $key => $value) {
+                if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
+                    continue;
                 }
-                
-                // If there are no normal attributes but we have width and length, generate "Ukuran"
-                if (!$addedSomething && isset($variantAttributes['width']) && isset($variantAttributes['length'])) {
-                    $ukuran = $variantAttributes['width'] . ' x ' . $variantAttributes['length'];
-                    if (!isset($attributeGroups['Ukuran'])) {
-                        $attributeGroups['Ukuran'] = [];
+                $normKey = $key;
+                $normValue = (string) $value;
+                if (strcasecmp($normKey, 'feel') === 0 || strcasecmp($normKey, 'completeness') === 0) {
+                    $normKey = 'Kelengkapan';
+                }
+                if (strcasecmp($normValue, 'mattress only') === 0 || strcasecmp($normValue, 'mattress') === 0) {
+                    $normValue = 'Kasur Saja';
+                } elseif (strcasecmp($normValue, 'fullset') === 0 || strcasecmp($normValue, 'full bed set') === 0) {
+                    $normValue = 'Set Kasur + Divan';
+                }
+
+                if (!isset($attributeGroups[$normKey])) {
+                    $attributeGroups[$normKey] = [];
+                }
+                $exists = false;
+                foreach ($attributeGroups[$normKey] as $opt) {
+                    if (strcasecmp(trim($opt), trim($normValue)) === 0) {
+                        $exists = true;
+                        break;
                     }
-                    if (!in_array($ukuran, $attributeGroups['Ukuran'])) {
-                        $attributeGroups['Ukuran'][] = $ukuran;
+                }
+                if (!$exists) {
+                    $attributeGroups[$normKey][] = $normValue;
+                }
+                $hasAnyNonIgnoredAttr = true;
+            }
+            
+            // Always ensure "Ukuran" is added if the variant has dimensions or Ukuran attribute
+            $ukuranVal = null;
+            if (!empty($variantAttributes['Ukuran'])) {
+                $ukuranVal = (string) $variantAttributes['Ukuran'];
+            } elseif (!empty($variantAttributes['width']) && !empty($variantAttributes['length'])) {
+                $ukuranVal = ((int)$variantAttributes['width']) . ' x ' . ((int)$variantAttributes['length']);
+            } elseif (!empty($variant->width) && !empty($variant->length)) {
+                $ukuranVal = ((int)$variant->width) . ' x ' . ((int)$variant->length);
+            }
+
+            if ($ukuranVal) {
+                if (!isset($attributeGroups['Ukuran'])) {
+                    $attributeGroups['Ukuran'] = [];
+                }
+                $alreadyExists = false;
+                foreach ($attributeGroups['Ukuran'] as $existingUkuran) {
+                    if (strcasecmp(trim($existingUkuran), trim($ukuranVal)) === 0) {
+                        $alreadyExists = true;
+                        break;
                     }
+                }
+                if (!$alreadyExists) {
+                    $attributeGroups['Ukuran'][] = $ukuranVal;
                 }
             }
         }

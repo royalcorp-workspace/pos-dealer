@@ -81,6 +81,8 @@ class WishlistController extends Controller
         }
 
         $count = Wishlist::where('customer_id', $customerId)->count();
+        $wishlistIds = Wishlist::where('customer_id', $customerId)->pluck('product_id')->all();
+        session()->put('wishlist', $wishlistIds);
 
         return response()->json([
             'success' => true,
@@ -101,6 +103,8 @@ class WishlistController extends Controller
             Wishlist::where('customer_id', $customerId)
                 ->where('product_id', $product->id)
                 ->delete();
+            $wishlistIds = Wishlist::where('customer_id', $customerId)->pluck('product_id')->all();
+            session()->put('wishlist', $wishlistIds);
         }
 
         if ($request->wantsJson()) {

@@ -13,7 +13,9 @@
             preg_match('/\d+/', $variant->variant_name, $matches);
             return $matches ? (int) $matches[0] : 999999;
         })->values();
-        $validVariants = $variantsData->filter(function($v) { return (float) $v->sell_price > 0; });
+        $validVariants = $variantsData->filter(function($v) {
+            return (float) $v->sell_price > 0 && ($v->status ?? true) && !($v->deleted ?? false);
+        });
         $colorsData = $product->colors->sortBy('color_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $hasVariants = $validVariants->isNotEmpty();
         $hasColors = $colorsData->isNotEmpty();
@@ -966,17 +968,12 @@
             if (is_array($parsedAttrs)) {
                 $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
                 
-                // Cek apakah ada atribut selain yang diabaikan
-                $hasOther = false;
-                foreach ($parsedAttrs as $key => $val) {
-                    if (!in_array(strtolower($key), $ignoredKeys) && !in_array($key, $ignoredKeys)) {
-                        $hasOther = true;
-                        break;
+                if (empty($parsedAttrs['Ukuran'])) {
+                    if (isset($parsedAttrs['width']) && isset($parsedAttrs['length'])) {
+                        $parsedAttrs['Ukuran'] = ((int)$parsedAttrs['width']) . ' x ' . ((int)$parsedAttrs['length']);
+                    } elseif (!empty($v->width) && !empty($v->length)) {
+                        $parsedAttrs['Ukuran'] = ((int)$v->width) . ' x ' . ((int)$v->length);
                     }
-                }
-                
-                if (!$hasOther && isset($parsedAttrs['width']) && isset($parsedAttrs['length'])) {
-                    $parsedAttrs['Ukuran'] = $parsedAttrs['width'] . ' x ' . $parsedAttrs['length'];
                 }
                 
                 foreach ($ignoredKeys as $ik) {
@@ -991,7 +988,7 @@
                     if (strcasecmp($normK, 'feel') === 0 || strcasecmp($normK, 'completeness') === 0) {
                         $normK = 'Kelengkapan';
                     }
-                    if (strcasecmp($normV, 'mattress only') === 0) {
+                    if (strcasecmp($normV, 'mattress only') === 0 || strcasecmp($normV, 'mattress') === 0) {
                         $normV = 'Kasur Saja';
                     } elseif (strcasecmp($normV, 'fullset') === 0 || strcasecmp($normV, 'full bed set') === 0) {
                         $normV = 'Set Kasur + Divan';
