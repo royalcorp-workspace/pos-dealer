@@ -1692,7 +1692,7 @@ class CheckoutController extends Controller
 
         return Voucher::active()
             ->where('show_on_web', true)
-            ->with(['categories'])
+            ->with(['categories', 'products', 'brands', 'customerGroups'])
             ->get()
             ->filter(function ($voucher) use ($cartProductIds, $cartCategoryIds, $userId) {
                 return $this->voucherAppliesToCart($voucher, $cartProductIds, $cartCategoryIds, $userId);
@@ -1706,12 +1706,38 @@ class CheckoutController extends Controller
 
     private function voucherAppliesToCart(Voucher $voucher, array $cartProductIds, array $cartCategoryIds, ?string $userId = null): bool
     {
+        // Scope 2: Customer Tertentu
         if ((int) $voucher->scope === 2) {
             return $voucher->canBeUsedBy($userId);
         }
 
+        // Scope 3: Kategori Tertentu
         if ((int) $voucher->scope === 3) {
             return $voucher->categories()->where('product_category.deleted', false)->whereIn('product_category.id', $cartCategoryIds)->exists();
+        }
+
+        // Scope 4: Produk Tertentu (per Artikel)
+        if ((int) $voucher->scope === 4) {
+            return $voucher->products()->where('products.deleted', false)->whereIn('products.id', $cartProductIds)->exists();
+        }
+
+        // Scope 5: Brand Tertentu
+        if ((int) $voucher->scope === 5) {
+            $cartBrandIds = Product::whereIn('id', $cartProductIds)->where('deleted', false)->pluck('brand_id')->unique()->toArray();
+            return $voucher->brands()->where('brands.deleted', false)->whereIn('brands.id', $cartBrandIds)->exists();
+        }
+
+        // Scope 6: Brand & Artikel Tertentu
+        if ((int) $voucher->scope === 6) {
+            $cartBrandIds = Product::whereIn('id', $cartProductIds)->where('deleted', false)->pluck('brand_id')->unique()->toArray();
+            $hasProduct = $voucher->products()->where('products.deleted', false)->whereIn('products.id', $cartProductIds)->exists();
+            $hasBrand = $voucher->brands()->where('brands.deleted', false)->whereIn('brands.id', $cartBrandIds)->exists();
+            return $hasProduct || $hasBrand;
+        }
+
+        // Scope 7: Group Customer (Karyawan / Reseller)
+        if ((int) $voucher->scope === 7) {
+            return $voucher->canBeUsedBy($userId);
         }
 
         return true;
@@ -1741,7 +1767,7 @@ class CheckoutController extends Controller
     {
         $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
         $vouchers = Voucher::active()
-            ->with(['categories'])
+            ->with(['categories', 'products', 'brands', 'customerGroups'])
             ->where(function ($query) use ($codes) {
                 foreach ($codes as $code) {
                     $query->orWhereRaw('LOWER(code) = ?', [strtolower($code)]);
@@ -1784,10 +1810,12 @@ class CheckoutController extends Controller
 
     private function getVoucherEligibleSubtotal(Voucher $voucher, array $cart): float
     {
-        if ((int) $voucher->scope === 2) {
+        // Scope 2 (Customer) & Scope 7 (Group Customer): All products in cart are eligible
+        if (in_array((int) $voucher->scope, [1, 2, 7], true)) {
             return (float) collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
         }
 
+        // Scope 3: Kategori tertentu
         if ((int) $voucher->scope === 3) {
             $productIds = $voucher->categories()
                 ->where('product_category.deleted', false)
@@ -1799,6 +1827,59 @@ class CheckoutController extends Controller
 
             return (float) collect($cart)
                 ->filter(fn($item) => in_array($item['product_id'] ?? null, $productIds, true))
+                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
+        }
+
+        // Scope 4: Produk Tertentu (per Artikel)
+        if ((int) $voucher->scope === 4) {
+            $eligibleProductIds = $voucher->products()
+                ->where('products.deleted', false)
+                ->pluck('products.id')
+                ->toArray();
+
+            return (float) collect($cart)
+                ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
+                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
+        }
+
+        // Scope 5: Brand Tertentu
+        if ((int) $voucher->scope === 5) {
+            $brandIds = $voucher->brands()
+                ->where('brands.deleted', false)
+                ->pluck('brands.id')
+                ->toArray();
+
+            $eligibleProductIds = Product::whereIn('brand_id', $brandIds)
+                ->where('deleted', false)
+                ->pluck('id')
+                ->toArray();
+
+            return (float) collect($cart)
+                ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
+                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
+        }
+
+        // Scope 6: Brand & Artikel Tertentu
+        if ((int) $voucher->scope === 6) {
+            $directProductIds = $voucher->products()
+                ->where('products.deleted', false)
+                ->pluck('products.id')
+                ->toArray();
+
+            $brandIds = $voucher->brands()
+                ->where('brands.deleted', false)
+                ->pluck('brands.id')
+                ->toArray();
+
+            $brandProductIds = Product::whereIn('brand_id', $brandIds)
+                ->where('deleted', false)
+                ->pluck('id')
+                ->toArray();
+
+            $allEligible = array_values(array_unique(array_merge($directProductIds, $brandProductIds)));
+
+            return (float) collect($cart)
+                ->filter(fn($item) => in_array($item['product_id'] ?? null, $allEligible, true))
                 ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
         }
 

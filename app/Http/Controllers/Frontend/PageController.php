@@ -40,11 +40,27 @@ class PageController extends Controller
 
     public function promos()
     {
+        $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
+        $customerId = null;
+        if ($userId) {
+            $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $userId)->orWhere('id', $userId)->first();
+            $customerId = $customer ? $customer->id : $userId;
+        }
+
         $promos = Voucher::active()
             ->where('show_on_web', true)
+            ->where(function ($q) {
+                $q->whereNull('visibility')
+                  ->orWhere('visibility', '!=', 'hidden');
+            })
+            ->with(['claims'])
             ->orderByDesc('start_date')
             ->orderByDesc('end_date')
-            ->get();
+            ->get()
+            ->map(function ($voucher) use ($customerId) {
+                $voucher->is_claimed = $customerId ? $voucher->claims->contains('customer_id', $customerId) : false;
+                return $voucher;
+            });
 
         return view('frontend.promos', compact('promos'));
     }

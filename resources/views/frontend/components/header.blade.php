@@ -596,16 +596,16 @@
                 </li>
                 
                 <!-- Bundling Hemat -->
-                <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
+                {{-- <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
                     <a href="{{ route('bundling.index') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors py-2 {{ request()->routeIs('bundling.*') ? 'text-brand-gold-dark font-bold' : '' }}">
                         {{ __('Bundling Hemat') }}
                     </a>
-                </li>
+                </li> --}}
                 
                 <!-- Bantuan -->
                 <li class="h-full flex items-center" @mouseenter="activeMegaMenu = null">
-                    <a href="{{ route('help') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors py-2 {{ request()->routeIs('help') ? 'text-brand-gold-dark font-bold' : '' }}">
-                        {{ __('Bantuan') }}
+                    <a href="{{ route('about') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors py-2 {{ request()->routeIs('help') ? 'text-brand-gold-dark font-bold' : '' }}">
+                        {{ __('Tentang Kami') }}
                     </a>
                 </li>
             </ul>

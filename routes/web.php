@@ -120,10 +120,14 @@ Route::post('/set-password', [AuthController::class, 'processSetPassword'])->nam
 Route::get('/api/expeditions/providers', [ExpeditionIntegrationController::class, 'providers'])->name('api.expeditions.providers');
 Route::get('/api/expeditions/{provider}/tracking/{awb}', [ExpeditionIntegrationController::class, 'tracking'])->name('api.expeditions.tracking');
 Route::post('/api/expeditions/rates', [ExpeditionIntegrationController::class, 'rates'])->name('api.expeditions.rates');
-
 Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
-Route::post('/voucher/validate', [\App\Http\Controllers\Frontend\VoucherController::class, 'validate'])->name('voucher.validate');
 Route::post('/cart/toggle-wishlist', [WishlistController::class, 'toggle'])->name('cart.toggle-wishlist');
+Route::post('/voucher/validate', [\App\Http\Controllers\Frontend\VoucherController::class, 'validate'])->name('voucher.validate');
+Route::post('/voucher/claim', [\App\Http\Controllers\Frontend\VoucherController::class, 'claim'])->name('voucher.claim');
+Route::post('/store/follow', [\App\Http\Controllers\Frontend\VoucherController::class, 'followStore'])->name('store.follow');
+Route::post('/store/unfollow', [\App\Http\Controllers\Frontend\VoucherController::class, 'unfollowStore'])->name('store.unfollow');
+
+
 Route::post('/cart/update/{id}', [CartController::class, 'update'])->name('cart.update');
 Route::post('/cart/remove/{id}', [CartController::class, 'remove'])->name('cart.remove');
 Route::post('/orders/{order}/reorder', [CartController::class, 'reorder'])->name('orders.reorder');
