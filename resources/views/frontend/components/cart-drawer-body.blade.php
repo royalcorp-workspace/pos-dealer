@@ -245,8 +245,8 @@
                 }
             @endphp
             <div data-cart-item-id="{{ $item['id'] }}" class="flex gap-4 p-4 border border-gray-100 rounded-2xl bg-white shadow-sm">
-                <div class="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden flex-shrink-0">
-                    <img src="{{ $item['image'] }}" alt="{{ $isBundle ? ($bundleData['bundle_name'] ?? 'Bundle') : $item['name'] }}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
+                <div class="w-24 h-24 bg-[#FAF8F5] rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center p-1.5 border border-gray-100">
+                    <img src="{{ $item['image'] }}" alt="{{ $isBundle ? ($bundleData['bundle_name'] ?? 'Bundle') : $item['name'] }}" loading="lazy" decoding="async" class="max-w-full max-h-full object-contain" />
                 </div>
                 <div class="flex flex-col flex-1">
                     <div class="flex justify-between items-start">

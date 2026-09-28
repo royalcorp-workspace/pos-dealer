@@ -13,8 +13,15 @@
             preg_match('/\d+/', $variant->variant_name, $matches);
             return $matches ? (int) $matches[0] : 999999;
         })->values();
-        $validVariants = $variantsData->filter(function($v) {
-            return (float) $v->sell_price > 0 && ($v->status ?? true) && !($v->deleted ?? false);
+        $hasExplicitActive = $variantsData->contains(fn($v) => ($v->status === true || (string)$v->status === '1' || (int)$v->status === 1) && !($v->deleted ?? false) && (float)$v->sell_price > 0);
+        $validVariants = $variantsData->filter(function($v) use ($hasExplicitActive) {
+            if ((float) $v->sell_price <= 0 || ($v->deleted ?? false)) {
+                return false;
+            }
+            if ($hasExplicitActive && ($v->status === false || (string)$v->status === '0')) {
+                return false;
+            }
+            return true;
         });
         $colorsData = $product->colors->sortBy('color_name', SORT_NATURAL | SORT_FLAG_CASE)->values();
         $hasVariants = $validVariants->isNotEmpty();
@@ -262,12 +269,12 @@
                 @set-main-image.window="setMainImage($event.detail)"
             >
                 <!-- Main Stage Image with Smooth Hover Zoom & Navigation -->
-                <div class="aspect-[4/3] bg-gradient-to-b from-[#FAF8F5] to-[#F3F1EC] rounded-3xl overflow-hidden border border-[#EFECE6] relative shadow-sm group">
+                <div class="aspect-[4/3] bg-gradient-to-b from-[#FAF8F5] to-[#F3F1EC] rounded-3xl overflow-hidden border border-[#EFECE6] relative shadow-sm group flex items-center justify-center p-2 sm:p-4">
                     <img 
                         :src="currentImage" 
                         alt="{{ $product->alt_text ?? $product->name }}" 
                         decoding="async"
-                        class="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 cursor-zoom-in"
+                        class="w-full h-full max-h-full max-w-full object-contain transition-transform duration-700 ease-out group-hover:scale-105 cursor-zoom-in"
                         onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';"
                     />
                     
@@ -317,12 +324,12 @@
                     <template x-for="(img, idx) in images" :key="idx">
                         <button 
                             type="button"
-                            class="aspect-square bg-white rounded-2xl overflow-hidden border-2 cursor-pointer shrink-0 w-20 h-20 transition-all duration-300 snap-start shadow-xs focus:outline-none"
+                            class="aspect-square bg-white rounded-2xl overflow-hidden border-2 cursor-pointer shrink-0 w-20 h-20 transition-all duration-300 snap-start shadow-xs focus:outline-none p-1.5 flex items-center justify-center"
                             :class="currentIndex === idx ? 'border-brand-gold ring-2 ring-brand-gold/30 shadow-md scale-102 opacity-100' : 'border-gray-200 opacity-60 hover:opacity-100'"
                             @click="currentIndex = idx"
                             :aria-label="'Pilih Foto ' + (idx + 1)"
                         >
-                            <img :src="img" :alt="'Thumbnail ' + (idx + 1)" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';" />
+                            <img :src="img" :alt="'Thumbnail ' + (idx + 1)" loading="lazy" decoding="async" class="w-full h-full object-contain" onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';" />
                         </button>
                     </template>
                 </div>
@@ -966,16 +973,66 @@
         if ($rawAttrs) {
             $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
             if (is_array($parsedAttrs)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url', 'thickness', 'tebal'];
                 
+                // 1. Ukuran
                 if (empty($parsedAttrs['Ukuran'])) {
                     if (isset($parsedAttrs['width']) && isset($parsedAttrs['length'])) {
-                        $parsedAttrs['Ukuran'] = ((int)$parsedAttrs['width']) . ' x ' . ((int)$parsedAttrs['length']);
+                        $w = (int)$parsedAttrs['width'];
+                        $l = (int)$parsedAttrs['length'];
+                        $wStr = $w < 100 ? '0' . $w : (string)$w;
+                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
                     } elseif (!empty($v->width) && !empty($v->length)) {
-                        $parsedAttrs['Ukuran'] = ((int)$v->width) . ' x ' . ((int)$v->length);
+                        $w = (int)$v->width;
+                        $l = (int)$v->length;
+                        $wStr = $w < 100 ? '0' . $w : (string)$w;
+                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
+                    } elseif (preg_match('/(\d{2,3})\s*[xX]\s*(\d{3})/i', (string)$v->variant_name, $m)) {
+                        $w = (int)$m[1];
+                        $l = (int)$m[2];
+                        $wStr = $w < 100 ? '0' . $w : (string)$w;
+                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
+                    }
+                } else {
+                    if (preg_match('/(\d{2,3})\s*[xX]\s*(\d{3})/i', (string)$parsedAttrs['Ukuran'], $m)) {
+                        $w = (int)$m[1];
+                        $l = (int)$m[2];
+                        $wStr = $w < 100 ? '0' . $w : (string)$w;
+                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
                     }
                 }
-                
+
+                // 2. Kelengkapan
+                if (empty($parsedAttrs['Kelengkapan'])) {
+                    if (!empty($parsedAttrs['feel'])) {
+                        $parsedAttrs['Kelengkapan'] = (string)$parsedAttrs['feel'];
+                    } elseif (!empty($parsedAttrs['completeness'])) {
+                        $parsedAttrs['Kelengkapan'] = (string)$parsedAttrs['completeness'];
+                    } elseif (preg_match('/(kasur\s+saja|mattress\s+only|matras\s+saja)/i', (string)$v->variant_name)) {
+                        $parsedAttrs['Kelengkapan'] = 'Kasur Saja';
+                    } elseif (preg_match('/(set\s+kasur\s*\+\s*divan|set\s+kasur|full\s*set|full\s*bed\s*set)/i', (string)$v->variant_name)) {
+                        $parsedAttrs['Kelengkapan'] = 'Set Kasur + Divan';
+                    }
+                }
+
+                // 3. Ketebalan
+                if (empty($parsedAttrs['Ketebalan'])) {
+                    if (!empty($parsedAttrs['tebal'])) {
+                        $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['tebal']) . ' cm';
+                    } elseif (!empty($parsedAttrs['height']) && (float)$parsedAttrs['height'] > 0) {
+                        $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['height']) . ' cm';
+                    } elseif (!empty($v->height) && (float)$v->height > 0) {
+                        $parsedAttrs['Ketebalan'] = ((int)$v->height) . ' cm';
+                    } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$v->variant_name, $m)) {
+                        $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
+                    } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$v->variant_name, $m)) {
+                        $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
+                    }
+                }
+                if (!empty($parsedAttrs['Ketebalan']) && !str_ends_with(strtolower($parsedAttrs['Ketebalan']), 'cm')) {
+                    $parsedAttrs['Ketebalan'] .= ' cm';
+                }
+
                 foreach ($ignoredKeys as $ik) {
                     unset($parsedAttrs[$ik]);
                 }
