@@ -108,4 +108,24 @@ class Product extends Model
 
         return media_url($this->thumbnail);
     }
+
+    public function getPriceAttribute(): float
+    {
+        if ($this->relationLoaded('variants') && $this->variants->isNotEmpty()) {
+            $valid = $this->variants->filter(fn($v) => (float)$v->sell_price > 0 && !($v->deleted ?? false));
+            if ($valid->isNotEmpty()) {
+                return (float) $valid->min('sell_price');
+            }
+        }
+        $v = $this->variants()->where('deleted', false)->where('sell_price', '>', 0)->orderBy('sell_price')->first();
+        if ($v) {
+            return (float) $v->sell_price;
+        }
+        return (float) ($this->attributes['base_price'] ?? 0);
+    }
+
+    public function getSellPriceAttribute(): float
+    {
+        return $this->price;
+    }
 }

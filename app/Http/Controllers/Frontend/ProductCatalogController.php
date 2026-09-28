@@ -307,11 +307,24 @@ class ProductCatalogController extends Controller
         $attributeGroups = [];
         $hasAnyNonIgnoredAttr = false;
         
+        // Determine if any variant is explicitly marked active (status = 1 / true)
+        $hasExplicitActive = $product->variants->contains(function ($v) {
+            return ($v->status === true || (string)$v->status === '1' || (int)$v->status === 1) 
+                && !($v->deleted === true || (int)$v->deleted === 1) 
+                && (float)$v->sell_price > 0;
+        });
+
         foreach ($product->variants as $variant) {
-            // Skip invalid or deactivated variants (0 price, status=false, deleted=true)
-            if ((float) $variant->sell_price <= 0 || $variant->status === false || (int)$variant->status === 0 || $variant->deleted === true || (int)$variant->deleted === 1) {
+            // Skip invalid or deleted variants (0 price or deleted=true)
+            if ((float) $variant->sell_price <= 0 || $variant->deleted === true || (int)$variant->deleted === 1) {
                 continue;
             }
+
+            // If some variants are explicitly active, only skip variants that are explicitly deactivated (status = 0 / false)
+            if ($hasExplicitActive && ($variant->status === false || (string)$variant->status === '0')) {
+                continue;
+            }
+
             $variantAttributes = [];
             $rawAttributes = $variant->getRawOriginal('attributes');
             if ($rawAttributes) {
@@ -321,7 +334,7 @@ class ProductCatalogController extends Controller
                 $variantAttributes = [];
             }
             
-            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url'];
+            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url', 'thickness', 'tebal'];
             foreach ($variantAttributes as $key => $value) {
                 if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
                     continue;
@@ -353,14 +366,25 @@ class ProductCatalogController extends Controller
                 $hasAnyNonIgnoredAttr = true;
             }
             
-            // Always ensure "Ukuran" is added if the variant has dimensions or Ukuran attribute
+            // 1. Ensure "Ukuran" is added
             $ukuranVal = null;
             if (!empty($variantAttributes['Ukuran'])) {
                 $ukuranVal = (string) $variantAttributes['Ukuran'];
             } elseif (!empty($variantAttributes['width']) && !empty($variantAttributes['length'])) {
-                $ukuranVal = ((int)$variantAttributes['width']) . ' x ' . ((int)$variantAttributes['length']);
+                $w = (int)$variantAttributes['width'];
+                $l = (int)$variantAttributes['length'];
+                $wStr = $w < 100 ? '0' . $w : (string)$w;
+                $ukuranVal = "{$wStr} X {$l}";
             } elseif (!empty($variant->width) && !empty($variant->length)) {
-                $ukuranVal = ((int)$variant->width) . ' x ' . ((int)$variant->length);
+                $w = (int)$variant->width;
+                $l = (int)$variant->length;
+                $wStr = $w < 100 ? '0' . $w : (string)$w;
+                $ukuranVal = "{$wStr} X {$l}";
+            } elseif (preg_match('/(\d{2,3})\s*[xX]\s*(\d{3})/i', (string)$variant->variant_name, $m)) {
+                $w = (int)$m[1];
+                $l = (int)$m[2];
+                $wStr = $w < 100 ? '0' . $w : (string)$w;
+                $ukuranVal = "{$wStr} X {$l}";
             }
 
             if ($ukuranVal) {
@@ -378,12 +402,87 @@ class ProductCatalogController extends Controller
                     $attributeGroups['Ukuran'][] = $ukuranVal;
                 }
             }
+
+            // 2. Ensure "Kelengkapan" is added if present or detectable from variant_name
+            $kelengkapanVal = null;
+            if (!empty($variantAttributes['Kelengkapan'])) {
+                $kelengkapanVal = (string) $variantAttributes['Kelengkapan'];
+            } elseif (!empty($variantAttributes['feel'])) {
+                $kelengkapanVal = (string) $variantAttributes['feel'];
+            } elseif (!empty($variantAttributes['completeness'])) {
+                $kelengkapanVal = (string) $variantAttributes['completeness'];
+            } elseif (preg_match('/(kasur\s+saja|mattress\s+only|matras\s+saja)/i', (string)$variant->variant_name)) {
+                $kelengkapanVal = 'Kasur Saja';
+            } elseif (preg_match('/(set\s+kasur\s*\+\s*divan|set\s+kasur|full\s*set|full\s*bed\s*set)/i', (string)$variant->variant_name)) {
+                $kelengkapanVal = 'Set Kasur + Divan';
+            }
+
+            if ($kelengkapanVal) {
+                if (strcasecmp($kelengkapanVal, 'mattress only') === 0 || strcasecmp($kelengkapanVal, 'mattress') === 0) {
+                    $kelengkapanVal = 'Kasur Saja';
+                } elseif (strcasecmp($kelengkapanVal, 'fullset') === 0 || strcasecmp($kelengkapanVal, 'full bed set') === 0) {
+                    $kelengkapanVal = 'Set Kasur + Divan';
+                }
+                if (!isset($attributeGroups['Kelengkapan'])) {
+                    $attributeGroups['Kelengkapan'] = [];
+                }
+                $alreadyExists = false;
+                foreach ($attributeGroups['Kelengkapan'] as $existingK) {
+                    if (strcasecmp(trim($existingK), trim($kelengkapanVal)) === 0) {
+                        $alreadyExists = true;
+                        break;
+                    }
+                }
+                if (!$alreadyExists) {
+                    $attributeGroups['Kelengkapan'][] = $kelengkapanVal;
+                }
+            }
+
+            // 3. Ensure "Ketebalan" is added if present or detectable
+            $ketebalanVal = null;
+            if (!empty($variantAttributes['Ketebalan'])) {
+                $ketebalanVal = (string) $variantAttributes['Ketebalan'];
+            } elseif (!empty($variantAttributes['tebal'])) {
+                $ketebalanVal = ((int)$variantAttributes['tebal']) . ' cm';
+            } elseif (!empty($variantAttributes['height']) && (float)$variantAttributes['height'] > 0) {
+                $ketebalanVal = ((int)$variantAttributes['height']) . ' cm';
+            } elseif (!empty($variant->height) && (float)$variant->height > 0) {
+                $ketebalanVal = ((int)$variant->height) . ' cm';
+            } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$variant->variant_name, $m)) {
+                $ketebalanVal = $m[1] . ' cm';
+            } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$variant->variant_name, $m)) {
+                $ketebalanVal = $m[1] . ' cm';
+            }
+
+            if ($ketebalanVal) {
+                if (!str_ends_with(strtolower($ketebalanVal), 'cm')) {
+                    $ketebalanVal .= ' cm';
+                }
+                if (!isset($attributeGroups['Ketebalan'])) {
+                    $attributeGroups['Ketebalan'] = [];
+                }
+                $alreadyExists = false;
+                foreach ($attributeGroups['Ketebalan'] as $existingT) {
+                    if (strcasecmp(trim($existingT), trim($ketebalanVal)) === 0) {
+                        $alreadyExists = true;
+                        break;
+                    }
+                }
+                if (!$alreadyExists) {
+                    $attributeGroups['Ketebalan'][] = $ketebalanVal;
+                }
+            }
         }
 
         // Sort each attribute group from smallest to largest (numerically / dimension-wise)
         foreach ($attributeGroups as $groupKey => &$optionsList) {
-            usort($optionsList, function ($a, $b) {
-                // Extract first number in string (e.g. 120 from "120 x 200" or "Single 120")
+            usort($optionsList, function ($a, $b) use ($groupKey) {
+                if (strcasecmp($groupKey, 'Kelengkapan') === 0) {
+                    // Kasur Saja should appear before Set Kasur + Divan
+                    if (stripos((string)$a, 'Kasur Saja') !== false) return -1;
+                    if (stripos((string)$b, 'Kasur Saja') !== false) return 1;
+                }
+                // Extract first number in string (e.g. 120 from "120 X 200" or 25 from "25 cm")
                 preg_match('/\d+/', (string)$a, $matchesA);
                 preg_match('/\d+/', (string)$b, $matchesB);
                 $numA = isset($matchesA[0]) ? (int)$matchesA[0] : 999999;

@@ -253,8 +253,8 @@
                     </div>
                     <template x-for="item in suggestions" :key="item.id">
                         <a :href="'/products/' + item.slug" class="flex items-center gap-3 p-3 hover:bg-brand-light/40 transition-colors border-b border-gray-50 last:border-0 group">
-                            <div class="w-11 h-11 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
-                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="w-full h-full object-cover">
+                            <div class="w-11 h-11 rounded-lg bg-[#FAF8F5] border border-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5">
+                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="max-w-full max-h-full object-contain">
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h4 class="text-xs sm:text-sm font-bold text-brand-dark truncate group-hover:text-brand-gold-dark transition-colors" x-text="item.name"></h4>
@@ -827,8 +827,8 @@
                     </div>
                     <template x-for="item in suggestions" :key="item.id">
                         <a :href="'/products/' + item.slug" class="flex items-center gap-3 p-3 hover:bg-brand-light/50 transition-colors border-b border-gray-50 last:border-0 group">
-                            <div class="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
-                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="w-full h-full object-cover">
+                            <div class="w-12 h-12 rounded-lg bg-[#FAF8F5] border border-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5">
+                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="max-w-full max-h-full object-contain">
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h4 class="text-sm font-extrabold text-brand-dark truncate group-hover:text-brand-gold transition-colors" x-text="item.name"></h4>
