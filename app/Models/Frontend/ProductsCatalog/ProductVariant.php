@@ -17,6 +17,12 @@ class ProductVariant extends Model
 
     protected $table = 'product_variants';
 
+    protected static function boot(): void
+    {
+        parent::boot();
+        static::addGlobalScope('not-deleted', fn($q) => $q->where('product_variants.deleted', false));
+    }
+
     protected $fillable = [
         'product_id',
         'sku',

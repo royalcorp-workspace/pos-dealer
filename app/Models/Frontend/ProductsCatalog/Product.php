@@ -32,8 +32,9 @@ class Product extends Model
         static::addGlobalScope('sellable', function ($q) {
             $q->where(function ($query) {
                 $query->whereHas('variants', function ($q2) {
-                          $q2->where('sell_price', '>', 0);
-                      });
+                    $q2->where('product_variants.deleted', false)
+                       ->where('product_variants.sell_price', '>', 0);
+                });
             });
         });
         static::addGlobalScope('in_promo', function ($q) {
@@ -47,10 +48,28 @@ class Product extends Model
                 })->exists();
 
             if ($hasActiveEvent) {
-                $q->whereHas('priceProductSettings', function ($q2) {
-                    $q2->where('price_product_settings.is_active', true)
-                       ->where('price_product_settings.deleted', false);
-                });
+                $hasStorewide = \Illuminate\Support\Facades\DB::table('price_product_settings')
+                    ->where('is_active', true)
+                    ->where('deleted', false)
+                    ->where('scope', 1)
+                    ->where(function($query) {
+                        $query->whereNull('start_date')->orWhere('start_date', '<=', now());
+                    })
+                    ->where(function($query) {
+                        $query->whereNull('end_date')->orWhere('end_date', '>=', now());
+                    })->exists();
+
+                if (!$hasStorewide) {
+                    $hasAnyItemPromo = \Illuminate\Support\Facades\DB::table('price_product_setting_items')
+                        ->where('deleted', false)
+                        ->exists();
+                    if ($hasAnyItemPromo) {
+                        $q->whereHas('priceProductSettings', function ($q2) {
+                            $q2->where('price_product_settings.is_active', true)
+                               ->where('price_product_settings.deleted', false);
+                        });
+                    }
+                }
             }
         });
     }
@@ -180,7 +199,7 @@ class Product extends Model
 
     public function variants(): HasMany
     {
-        return $this->hasMany(ProductVariant::class, 'product_id');
+        return $this->hasMany(ProductVariant::class, 'product_id')->where('product_variants.deleted', false);
     }
 
 

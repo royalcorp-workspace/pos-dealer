@@ -14,7 +14,7 @@
             get hasUpper() { return /[A-Z]/.test(this.password); },
             get hasLower() { return /[a-z]/.test(this.password); },
             get hasNumber() { return /[0-9]/.test(this.password); },
-            get hasSymbol() { return /[@$!%*?&#^()_+\-=\[\]{};':\",.<>\/]/.test(this.password); },
+            get hasSymbol() { return /[\W_]/.test(this.password); },
             get isMatch() { return this.password && this.password === this.password_confirmation; },
             get isValid() { return this.hasMinLen && this.hasUpper && this.hasLower && this.hasNumber && this.hasSymbol && this.isMatch; }
         }">

@@ -1028,16 +1028,12 @@
                 x-data="{ 
                     showPopup: false,
                     init() {
-                        // Cek memori browser agar popup tidak spam (hanya muncul 1 kali per sesi)
-                        if (!sessionStorage.getItem('eventPopupShown_{{ $firstPopup->id }}')) {
-                            setTimeout(() => {
-                                this.showPopup = true;
-                            }, 1000); // Muncul setelah 1 detik
-                        }
+                        setTimeout(() => {
+                            this.showPopup = true;
+                        }, 1000); // Muncul setelah 1 detik setiap kali halaman home dimuat
                     },
                     closePopup() {
                         this.showPopup = false;
-                        sessionStorage.setItem('eventPopupShown_{{ $firstPopup->id }}', 'true');
                     }
                 }"
                 x-show="showPopup"
