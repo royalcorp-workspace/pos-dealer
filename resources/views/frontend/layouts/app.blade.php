@@ -937,6 +937,7 @@
                 }));
             }
         };
+    </script>
     @if(session()->get('is_logged_in'))
         @php
             $currentUserId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
