@@ -117,7 +117,18 @@ document.addEventListener('submit', async function(e) {
         form.setAttribute('data-direct-upload-handled', 'true');
         form.submit();
     } catch (err) {
-        alert('Upload Error: ' + err.message);
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal Mengunggah',
+                text: err.message,
+                confirmButtonColor: '#dc2626'
+            });
+        } else {
+            window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { type: 'error', message: 'Upload Error: ' + err.message } 
+            }));
+        }
         if (loader) loader.classList.add('hidden');
         imageInputs.forEach(input => input.disabled = false);
     }

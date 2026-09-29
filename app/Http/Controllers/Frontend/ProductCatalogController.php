@@ -137,19 +137,15 @@ class ProductCatalogController extends Controller
         if ($filterType && $filterValue) {
             if ($filterType === 'search') {
                 $query->where(function ($q) use ($filterValue) {
-                    $terms = array_filter(explode(' ', strtolower(trim($filterValue))));
-                    
-                    // Build a fuzzy string for typos: 'k a s u r' -> '%k%a%s%u%r%'
-                    $fuzzyString = '%';
-                    foreach (str_split(str_replace(' ', '', strtolower(trim($filterValue)))) as $char) {
-                        $fuzzyString .= $char . '%';
-                    }
+                    $cleanQuery = trim($filterValue);
+                    $terms = array_filter(explode(' ', strtolower($cleanQuery)));
 
                     // 1. Exact phrase match
-                    $q->where('name', 'ilike', '%' . $filterValue . '%')
-                      ->orWhere('slug', 'ilike', '%' . $filterValue . '%');
+                    $q->where('name', 'ilike', '%' . $cleanQuery . '%')
+                      ->orWhere('slug', 'ilike', '%' . $cleanQuery . '%')
+                      ->orWhereHas('brand', fn($b) => $b->where('name', 'ilike', '%' . $cleanQuery . '%'));
 
-                    // 2. Multi-word match (e.g., "Kasur 200 100" requires ALL words to match somewhere)
+                    // 2. Multi-word match (ALL words must match somewhere: in name, slug, category, or brand)
                     if (count($terms) > 1) {
                         $q->orWhere(function ($q2) use ($terms) {
                             foreach ($terms as $term) {
@@ -165,11 +161,6 @@ class ProductCatalogController extends Controller
                                 });
                             }
                         });
-                    }
-
-                    // 3. Typo/Fuzzy match ("ksur" -> "%k%s%u%r%")
-                    if (strlen($filterValue) <= 15) {
-                        $q->orWhere('name', 'ilike', $fuzzyString);
                     }
                 });
             }
@@ -508,24 +499,19 @@ class ProductCatalogController extends Controller
         }
 
         $words = array_filter(explode(' ', $query));
-        
-        // Build a fuzzy string for typos: 'k a s u r' -> '%k%a%s%u%r%'
-        $fuzzyString = '%';
-        foreach (str_split(str_replace(' ', '', $query)) as $char) {
-            $fuzzyString .= $char . '%';
-        }
 
         $products = Product::where('deleted', false)
             ->where(function ($q) {
                 $q->where('is_bundle', false)
                   ->orWhereNull('is_bundle');
             })
-            ->where(function ($q) use ($query, $words, $fuzzyString) {
-                // 1. Exact phrase match
+            ->where(function ($q) use ($query, $words) {
+                // 1. Exact phrase match in name, slug, or brand
                 $q->where('name', 'ilike', '%' . $query . '%')
-                  ->orWhere('slug', 'ilike', '%' . $query . '%');
+                  ->orWhere('slug', 'ilike', '%' . $query . '%')
+                  ->orWhereHas('brand', fn($b) => $b->where('name', 'ilike', '%' . $query . '%'));
 
-                // 2. Multi-word match (e.g., "Kasur 200 100")
+                // 2. Multi-word match: ALL words must match somewhere
                 if (count($words) > 1) {
                     $q->orWhere(function ($q2) use ($words) {
                         foreach ($words as $word) {
@@ -542,11 +528,6 @@ class ProductCatalogController extends Controller
                         }
                     });
                 }
-                
-                // 3. Typo/Fuzzy match ("ksur" -> "%k%s%u%r%")
-                if (strlen($query) <= 15) {
-                    $q->orWhere('name', 'ilike', $fuzzyString);
-                }
             })
             ->with(['category', 'brand', 'variants'])
             ->limit(20) // Fetch more to sort by relevance in PHP
@@ -555,14 +536,28 @@ class ProductCatalogController extends Controller
         // Sort in PHP to ensure the most relevant (exact matches) appear first
         $products = $products->sortByDesc(function ($product) use ($query, $words) {
             $name = strtolower($product->name);
+            $brandName = strtolower($product->brand->name ?? '');
             $score = 0;
             
             if ($name === $query) return 1000;
-            if (str_contains($name, $query)) $score += 500;
-            if (str_starts_with($name, $query)) $score += 200;
+            if ($brandName === $query) $score += 800;
+            if (str_starts_with($brandName, $query)) $score += 600;
+            if (str_contains($brandName, $query)) $score += 400;
+            if (str_starts_with($name, $query)) $score += 300;
+            if (str_contains($name, $query)) $score += 200;
             
+            $matchedWords = 0;
             foreach ($words as $word) {
-                if (str_contains($name, $word)) $score += 50;
+                if (str_contains($brandName, $word)) {
+                    $score += 150;
+                    $matchedWords++;
+                } elseif (str_contains($name, $word)) {
+                    $score += 50;
+                    $matchedWords++;
+                }
+            }
+            if (count($words) > 1 && $matchedWords === count($words)) {
+                $score += 100;
             }
             return $score;
         })

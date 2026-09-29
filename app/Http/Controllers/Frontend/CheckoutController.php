@@ -747,6 +747,11 @@ class CheckoutController extends Controller
 
         // If buffer is empty/missing, check if there is an existing UNPAID order to resume payment
         if ((empty($cart) || !$buffer) && $existingOrder && (int)$existingOrder->payment_status === 1 && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+            // If order already has an initiated payment / settlement, navigating back to payment should redirect to thankyou page!
+            if (!empty($existingOrder->settlement_id) || \App\Models\Settlement::where('reference_id', $existingOrder->order_number)->exists() || session()->get('thankyou_order_id') === $existingOrder->id) {
+                return redirect()->route('thankyou', ['order_id' => $existingOrder->id]);
+            }
+
             $orderData = $this->formatOrderDataFromModel($existingOrder);
             session()->put('order_data', $orderData);
             session()->put('last_created_order_id', $existingOrder->id);
@@ -886,6 +891,15 @@ class CheckoutController extends Controller
                 'success' => true,
                 'redirect_url' => route('thankyou', ['order_id' => $existingOrder->id]),
                 'message' => 'Pesanan ini sudah dibayar.'
+            ]);
+        }
+
+        // If order already has an initiated payment / settlement, redirect to thankyou immediately
+        if ($existingOrder && (!empty($existingOrder->settlement_id) || \App\Models\Settlement::where('reference_id', $existingOrder->order_number)->exists() || session()->get('thankyou_order_id') === $existingOrder->id)) {
+            return response()->json([
+                'success' => true,
+                'redirect_url' => route('thankyou', ['order_id' => $existingOrder->id]),
+                'message' => 'Pesanan ini sudah berhasil dibuat. Mengalihkan ke rincian pembayaran...'
             ]);
         }
 
@@ -1421,14 +1435,16 @@ class CheckoutController extends Controller
                 $paymentData = $response->json();
 
                 if ($response->successful() && isset($paymentData['error_code']) && $paymentData['error_code'] === '0000') {
-                    $settlement = \App\Models\Settlement::create([
-                        'reference_id' => $order->order_number,
-                        'gross_amount' => $amount,
-                        'fee_amount' => $charge,
-                        'net_amount' => $order->total,
-                        'status' => 'pending',
-                        'notes' => "Payment via {$paymentMethod}"
-                    ]);
+                    $settlement = \App\Models\Settlement::updateOrCreate(
+                        ['reference_id' => $order->order_number],
+                        [
+                            'gross_amount' => $amount,
+                            'fee_amount' => $charge,
+                            'net_amount' => $order->total,
+                            'status' => 'pending',
+                            'notes' => "Payment via {$paymentMethod}"
+                        ]
+                    );
 
                     $order->update([
                         'settlement_id' => $settlement->id,

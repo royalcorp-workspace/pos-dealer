@@ -1,3 +1,10 @@
+// Reload page when navigating back from Thank You page (BFCache handling)
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted || (window.performance && window.performance.navigation && window.performance.navigation.type === 2)) {
+        window.location.reload();
+    }
+});
+
 window.processPayment = function () {
     var selectedMethod = document.querySelector('input[name="payment_method"]:checked');
     var validationAlert = document.getElementById('payment-method-validation-error');

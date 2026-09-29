@@ -680,13 +680,14 @@
                             <!-- Wishlist Heart Button -->
                             <button 
                                 type="button"
-                                class="h-12 w-12 sm:h-13 sm:w-13 rounded-2xl flex items-center justify-center border-2 border-gray-200 bg-white hover:border-brand-gold hover:text-brand-gold transition-all duration-200 shrink-0 cursor-pointer shadow-2xs {{ $isInWishlist ? 'text-red-500 border-red-200' : 'text-gray-400' }}"
+                                data-wishlist-btn
                                 data-product-id="{{ $product->id }}"
                                 onclick="toggleWishlist(this)"
-                                title="Simpan ke Wishlist"
+                                class="h-12 w-12 sm:h-13 sm:w-13 rounded-2xl flex items-center justify-center border-2 transition-all duration-200 shrink-0 cursor-pointer shadow-2xs group/detail-wishlist {{ $isInWishlist ? 'border-red-300 bg-red-50/60 text-red-500 shadow-sm' : 'border-gray-200 bg-white text-gray-400 hover:border-red-200 hover:text-red-500' }}"
+                                title="{{ $isInWishlist ? 'Hapus dari Wishlist' : 'Simpan ke Wishlist' }}"
                                 aria-label="Wishlist"
                             >
-                                <i class="fa-{{ $isInWishlist ? 'solid' : 'regular' }} fa-heart text-lg"></i>
+                                <i class="fa-{{ $isInWishlist ? 'solid' : 'regular' }} fa-heart text-lg {{ $isInWishlist ? 'text-red-500 scale-110' : 'text-gray-400 group-hover/detail-wishlist:text-red-500' }} transition-transform duration-200"></i>
                             </button>
                         </div>
                     </div>

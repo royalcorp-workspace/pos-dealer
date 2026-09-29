@@ -100,6 +100,7 @@ Route::get('/register', [AuthController::class, 'showRegister'])->name('register
 Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('forgot-password.show');
 Route::get('/password-otp-sent', [CheckoutController::class, 'passwordOtpSent'])->name('password-otp.sent');
 Route::get('/reset-password', [AuthController::class, 'showResetPassword'])->name('reset-password.show');
+Route::post('/reset-password', [\App\Http\Controllers\Api\PasswordResetController::class, 'reset'])->name('reset-password.process');
 
 Route::get('/refresh-csrf', fn() => response()->json(['csrf_token' => csrf_token()]))->name('csrf.refresh');
 Route::get('/login', fn() => redirect()->route('home', ['show_login' => 1]))->name('login.show');

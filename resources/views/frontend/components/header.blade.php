@@ -106,11 +106,14 @@
     $currentLocale = session()->get('locale', 'id');
     $unreadNotificationCount = 0;
     try {
-        $unreadNotificationCount = \App\Models\Frontend\Notification::where('is_active', true)
-            ->where('deleted', false)
-            ->where('is_read', false)
-            ->where(function ($q) {
-                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+        $userId = $isLoggedIn ? ($user['id'] ?? null) : null;
+        $unreadNotificationCount = \App\Models\Frontend\Notification::where('is_read', false)
+            ->when($userId, function ($q) use ($userId) {
+                $q->where(function ($sub) use ($userId) {
+                    $sub->where('user_id', $userId)->orWhere('is_broadcast', true);
+                });
+            }, function ($q) {
+                $q->where('is_broadcast', true);
             })
             ->count();
     } catch (\Throwable $e) {
@@ -319,11 +322,9 @@
             >
                 <div class="relative">
                     <i id="wishlist-icon" class="fa-{{ $wishlistCount > 0 ? 'solid' : 'regular' }} fa-heart text-base {{ $wishlistCount > 0 ? 'text-red-500' : 'text-gray-700 group-hover:text-brand-dark' }}"></i>
-                    @if($wishlistCount > 0)
-                        <span id="wishlist-count-badge" class="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-extrabold min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center shadow-xs">
-                            {{ $wishlistCount }}
-                        </span>
-                    @endif
+                    <span id="wishlist-count-badge" class="{{ $wishlistCount > 0 ? '' : 'hidden' }} absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-extrabold min-w-[15px] h-[15px] px-1 rounded-full flex items-center justify-center shadow-xs ring-2 ring-white transition-transform">
+                        {{ $wishlistCount }}
+                    </span>
                 </div>
             </a>
 

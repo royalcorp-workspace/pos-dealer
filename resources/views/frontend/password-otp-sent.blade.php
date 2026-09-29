@@ -13,11 +13,11 @@
                 </svg>
             </div>
             <h1 class="text-2xl font-extrabold text-brand-dark mb-3">Cek Email Anda</h1>
-            <p class="text-gray-600 mb-6">Kami telah mengirimkan link reset password ke email <strong x-text="email"></strong>. Klik link di email Anda untuk melanjutkan.</p>
+            <p class="text-gray-600 mb-6">Kami telah mengirimkan 6 digit kode OTP reset password ke email <strong class="text-brand-dark">{{ request()->query('email', '') }}</strong>. Silakan periksa kotak masuk atau folder spam Anda.</p>
             <div class="space-y-3">
                 <a href="{{ route('reset-password.show', ['email' => request()->query('email', '')]) }}" 
                    class="block w-full py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold font-bold rounded-xl shadow-lg transition-transform active:scale-[0.98]">
-                    Lanjutkan ke Reset Password
+                    Lanjutkan ke Masukkan OTP
                 </a>
                 <a href="{{ route('forgot-password.show') }}" class="block w-full py-2 text-sm font-semibold text-gray-600 hover:text-brand-dark transition-colors">
                     &larr; Kirim ulang kode OTP

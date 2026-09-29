@@ -12,12 +12,18 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        $notifications = Notification::where('is_active', true)
-            ->where('deleted', false)
-            ->where(function ($q) {
-                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+        $userId = session()->get('is_logged_in')
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+            : null;
+
+        $notifications = Notification::query()
+            ->when($userId, function ($q) use ($userId) {
+                $q->where(function ($sub) use ($userId) {
+                    $sub->where('user_id', $userId)->orWhere('is_broadcast', true);
+                });
+            }, function ($q) {
+                $q->where('is_broadcast', true);
             })
-            ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -30,11 +36,18 @@ class NotificationController extends Controller
 
     public function unreadCount(Request $request)
     {
-        $count = Notification::where('is_active', true)
-            ->where('deleted', false)
+        $userId = session()->get('is_logged_in')
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
+            : null;
+
+        $count = Notification::query()
             ->where('is_read', false)
-            ->where(function ($q) {
-                $q->whereNull('published_at')->orWhere('published_at', '<=', now());
+            ->when($userId, function ($q) use ($userId) {
+                $q->where(function ($sub) use ($userId) {
+                    $sub->where('user_id', $userId)->orWhere('is_broadcast', true);
+                });
+            }, function ($q) {
+                $q->where('is_broadcast', true);
             })
             ->count();
 

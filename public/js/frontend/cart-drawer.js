@@ -228,12 +228,12 @@
             }
         }
 
-        // Validate minimum purchase
         if (minPurchase > 0 && currentCartTotal < minPurchase) {
+            const warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.';
             if (typeof addToast === 'function') {
-                addToast('warning', 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+                addToast('warning', warningMsg);
             } else {
-                alert('Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: warningMsg } }));
             }
             return;
         }

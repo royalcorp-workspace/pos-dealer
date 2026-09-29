@@ -221,17 +221,29 @@ function claimVoucher(voucherId, btn) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Pemberitahuan',
-                    text: data.message
+                    text: data.message,
+                    confirmButtonColor: '#1e3a8a',
+                    confirmButtonText: 'Mengerti'
                 });
             } else {
-                alert(data.message);
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: data.message } }));
             }
         }
     })
     .catch(err => {
         btn.disabled = false;
         btn.innerHTML = originalText;
-        alert('Terjadi kesalahan saat mengklaim voucher.');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: 'Terjadi kesalahan saat mengklaim voucher.',
+                confirmButtonColor: '#1e3a8a',
+                confirmButtonText: 'Tutup'
+            });
+        } else {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Terjadi kesalahan saat mengklaim voucher.' } }));
+        }
     });
 }
 </script>
