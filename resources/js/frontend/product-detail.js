@@ -281,7 +281,7 @@ function findMatchingVariant() {
                                          .replace(/Mattress Only/gi, 'Kasur Saja');
                 if (!displayName) {
                     displayName = Object.entries(selectedAttributes).map(([k,v]) => {
-                        let cleanK = k === 'Feel' ? 'Kelengkapan' : k;
+                        let cleanK = k;
                         let cleanV = v;
                         if (String(cleanV).toLowerCase() === 'mattress only') cleanV = 'Kasur Saja';
                         if (String(cleanV).toLowerCase() === 'fullset' || String(cleanV).toLowerCase() === 'full bed set') cleanV = 'Set Kasur + Divan';
@@ -638,7 +638,7 @@ function selectColor(el) {
         if (!variantName) {
             if (typeof selectedAttributes !== 'undefined' && Object.keys(selectedAttributes).length > 0) {
                 variantName = Object.entries(selectedAttributes).map(([k,v]) => {
-                    let cleanK = k === 'Feel' ? 'Kelengkapan' : k;
+                    let cleanK = k;
                     let cleanV = v;
                     if (String(cleanV).toLowerCase() === 'mattress only') cleanV = 'Kasur Saja';
                     if (String(cleanV).toLowerCase() === 'fullset' || String(cleanV).toLowerCase() === 'full bed set') cleanV = 'Set Kasur + Divan';

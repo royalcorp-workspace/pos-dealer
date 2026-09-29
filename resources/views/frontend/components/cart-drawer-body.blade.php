@@ -404,12 +404,21 @@
                         <span class="inline-flex items-center rounded-full {{ $coupon->allow_stacking ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500' }} px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider">{{ $coupon->allow_stacking ? 'Bisa Digabung' : 'Single Voucher' }}</span>
                         @if((float)($coupon->min_purchase ?? 0) > 0)
                             <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider">Min. Rp {{ number_format($coupon->min_purchase, 0, ',', '.') }}</span>
+                            @if($cartTotal < (float)$coupon->min_purchase)
+                                <span class="inline-flex items-center rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-extrabold tracking-wider">Kurang Rp {{ number_format((float)$coupon->min_purchase - $cartTotal, 0, ',', '.') }}</span>
+                            @endif
                         @endif
                     </div>
                     <div class="mt-4 flex items-center justify-between">
                         <span class="font-mono text-sm font-bold text-brand-gold-dark">{{ $coupon->code }}</span>
                         @if($isUsable)
-                            <span class="coupon-option-label text-xs font-bold text-gray-400">Pilih</span>
+                            @if((float)($coupon->min_purchase ?? 0) > 0 && $cartTotal < (float)$coupon->min_purchase)
+                                <span class="coupon-option-label text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-exclamation text-[10px]"></i> Belum Cukup
+                                </span>
+                            @else
+                                <span class="coupon-option-label text-xs font-bold text-gray-400">Pilih</span>
+                            @endif
                         @else
                             <span class="coupon-option-label text-xs font-bold text-red-500 uppercase tracking-wider">Limit Habis</span>
                         @endif

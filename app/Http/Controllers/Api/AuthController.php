@@ -140,7 +140,11 @@ class AuthController extends Controller
             try {
                 \Illuminate\Support\Facades\Mail::to($user->email)
                     ->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+                \Illuminate\Support\Facades\Log::channel('email')->info("Registration verification email sent successfully to {$user->email}");
             } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send verification email to {$user->email}: " . $e->getMessage(), [
+                    'exception' => $e->getMessage(),
+                ]);
                 \Illuminate\Support\Facades\Log::error('Failed to send verification email: ' . $e->getMessage());
             }
             return response()->json([

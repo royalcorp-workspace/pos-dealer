@@ -496,12 +496,23 @@
                                             <span class="inline-flex items-center rounded-md bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[10px] font-bold">
                                                 Min. Rp {{ number_format($voucher->min_purchase, 0, ',', '.') }}
                                             </span>
+                                            @if($cartTotal < (float)$voucher->min_purchase)
+                                                <span class="inline-flex items-center rounded-md bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold">
+                                                    Kurang Rp {{ number_format((float)$voucher->min_purchase - $cartTotal, 0, ',', '.') }}
+                                                </span>
+                                            @endif
                                         @endif
                                     </div>
                                     <div class="mt-3 pt-2.5 border-t border-dashed border-gray-200 flex items-center justify-between">
                                         <span class="font-mono text-xs font-bold text-brand-dark bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{{ $voucher->code }}</span>
                                         @if($isUsable)
-                                            <span class="text-xs font-bold text-brand-gold-dark select-coupon-label">{{ $isSelected ? 'Dipilih' : 'Pilih' }}</span>
+                                            @if((float)($voucher->min_purchase ?? 0) > 0 && $cartTotal < (float)$voucher->min_purchase)
+                                                <span class="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex items-center gap-1 select-coupon-label">
+                                                    <i class="fa-solid fa-circle-exclamation text-[10px]"></i> Belum Cukup
+                                                </span>
+                                            @else
+                                                <span class="text-xs font-bold text-brand-gold-dark select-coupon-label">{{ $isSelected ? 'Dipilih' : 'Pilih' }}</span>
+                                            @endif
                                         @else
                                             <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider select-coupon-label">Limit Habis</span>
                                         @endif

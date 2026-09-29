@@ -14,6 +14,7 @@ use App\Models\Payment;
 
 class Order extends Model
 {
+    protected $table = 'orders';
     protected $keyType = 'string';
     public $incrementing = false;
 
@@ -115,7 +116,7 @@ class Order extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(OrderItem::class);
+        return $this->hasMany(\App\Models\Frontend\Order\OrderItem::class, 'order_id', 'id');
     }
 
     public function payments(): HasMany

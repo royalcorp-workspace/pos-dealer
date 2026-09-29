@@ -145,8 +145,14 @@ class SnapBiController extends Controller
                 $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
                 if ($customerEmail) {
                     \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\PaymentSuccess($order));
+                    \Illuminate\Support\Facades\Log::channel('email')->info("PaymentSuccess email sent successfully to {$customerEmail} for Order #{$order->order_number}");
                 }
             } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send PaymentSuccess email to {$customerEmail}: " . $e->getMessage(), [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'exception' => $e->getMessage(),
+                ]);
                 \Illuminate\Support\Facades\Log::error('Gagal mengirim email PaymentSuccess (Snap): ' . $e->getMessage());
             }
         }

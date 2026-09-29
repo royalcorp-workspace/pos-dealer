@@ -154,9 +154,14 @@ class VoucherController extends Controller
 
         // Minimum purchase check
         if ($request->cart_total < $voucher->min_purchase) {
+            $kurang = (float) $voucher->min_purchase - (float) $request->cart_total;
             return response()->json([
                 'valid' => false,
-                'message' => 'Minimum pembelian Rp ' . number_format((float) $voucher->min_purchase, 0, ',', '.') . ' untuk voucher ini.',
+                'is_min_purchase' => true,
+                'min_purchase' => (float) $voucher->min_purchase,
+                'cart_total' => (float) $request->cart_total,
+                'shortfall' => $kurang,
+                'message' => 'Minimum pembelian Rp ' . number_format((float) $voucher->min_purchase, 0, ',', '.') . ' untuk voucher ini (Kurang Rp ' . number_format($kurang, 0, ',', '.') . ').',
             ]);
         }
 

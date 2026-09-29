@@ -10,11 +10,41 @@
     $paymentStatus = $order?->payment_status ?? 1; // 1 = unpaid, 2 = paid
     $statusLabel = \App\Models\Frontend\Order::statusLabels()[$status] ?? 'Menunggu Pembayaran';
     $statusBadge = $order?->getStatusBadgeClassAttribute() ?? 'bg-yellow-100 text-yellow-700';
-    $items = $order?->items ?? [];
+    $items = $order?->items;
+    if (empty($items) || count($items) === 0) {
+        $items = \App\Models\Frontend\Order\OrderItem::where('order_id', $order?->id)->get();
+    }
+    if ((empty($items) || count($items) === 0) && !empty($order?->meta['items'])) {
+        $items = collect($order->meta['items'])->map(function($raw) {
+            $unitPrice = (float)($raw['sell_price'] ?? ($raw['unit_price'] ?? 0));
+            $qty = (int)($raw['quantity'] ?? 1);
+            return (object) [
+                'name' => $raw['name'] ?? 'Produk',
+                'quantity' => $qty,
+                'unit_price' => $unitPrice,
+                'total' => (float)($raw['total'] ?? ($unitPrice * $qty)),
+                'discount_nominal' => (float)($raw['discount_nominal'] ?? 0),
+                'discount_percent' => (float)($raw['discount_percent'] ?? 0),
+                'item_notes' => $raw['item_note'] ?? '',
+                'meta' => ['image' => $raw['image'] ?? ''],
+                'product' => null,
+            ];
+        });
+    }
     
     $isUnpaid = $paymentStatus == 1;
     $vaNumber = $order->meta['va_number'] ?? null;
     $instructions = $order->meta['payment_instructions'] ?? [];
+    
+    $paymentStartedAt = !empty($order?->meta['payment_started_at']) 
+        ? \Carbon\Carbon::parse($order->meta['payment_started_at']) 
+        : ($order?->created_at ?? now());
+    $expireAt = (clone $paymentStartedAt)->addHours(24);
+    $remainingSeconds = max(0, (int) now()->diffInSeconds($expireAt, false));
+    $initH = str_pad((string) floor($remainingSeconds / 3600), 2, '0', STR_PAD_LEFT);
+    $initM = str_pad((string) floor(($remainingSeconds % 3600) / 60), 2, '0', STR_PAD_LEFT);
+    $initS = str_pad((string) ($remainingSeconds % 60), 2, '0', STR_PAD_LEFT);
+    $initialCountdownText = "{$initH}:{$initM}:{$initS}";
     
     $pmModel = \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
     $isBankTransfer = ($pmModel && (
@@ -39,8 +69,8 @@
                     
                     <div class="inline-block bg-white px-6 py-3 rounded-2xl shadow-sm border border-brand-muted mb-8">
                         <p class="text-sm text-gray-500 font-bold mb-1 uppercase tracking-wider">Sisa Waktu Pembayaran</p>
-                        <div class="text-3xl font-bold text-red-600 font-mono tracking-widest" id="order-countdown" data-created="{{ $order->created_at ? $order->created_at->toIso8601String() : now()->toIso8601String() }}">
-                            --:--:--
+                        <div class="text-3xl font-bold text-red-600 font-mono tracking-widest" id="order-countdown" data-remaining="{{ $remainingSeconds }}" data-created="{{ $paymentStartedAt->toIso8601String() }}">
+                            {{ $initialCountdownText }}
                         </div>
                     </div>
 
@@ -346,32 +376,47 @@
         var countdownEl = document.getElementById('order-countdown');
         if (!countdownEl) return;
         
-        var createdStr = countdownEl.getAttribute('data-created');
-        if (!createdStr) return;
+        var remainingAttr = countdownEl.getAttribute('data-remaining');
+        var remainingSeconds = remainingAttr !== null ? parseInt(remainingAttr, 10) : null;
+        var startLocalTime = Date.now();
         
-        var createdAt = new Date(createdStr).getTime();
-        var expireAt = createdAt + (24 * 60 * 60 * 1000); // 24 hours
+        var expireAt = null;
+        if (remainingSeconds === null || isNaN(remainingSeconds)) {
+            var createdStr = countdownEl.getAttribute('data-created');
+            if (createdStr) {
+                var createdAt = new Date(createdStr).getTime();
+                expireAt = createdAt + (24 * 60 * 60 * 1000);
+            }
+        }
         
         function updateTimer() {
-            var now = new Date().getTime();
-            var distance = expireAt - now;
+            var currentRemaining;
+            if (remainingSeconds !== null && !isNaN(remainingSeconds)) {
+                var elapsed = Math.floor((Date.now() - startLocalTime) / 1000);
+                currentRemaining = remainingSeconds - elapsed;
+            } else if (expireAt) {
+                var distance = expireAt - Date.now();
+                currentRemaining = Math.floor(distance / 1000);
+            } else {
+                return;
+            }
             
-            if (distance < 0) {
+            if (currentRemaining <= 0) {
                 countdownEl.innerHTML = "00:00:00";
                 countdownEl.classList.add('text-gray-400');
                 countdownEl.classList.remove('text-red-600');
                 return;
             }
             
-            var hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            var minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-            var seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            var hours = Math.floor(currentRemaining / 3600);
+            var minutes = Math.floor((currentRemaining % 3600) / 60);
+            var seconds = currentRemaining % 60;
             
-            hours = hours < 10 ? "0" + hours : hours;
-            minutes = minutes < 10 ? "0" + minutes : minutes;
-            seconds = seconds < 10 ? "0" + seconds : seconds;
+            var hStr = hours < 10 ? "0" + hours : hours;
+            var mStr = minutes < 10 ? "0" + minutes : minutes;
+            var sStr = seconds < 10 ? "0" + seconds : seconds;
             
-            countdownEl.innerHTML = hours + ":" + minutes + ":" + seconds;
+            countdownEl.innerHTML = hStr + ":" + mStr + ":" + sStr;
         }
         
         updateTimer();

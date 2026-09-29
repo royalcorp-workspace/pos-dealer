@@ -18,7 +18,7 @@ return [
     |
     */
 
-    'default' => env('LOG_CHANNEL', 'stack'),
+    'default' => env('LOG_CHANNEL', 'daily'),
 
     /*
     |--------------------------------------------------------------------------
@@ -52,43 +52,54 @@ return [
 
     'channels' => [
 
-                'espay' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/espay.log'),
-            'level' => 'debug',
-            'days' => 14,
-        ],
-
-        'espay-web' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/espay-web.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'days' => 14,
-        ],
-
-        'espay-mobile' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/espay-mobile.log'),
-            'level' => env('LOG_LEVEL', 'debug'),
-            'days' => 14,
-        ],
-
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
         'single' => [
             'driver' => 'single',
-            'path' => storage_path('logs/laravel.log'),
+            'path' => storage_path('logs/laravel/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/laravel.log'),
+            'path' => storage_path('logs/laravel/laravel.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'espay' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/espay/espay.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'espay-web' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/espay/espay-web.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'espay-mobile' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/espay/espay-mobile.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        'email' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/email/email.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
@@ -145,7 +156,7 @@ return [
         ],
 
         'emergency' => [
-            'path' => storage_path('logs/laravel.log'),
+            'path' => storage_path('logs/laravel/laravel.log'),
         ],
 
     ],

@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrderItem extends Model
 {
+    use HasUuids;
+
+    protected $table = 'order_items';
     protected $keyType = 'string';
     public $incrementing = false;
 
     protected $fillable = [
+        'id',
         'order_id',
         'product_id',
         'product_variant_id',
@@ -45,21 +50,21 @@ class OrderItem extends Model
 
     public function order(): BelongsTo
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(Order::class, 'order_id', 'id');
     }
 
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(\App\Models\Frontend\ProductsCatalog\Product::class, 'product_id', 'id')->withoutGlobalScopes();
     }
 
     public function variant(): BelongsTo
     {
-        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+        return $this->belongsTo(\App\Models\Frontend\ProductsCatalog\ProductVariant::class, 'product_variant_id', 'id')->withoutGlobalScopes();
     }
 
     public function color(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\Frontend\ProductsCatalog\ProductColor::class, 'product_color_id');
+        return $this->belongsTo(\App\Models\Frontend\ProductsCatalog\ProductColor::class, 'product_color_id', 'id');
     }
 }
