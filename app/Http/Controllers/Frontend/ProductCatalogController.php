@@ -298,6 +298,30 @@ class ProductCatalogController extends Controller
         $attributeGroups = [];
         $hasAnyNonIgnoredAttr = false;
         
+        $detectedCompletenessTitle = null;
+        $hasThicknessSetting = false;
+        $hasExplicitThicknessFlag = false;
+
+        foreach ($product->variants as $v) {
+            $rawA = $v->getRawOriginal('attributes');
+            $pA = is_string($rawA) ? json_decode($rawA, true) : $rawA;
+            if (is_array($pA)) {
+                if (!empty($pA['_completeness_title'])) {
+                    $detectedCompletenessTitle = trim((string)$pA['_completeness_title']);
+                }
+                if (isset($pA['_has_thickness'])) {
+                    $hasExplicitThicknessFlag = true;
+                    if ($pA['_has_thickness'] === true || $pA['_has_thickness'] === 'true' || $pA['_has_thickness'] === 1 || $pA['_has_thickness'] === '1') {
+                        $hasThicknessSetting = true;
+                    }
+                } elseif (!empty($pA['Ketebalan'])) {
+                    $hasThicknessSetting = true;
+                }
+            }
+        }
+        $completenessTitle = $detectedCompletenessTitle ?: 'Kelengkapan';
+        $isThicknessEnabled = $hasExplicitThicknessFlag ? $hasThicknessSetting : $hasThicknessSetting;
+
         // Determine if any variant is explicitly marked active (status = 1 / true)
         $hasExplicitActive = $product->variants->contains(function ($v) {
             return ($v->status === true || (string)$v->status === '1' || (int)$v->status === 1) 
@@ -325,15 +349,15 @@ class ProductCatalogController extends Controller
                 $variantAttributes = [];
             }
             
-            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url', 'thickness', 'tebal'];
+            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
             foreach ($variantAttributes as $key => $value) {
                 if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
                     continue;
                 }
                 $normKey = $key;
                 $normValue = (string) $value;
-                if (strcasecmp($normKey, 'feel') === 0 || strcasecmp($normKey, 'completeness') === 0) {
-                    $normKey = 'Kelengkapan';
+                if (strcasecmp($normKey, 'feel') === 0 || strcasecmp($normKey, 'completeness') === 0 || strcasecmp($normKey, 'kelengkapan') === 0) {
+                    $normKey = $completenessTitle;
                 }
                 if (strcasecmp($normValue, 'mattress only') === 0 || strcasecmp($normValue, 'mattress') === 0) {
                     $normValue = 'Kasur Saja';
@@ -394,9 +418,11 @@ class ProductCatalogController extends Controller
                 }
             }
 
-            // 2. Ensure "Kelengkapan" is added if present or detectable from variant_name
+            // 2. Ensure Completeness / Custom Option is added if present or detectable from variant_name
             $kelengkapanVal = null;
-            if (!empty($variantAttributes['Kelengkapan'])) {
+            if (!empty($variantAttributes[$completenessTitle])) {
+                $kelengkapanVal = (string) $variantAttributes[$completenessTitle];
+            } elseif (!empty($variantAttributes['Kelengkapan'])) {
                 $kelengkapanVal = (string) $variantAttributes['Kelengkapan'];
             } elseif (!empty($variantAttributes['feel'])) {
                 $kelengkapanVal = (string) $variantAttributes['feel'];
@@ -414,61 +440,61 @@ class ProductCatalogController extends Controller
                 } elseif (strcasecmp($kelengkapanVal, 'fullset') === 0 || strcasecmp($kelengkapanVal, 'full bed set') === 0) {
                     $kelengkapanVal = 'Set Kasur + Divan';
                 }
-                if (!isset($attributeGroups['Kelengkapan'])) {
-                    $attributeGroups['Kelengkapan'] = [];
+                if (!isset($attributeGroups[$completenessTitle])) {
+                    $attributeGroups[$completenessTitle] = [];
                 }
                 $alreadyExists = false;
-                foreach ($attributeGroups['Kelengkapan'] as $existingK) {
+                foreach ($attributeGroups[$completenessTitle] as $existingK) {
                     if (strcasecmp(trim($existingK), trim($kelengkapanVal)) === 0) {
                         $alreadyExists = true;
                         break;
                     }
                 }
                 if (!$alreadyExists) {
-                    $attributeGroups['Kelengkapan'][] = $kelengkapanVal;
+                    $attributeGroups[$completenessTitle][] = $kelengkapanVal;
                 }
             }
 
-            // 3. Ensure "Ketebalan" is added if present or detectable
-            $ketebalanVal = null;
-            if (!empty($variantAttributes['Ketebalan'])) {
-                $ketebalanVal = (string) $variantAttributes['Ketebalan'];
-            } elseif (!empty($variantAttributes['tebal'])) {
-                $ketebalanVal = ((int)$variantAttributes['tebal']) . ' cm';
-            } elseif (!empty($variantAttributes['height']) && (float)$variantAttributes['height'] > 0) {
-                $ketebalanVal = ((int)$variantAttributes['height']) . ' cm';
-            } elseif (!empty($variant->height) && (float)$variant->height > 0) {
-                $ketebalanVal = ((int)$variant->height) . ' cm';
-            } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$variant->variant_name, $m)) {
-                $ketebalanVal = $m[1] . ' cm';
-            } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$variant->variant_name, $m)) {
-                $ketebalanVal = $m[1] . ' cm';
-            }
+            // 3. Ensure "Ketebalan" is added ONLY IF thickness is enabled
+            if ($isThicknessEnabled) {
+                $ketebalanVal = null;
+                if (!empty($variantAttributes['Ketebalan'])) {
+                    $ketebalanVal = (string) $variantAttributes['Ketebalan'];
+                } elseif (!empty($variantAttributes['tebal'])) {
+                    $ketebalanVal = ((int)$variantAttributes['tebal']) . ' cm';
+                } elseif (!empty($variantAttributes['height']) && (float)$variantAttributes['height'] > 0) {
+                    $ketebalanVal = ((int)$variantAttributes['height']) . ' cm';
+                } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$variant->variant_name, $m)) {
+                    $ketebalanVal = $m[1] . ' cm';
+                } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$variant->variant_name, $m)) {
+                    $ketebalanVal = $m[1] . ' cm';
+                }
 
-            if ($ketebalanVal) {
-                if (!str_ends_with(strtolower($ketebalanVal), 'cm')) {
-                    $ketebalanVal .= ' cm';
-                }
-                if (!isset($attributeGroups['Ketebalan'])) {
-                    $attributeGroups['Ketebalan'] = [];
-                }
-                $alreadyExists = false;
-                foreach ($attributeGroups['Ketebalan'] as $existingT) {
-                    if (strcasecmp(trim($existingT), trim($ketebalanVal)) === 0) {
-                        $alreadyExists = true;
-                        break;
+                if ($ketebalanVal) {
+                    if (!str_ends_with(strtolower($ketebalanVal), 'cm')) {
+                        $ketebalanVal .= ' cm';
                     }
-                }
-                if (!$alreadyExists) {
-                    $attributeGroups['Ketebalan'][] = $ketebalanVal;
+                    if (!isset($attributeGroups['Ketebalan'])) {
+                        $attributeGroups['Ketebalan'] = [];
+                    }
+                    $alreadyExists = false;
+                    foreach ($attributeGroups['Ketebalan'] as $existingT) {
+                        if (strcasecmp(trim($existingT), trim($ketebalanVal)) === 0) {
+                            $alreadyExists = true;
+                            break;
+                        }
+                    }
+                    if (!$alreadyExists) {
+                        $attributeGroups['Ketebalan'][] = $ketebalanVal;
+                    }
                 }
             }
         }
 
         // Sort each attribute group from smallest to largest (numerically / dimension-wise)
         foreach ($attributeGroups as $groupKey => &$optionsList) {
-            usort($optionsList, function ($a, $b) use ($groupKey) {
-                if (strcasecmp($groupKey, 'Kelengkapan') === 0) {
+            usort($optionsList, function ($a, $b) use ($groupKey, $completenessTitle) {
+                if (strcasecmp($groupKey, $completenessTitle) === 0 || strcasecmp($groupKey, 'Kelengkapan') === 0) {
                     // Kasur Saja should appear before Set Kasur + Divan
                     if (stripos((string)$a, 'Kasur Saja') !== false) return -1;
                     if (stripos((string)$b, 'Kasur Saja') !== false) return 1;

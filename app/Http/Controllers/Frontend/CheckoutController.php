@@ -335,6 +335,7 @@ class CheckoutController extends Controller
             'item_notes.*' => 'nullable|string|max:500',
         ]);
 
+        session()->forget(['thankyou_order_id', 'last_created_order_id']);
         $buffer = $this->getCurrentBuffer();
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
@@ -721,6 +722,7 @@ class CheckoutController extends Controller
             'voucher_id' => $voucher?->id,
             'voucher_ids' => collect($appliedVouchers)->pluck('voucher.id')->filter()->values()->all(),
             'items' => $itemsForOrderData,
+            'resolved_items' => $resolvedItems,
         ];
 
         Session::put('selected_voucher_codes', $voucherCodes);
@@ -873,16 +875,10 @@ class CheckoutController extends Controller
 
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
 
-        // Check if an order was already created previously for this ID
+        // Check if an order was already created previously for this exact ID or buffer
         $existingOrder = $this->getOrderFromIdentifier($orderId);
         if (!$existingOrder && !empty($sessionOrderData['id'])) {
             $existingOrder = $this->getOrderFromIdentifier($sessionOrderData['id']);
-        }
-        if (!$existingOrder) {
-            $sessionOrderId = session()->get('last_created_order_id') ?? session()->get('thankyou_order_id');
-            if ($sessionOrderId) {
-                $existingOrder = $this->getOrderFromIdentifier($sessionOrderId);
-            }
         }
 
         // If order already exists and is already paid, redirect to thankyou immediately
@@ -1110,6 +1106,7 @@ class CheckoutController extends Controller
                         'shipping_service_name' => $shippingCalc['service_name'] ?? null,
                         'shipping_service_code' => $shippingCalc['service_code'] ?? null,
                         'courier_service_type' => $shippingCalc['service_code'] ?? null,
+                        'items' => !empty($itemsForOrderData) ? $itemsForOrderData : array_values($cart),
                     ]
                 );
 
@@ -1356,6 +1353,48 @@ class CheckoutController extends Controller
                 $order->meta = $meta;
             }
 
+            // Post-creation safety guarantee: ensure order has items in order_items table
+            $dbItemCount = \Illuminate\Support\Facades\DB::table('order_items')->where('order_id', $order->id)->count();
+            if ($dbItemCount === 0) {
+                \Illuminate\Support\Facades\Log::warning("Order #{$order->order_number} has 0 items, running emergency order item insertion");
+                $fallbackCart = !empty($cart) ? $cart : ($sessionOrderData['items'] ?? ($order->meta['items'] ?? []));
+                foreach ($fallbackCart as $item) {
+                    $variantId = $item['variant_id'] ?? ($item['id'] !== ($item['product_id'] ?? null) ? $item['id'] : null);
+                    $qty = max(1, (int) ($item['quantity'] ?? 1));
+                    $sellPrice = (float) ($item['sell_price'] ?? $item['price'] ?? 0);
+                    $basePrice = (float) ($item['base_price'] ?? $item['original_price'] ?? $sellPrice);
+                    $itemTotal = (float) ($item['total'] ?? ($sellPrice * $qty));
+                    $discNom = max(0.0, ($basePrice * $qty) - $itemTotal);
+                    $discPct = ($basePrice * $qty) > 0 ? round(($discNom / ($basePrice * $qty)) * 100, 2) : 0.0;
+
+                    $itemMeta = [
+                        'base_price' => $basePrice,
+                        'original_price' => $basePrice,
+                        'after_disc_price' => $sellPrice,
+                        'discount_nominal' => $discNom,
+                        'discount_percent' => $discPct,
+                    ];
+                    if (!empty($item['image'])) {
+                        $itemMeta['image'] = $item['image'];
+                    }
+
+                    OrderItem::create([
+                        'id' => Str::uuid(),
+                        'order_id' => $order->id,
+                        'product_id' => $item['product_id'] ?? null,
+                        'product_variant_id' => $variantId,
+                        'name' => $item['name'] ?? 'Produk',
+                        'quantity' => $qty,
+                        'unit_price' => $basePrice,
+                        'discount_nominal' => $discNom,
+                        'discount_percent' => $discPct,
+                        'total' => $itemTotal,
+                        'item_notes' => $item['item_note'] ?? '',
+                        'meta' => $itemMeta,
+                    ]);
+                }
+            }
+
             $meta = $order->meta ?? [];
 
             // 6. Handle Bank Transfer
@@ -1488,8 +1527,14 @@ class CheckoutController extends Controller
             $customerEmail = $order->customer->email ?? ($customerData['email'] ?? null);
             if ($customerEmail) {
                 \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
+                \Illuminate\Support\Facades\Log::channel('email')->info("OrderCreated email sent successfully to {$customerEmail} for Order #{$order->order_number}");
             }
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send OrderCreated email to {$customerEmail}: " . $e->getMessage(), [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'exception' => $e->getMessage(),
+            ]);
             \Illuminate\Support\Facades\Log::error('Gagal mengirim email OrderCreated: ' . $e->getMessage());
         }
 
@@ -1644,15 +1689,15 @@ class CheckoutController extends Controller
 
     public function thankYou(Request $request)
     {
-        $orderId = session('thankyou_order_id');
         $orderIdFromUrl = $request->query('order_id');
+        $orderId = $orderIdFromUrl ?: session('thankyou_order_id');
         $order = null;
         
-        // Try to get order from session ID first, then from URL parameter
         if ($orderId) {
-            $order = Order::with(['customer', 'courier', 'items.product', 'voucher'])->find($orderId);
-        } elseif ($orderIdFromUrl) {
-            $order = $this->getOrderFromIdentifier($orderIdFromUrl);
+            $order = $this->getOrderFromIdentifier($orderId);
+            if (!$order) {
+                $order = Order::with(['customer', 'courier', 'items.product', 'voucher'])->find($orderId);
+            }
         } else {
             // As last resort, get most recent order for logged-in user
             if (session()->get('is_logged_in')) {

@@ -411,12 +411,12 @@
                                                 <i class="fa-solid fa-ruler-combined text-brand-gold text-xs"></i>
                                             @elseif(stripos($groupName, 'tebal') !== false || stripos($groupName, 'tinggi') !== false || stripos($groupName, 'height') !== false)
                                                 <i class="fa-solid fa-arrows-up-down text-brand-gold text-xs"></i>
-                                            @elseif(stripos($groupName, 'kelengkapan') !== false || stripos($groupName, 'paket') !== false || stripos($groupName, 'feel') !== false)
+                                            @elseif(stripos($groupName, 'kelengkapan') !== false || stripos($groupName, 'paket') !== false || stripos($groupName, 'feel') !== false || stripos($groupName, 'opsi') !== false)
                                                 <i class="fa-solid fa-box-open text-brand-gold text-xs"></i>
                                             @else
                                                 <i class="fa-solid fa-layer-group text-brand-gold text-xs"></i>
                                             @endif
-                                            <span>{{ __('   ') }} {{ $groupName }}</span>
+                                            <span>{{ $groupName }}</span>
                                         </label>
                                         <span class="text-xs font-bold text-brand-gold-dark selected-attr-badge" data-group="{{ $groupName }}"></span>
                                     </div>
@@ -968,13 +968,37 @@
 
 @push('scripts')
 @php
-    $mappedVariants = collect($validVariants ?? [])->map(function($v) {
+    $detectedCompletenessTitle = null;
+    $hasThicknessSetting = false;
+    $hasExplicitThicknessFlag = false;
+
+    foreach ($validVariants as $v) {
+        $rawA = $v->getRawOriginal('attributes');
+        $pA = is_string($rawA) ? json_decode($rawA, true) : $rawA;
+        if (is_array($pA)) {
+            if (!empty($pA['_completeness_title'])) {
+                $detectedCompletenessTitle = trim((string)$pA['_completeness_title']);
+            }
+            if (isset($pA['_has_thickness'])) {
+                $hasExplicitThicknessFlag = true;
+                if ($pA['_has_thickness'] === true || $pA['_has_thickness'] === 'true' || $pA['_has_thickness'] === 1 || $pA['_has_thickness'] === '1') {
+                    $hasThicknessSetting = true;
+                }
+            } elseif (!empty($pA['Ketebalan'])) {
+                $hasThicknessSetting = true;
+            }
+        }
+    }
+    $completenessTitle = $detectedCompletenessTitle ?: 'Kelengkapan';
+    $isThicknessEnabled = $hasExplicitThicknessFlag ? $hasThicknessSetting : $hasThicknessSetting;
+
+    $mappedVariants = collect($validVariants ?? [])->map(function($v) use ($completenessTitle, $isThicknessEnabled) {
         $rawAttrs = $v->getRawOriginal('attributes');
         $parsedAttrs = [];
         if ($rawAttrs) {
             $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
             if (is_array($parsedAttrs)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', 'image', 'image_url', 'thickness', 'tebal'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
                 
                 // 1. Ukuran
                 if (empty($parsedAttrs['Ukuran'])) {
@@ -1003,35 +1027,39 @@
                     }
                 }
 
-                // 2. Kelengkapan
-                if (empty($parsedAttrs['Kelengkapan'])) {
-                    if (!empty($parsedAttrs['feel'])) {
-                        $parsedAttrs['Kelengkapan'] = (string)$parsedAttrs['feel'];
+                // 2. Completeness / Custom Option
+                if (empty($parsedAttrs[$completenessTitle])) {
+                    if (!empty($parsedAttrs['Kelengkapan'])) {
+                        $parsedAttrs[$completenessTitle] = (string)$parsedAttrs['Kelengkapan'];
+                    } elseif (!empty($parsedAttrs['feel'])) {
+                        $parsedAttrs[$completenessTitle] = (string)$parsedAttrs['feel'];
                     } elseif (!empty($parsedAttrs['completeness'])) {
-                        $parsedAttrs['Kelengkapan'] = (string)$parsedAttrs['completeness'];
+                        $parsedAttrs[$completenessTitle] = (string)$parsedAttrs['completeness'];
                     } elseif (preg_match('/(kasur\s+saja|mattress\s+only|matras\s+saja)/i', (string)$v->variant_name)) {
-                        $parsedAttrs['Kelengkapan'] = 'Kasur Saja';
+                        $parsedAttrs[$completenessTitle] = 'Kasur Saja';
                     } elseif (preg_match('/(set\s+kasur\s*\+\s*divan|set\s+kasur|full\s*set|full\s*bed\s*set)/i', (string)$v->variant_name)) {
-                        $parsedAttrs['Kelengkapan'] = 'Set Kasur + Divan';
+                        $parsedAttrs[$completenessTitle] = 'Set Kasur + Divan';
                     }
                 }
 
-                // 3. Ketebalan
-                if (empty($parsedAttrs['Ketebalan'])) {
-                    if (!empty($parsedAttrs['tebal'])) {
-                        $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['tebal']) . ' cm';
-                    } elseif (!empty($parsedAttrs['height']) && (float)$parsedAttrs['height'] > 0) {
-                        $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['height']) . ' cm';
-                    } elseif (!empty($v->height) && (float)$v->height > 0) {
-                        $parsedAttrs['Ketebalan'] = ((int)$v->height) . ' cm';
-                    } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$v->variant_name, $m)) {
-                        $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
-                    } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$v->variant_name, $m)) {
-                        $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
+                // 3. Ketebalan - ONLY IF thickness is enabled!
+                if ($isThicknessEnabled) {
+                    if (empty($parsedAttrs['Ketebalan'])) {
+                        if (!empty($parsedAttrs['tebal'])) {
+                            $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['tebal']) . ' cm';
+                        } elseif (!empty($parsedAttrs['height']) && (float)$parsedAttrs['height'] > 0) {
+                            $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['height']) . ' cm';
+                        } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$v->variant_name, $m)) {
+                            $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
+                        } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$v->variant_name, $m)) {
+                            $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
+                        }
                     }
-                }
-                if (!empty($parsedAttrs['Ketebalan']) && !str_ends_with(strtolower($parsedAttrs['Ketebalan']), 'cm')) {
-                    $parsedAttrs['Ketebalan'] .= ' cm';
+                    if (!empty($parsedAttrs['Ketebalan']) && !str_ends_with(strtolower($parsedAttrs['Ketebalan']), 'cm')) {
+                        $parsedAttrs['Ketebalan'] .= ' cm';
+                    }
+                } else {
+                    unset($parsedAttrs['Ketebalan'], $parsedAttrs['tebal'], $parsedAttrs['height']);
                 }
 
                 foreach ($ignoredKeys as $ik) {
@@ -1043,8 +1071,8 @@
                 foreach ($parsedAttrs as $k => $val) {
                     $normK = $k;
                     $normV = (string) $val;
-                    if (strcasecmp($normK, 'feel') === 0 || strcasecmp($normK, 'completeness') === 0) {
-                        $normK = 'Kelengkapan';
+                    if (strcasecmp($normK, 'feel') === 0 || strcasecmp($normK, 'completeness') === 0 || strcasecmp($normK, 'kelengkapan') === 0) {
+                        $normK = $completenessTitle;
                     }
                     if (strcasecmp($normV, 'mattress only') === 0 || strcasecmp($normV, 'mattress') === 0) {
                         $normV = 'Kasur Saja';

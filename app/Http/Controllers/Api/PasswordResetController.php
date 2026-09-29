@@ -61,7 +61,11 @@ class PasswordResetController extends Controller
                         $otp,
                         (int) ($this->otpTtlSeconds() / 60)
                     ));
+                    \Illuminate\Support\Facades\Log::channel('email')->info("OTP Password Reset email sent successfully to {$user->email}");
                 } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send OTP email to {$user->email}: " . $e->getMessage(), [
+                        'exception' => $e->getMessage(),
+                    ]);
                     \Illuminate\Support\Facades\Log::error("Gagal mengirim email OTP ke {$user->email}: " . $e->getMessage());
                     return response()->json([
                         'message' => 'Gagal mengirim email kode OTP. Silakan periksa koneksi atau coba lagi nanti.',
@@ -136,6 +140,7 @@ class PasswordResetController extends Controller
             ->first();
 
         if (!$reset || $reset->expires_at->getTimestamp() < time()) {
+            \Illuminate\Support\Facades\Log::channel('email')->warning("OTP verification failed for {$email}: Invalid or expired OTP code");
             $msg = 'Kode OTP salah atau sudah kedaluwarsa. Silakan periksa kembali kode OTP di email Anda atau minta kode OTP baru.';
             if ($isJson) {
                 return response()->json([
@@ -160,6 +165,8 @@ class PasswordResetController extends Controller
             ->update(['revoked' => true]);
 
         $this->audit->log($user, 'password_reset_success', $request, []);
+
+        \Illuminate\Support\Facades\Log::channel('email')->info("Password reset completed successfully for {$email} via OTP");
 
         $successMsg = 'Password berhasil direset! Silakan masuk dengan password baru Anda.';
 

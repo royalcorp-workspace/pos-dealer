@@ -195,7 +195,11 @@ public function help()
         try {
             \Illuminate\Support\Facades\Mail::to($user->email)
                 ->send(new \App\Mail\VerifyEmailMail($user->email, $token));
+            \Illuminate\Support\Facades\Log::channel('email')->info("Verification email resent successfully to {$user->email}");
         } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::channel('email')->error("Failed to resend verification email to {$user->email}: " . $e->getMessage(), [
+                'exception' => $e->getMessage(),
+            ]);
             \Illuminate\Support\Facades\Log::error('Failed to resend verification email: ' . $e->getMessage());
             return response()->json([
                 'success' => false,

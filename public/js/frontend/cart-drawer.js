@@ -229,7 +229,39 @@
         }
 
         if (minPurchase > 0 && currentCartTotal < minPurchase) {
-            const warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.';
+            const shortfall = minPurchase - currentCartTotal;
+            const warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini (Kurang ' + formatRupiah(shortfall) + ').';
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Minimum Belanja Belum Terpenuhi',
+                    html: `
+                        <div class="text-left text-sm text-gray-700 py-1 space-y-2">
+                            <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong>.</p>
+                            <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                                <div class="flex justify-between">
+                                    <span>Total Keranjang:</span>
+                                    <span class="font-bold">${formatRupiah(currentCartTotal)}</span>
+                                </div>
+                                <div class="flex justify-between text-red-600 font-bold">
+                                    <span>Kurang Belanja:</span>
+                                    <span>${formatRupiah(shortfall)}</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500">Tambahkan produk senilai <strong>${formatRupiah(shortfall)}</strong> lagi ke keranjang Anda untuk menikmati promo ini.</p>
+                        </div>
+                    `,
+                    confirmButtonColor: '#1e3a8a',
+                    confirmButtonText: 'Mengerti',
+                    customClass: {
+                        popup: 'rounded-2xl shadow-xl'
+                    }
+                });
+            } else if (typeof window.alert === 'function') {
+                window.alert(warningMsg);
+            }
+
             if (typeof addToast === 'function') {
                 addToast('warning', warningMsg);
             } else {
@@ -432,6 +464,41 @@
                 if (input) input.value = '';
             } else {
                 if (feedback) feedback.innerHTML = '<span class="text-red-500">' + data.message + '</span>';
+                if (data.is_min_purchase || (data.message && data.message.toLowerCase().includes('minimum'))) {
+                    var shortfall = data.shortfall || (data.min_purchase ? Math.max(0, data.min_purchase - cartTotal) : 0);
+                    var minPurchase = data.min_purchase || 0;
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Minimum Belanja Belum Terpenuhi',
+                            html: `
+                                <div class="text-left text-sm text-gray-700 py-1 space-y-2">
+                                    <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong>.</p>
+                                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                                        <div class="flex justify-between">
+                                            <span>Total Keranjang:</span>
+                                            <span class="font-bold">${formatRupiah(cartTotal)}</span>
+                                        </div>
+                                        ${shortfall > 0 ? `
+                                        <div class="flex justify-between text-red-600 font-bold">
+                                            <span>Kurang Belanja:</span>
+                                            <span>${formatRupiah(shortfall)}</span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    <p class="text-xs text-gray-500">${data.message}</p>
+                                </div>
+                            `,
+                            confirmButtonColor: '#1e3a8a',
+                            confirmButtonText: 'Mengerti',
+                            customClass: {
+                                popup: 'rounded-2xl shadow-xl'
+                            }
+                        });
+                    } else if (typeof window.alert === 'function') {
+                        window.alert(data.message);
+                    }
+                }
             }
         })
         .catch(function () {

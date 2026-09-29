@@ -232,25 +232,13 @@ function findMatchingVariant() {
     
     if (requiredGroupsCount > 0 && currentSelectedCount === requiredGroupsCount) {
         let matchedVariant = null;
-        const normalizeAttrForMatch = (val) => {
-            if (val === null || val === undefined) return '';
-            let str = String(val).trim().toLowerCase();
-            if (str.includes('x')) {
-                let parts = str.split('x').map(p => parseInt(p.replace(/\D+/g, ''), 10));
-                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                    return `${parts[0]}x${parts[1]}`;
-                }
-            }
-            return str;
-        };
-
         if (window.productVariants) {
             matchedVariant = window.productVariants.find(v => {
                 if (!v.attributes) return false;
                 for (const key in selectedAttributes) {
                     const selVal = selectedAttributes[key];
                     const vVal = v.attributes[key] !== undefined ? v.attributes[key] : v.attributes[key.toLowerCase()];
-                    if (normalizeAttrForMatch(vVal) !== normalizeAttrForMatch(selVal)) return false;
+                    if (String(vVal).trim() !== String(selVal).trim()) return false;
                 }
                 return true;
             });
@@ -293,7 +281,7 @@ function findMatchingVariant() {
                                          .replace(/Mattress Only/gi, 'Kasur Saja');
                 if (!displayName) {
                     displayName = Object.entries(selectedAttributes).map(([k,v]) => {
-                        let cleanK = k === 'Feel' ? 'Kelengkapan' : k;
+                        let cleanK = k;
                         let cleanV = v;
                         if (String(cleanV).toLowerCase() === 'mattress only') cleanV = 'Kasur Saja';
                         if (String(cleanV).toLowerCase() === 'fullset' || String(cleanV).toLowerCase() === 'full bed set') cleanV = 'Set Kasur + Divan';
@@ -650,7 +638,7 @@ function selectColor(el) {
         if (!variantName) {
             if (typeof selectedAttributes !== 'undefined' && Object.keys(selectedAttributes).length > 0) {
                 variantName = Object.entries(selectedAttributes).map(([k,v]) => {
-                    let cleanK = k === 'Feel' ? 'Kelengkapan' : k;
+                    let cleanK = k;
                     let cleanV = v;
                     if (String(cleanV).toLowerCase() === 'mattress only') cleanV = 'Kasur Saja';
                     if (String(cleanV).toLowerCase() === 'fullset' || String(cleanV).toLowerCase() === 'full bed set') cleanV = 'Set Kasur + Divan';

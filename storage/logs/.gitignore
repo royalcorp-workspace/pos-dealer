@@ -1,2 +1,8 @@
 *
 !.gitignore
+!laravel/
+!laravel/.gitignore
+!espay/
+!espay/.gitignore
+!email/
+!email/.gitignore

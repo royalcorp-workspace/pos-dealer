@@ -331,7 +331,7 @@
             <!-- Notification Bell -->
             <div x-data="{ open: false }" class="relative">
                 <button 
-                    @click="open = !open; if(open) { fetchNotifications(); }"
+                    @click="open = !open; if(open) { if (typeof fetchNotifications === 'function') { fetchNotifications(); } else if (window.fetchNotifications) { window.fetchNotifications(); } }"
                     @click.outside="open = false"
                     class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80 transition-all focus:outline-none relative group cursor-pointer"
                     aria-label="Notifikasi"
@@ -369,6 +369,66 @@
                     </div>
                 </div>
             </div>
+
+            <script>
+            if (typeof window.fetchNotifications !== 'function') {
+                window.fetchNotifications = function () {
+                    var listEl = document.getElementById('notification-list');
+                    if (!listEl) return;
+
+                    fetch('/notifications', {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        var notifications = data.notifications || [];
+                        if (notifications.length === 0) {
+                            listEl.innerHTML = '<div class="p-4 text-center text-xs text-gray-500">{{ __("Belum ada notifikasi.") }}</div>';
+                            return;
+                        }
+
+                        var html = '';
+                        notifications.forEach(function (n) {
+                            var dateStr = n.published_at || (n.created_at ? new Date(n.created_at).toLocaleDateString('id-ID') : '');
+                            html += '<div class="p-3 border-b border-gray-50 last:border-0">' +
+                                '<div class="flex gap-3">' +
+                                '<div class="flex-1">' +
+                                '<p class="text-xs font-semibold text-gray-800">' + (n.title || '') + '</p>' +
+                                '<p class="text-xs text-gray-500 mt-0.5">' + (n.message || '') + '</p>' +
+                                '<span class="text-[10px] text-gray-400 mt-1 block">' + dateStr + '</span>' +
+                                '</div>' +
+                                (n.is_read ? '' : '<span class="w-2 h-2 bg-brand-gold rounded-full flex-shrink-0 mt-0.5"></span>') +
+                                '</div></div>';
+                        });
+                        listEl.innerHTML = html;
+                    })
+                    .catch(function () {
+                        listEl.innerHTML = '<div class="p-4 text-center text-xs text-gray-500">{{ __("Gagal memuat notifikasi.") }}</div>';
+                    });
+                };
+            }
+            if (typeof window.markAllRead !== 'function') {
+                window.markAllRead = function () {
+                    fetch('/notifications/read-all', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') || {}).content,
+                            'Accept': 'application/json',
+                        },
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function () {
+                        if (typeof window.fetchNotifications === 'function') {
+                            window.fetchNotifications();
+                        }
+                        var countBadge = document.querySelector('header .bg-brand-gold.text-white');
+                        if (countBadge && countBadge.closest('button[aria-label="Notifikasi"]')) {
+                            countBadge.style.display = 'none';
+                        }
+                    });
+                };
+            }
+            </script>
 
             <div class="h-5 w-px bg-gray-200 hidden sm:block mx-1"></div>
 
