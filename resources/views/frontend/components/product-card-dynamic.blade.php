@@ -140,12 +140,14 @@
         <div class="product-card__actions absolute top-2.5 right-2.5 sm:top-3 sm:right-3 transition-opacity duration-300 z-10">
             <button 
                 type="button"
+                data-wishlist-btn
                 data-product-id="{{ $product->id }}"
                 onclick="toggleWishlist(this)"
-                class="w-8 h-8 sm:w-9 sm:h-9 bg-white/90 backdrop-blur-xs rounded-full flex items-center justify-center text-gray-700 shadow-xs hover:bg-brand-gold hover:text-white transition-colors focus:outline-hidden"
-                aria-label="Tambah ke favorit"
+                class="w-8 h-8 sm:w-9 sm:h-9 backdrop-blur-xs rounded-full flex items-center justify-center transition-all duration-300 focus:outline-hidden shadow-xs cursor-pointer group/btn {{ $isInWishlist ? 'bg-red-50 text-red-500 border border-red-200 shadow-sm' : 'bg-white/90 text-gray-400 border border-gray-200/80 hover:border-red-200 hover:text-red-500 hover:bg-white' }}"
+                aria-label="{{ $isInWishlist ? 'Hapus dari favorit' : 'Tambah ke favorit' }}"
+                title="{{ $isInWishlist ? 'Hapus dari Wishlist' : 'Tambah ke Wishlist' }}"
             >
-                <i class="fa-{{ $isInWishlist ? 'solid' : 'regular' }} fa-heart text-xs sm:text-sm {{ $isInWishlist ? 'text-brand-gold' : '' }}"></i>
+                <i class="fa-{{ $isInWishlist ? 'solid' : 'regular' }} fa-heart text-xs sm:text-sm {{ $isInWishlist ? 'text-red-500 scale-110' : 'text-gray-400 group-hover/btn:text-red-500' }} transition-transform duration-200"></i>
             </button>
         </div>
     </div>

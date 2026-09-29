@@ -848,7 +848,7 @@
                     this.sending = true;
                     
                     // Optimistic UI
-                    const tempId = Date.now();
+                    const tempId = 'temp-' + Date.now();
                     this.messages.push({
                         id: tempId,
                         text: text,
@@ -917,6 +917,166 @@
     </script>
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Intercept native browser alert() and route to styled template popup
+        window.alert = function(message) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Pemberitahuan',
+                    html: message,
+                    confirmButtonColor: '#1e3a8a',
+                    confirmButtonText: 'Mengerti',
+                    customClass: {
+                        popup: 'rounded-2xl shadow-xl'
+                    }
+                });
+            } else {
+                window.dispatchEvent(new CustomEvent('show-toast', { 
+                    detail: { type: 'warning', message: message } 
+                }));
+            }
+        };
+    @if(session()->get('is_logged_in'))
+        @php
+            $currentUserId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
+            $currentCustomerId = $currentUserId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $currentUserId)->value('id') : null;
+        @endphp
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
+                    const pusherAppKey = '{{ env('PUSHER_APP_KEY') }}';
+                    const pusherCluster = '{{ env('PUSHER_APP_CLUSTER') }}';
+                    const userId = '{{ $currentUserId }}';
+                    const customerId = '{{ $currentCustomerId }}';
+
+                    if (!pusherAppKey || (!userId && !customerId)) return;
+
+                    const shippingPusher = new Pusher(pusherAppKey, {
+                        cluster: pusherCluster,
+                        forceTLS: true
+                    });
+
+                    function handleShippingUpdate(data) {
+                        console.log('Realtime shipping update received:', data);
+
+                        // 1. Play subtle audio chime
+                        try {
+                            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            const osc = audioCtx.createOscillator();
+                            const gain = audioCtx.createGain();
+                            osc.connect(gain);
+                            gain.connect(audioCtx.destination);
+                            osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+                            osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+                            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+                            osc.start();
+                            osc.stop(audioCtx.currentTime + 0.35);
+                        } catch (e) {}
+
+                        // 2. Increment notification bell badge
+                        const bellBadge = document.querySelector('header button[aria-label="Notifikasi"] span');
+                        if (bellBadge) {
+                            let count = parseInt(bellBadge.textContent || '0', 10) || 0;
+                            count++;
+                            bellBadge.textContent = count > 9 ? '9+' : count;
+                            bellBadge.classList.remove('hidden');
+                            bellBadge.style.display = 'flex';
+                        } else {
+                            const bellBtn = document.querySelector('header button[aria-label="Notifikasi"]');
+                            if (bellBtn) {
+                                const newBadge = document.createElement('span');
+                                newBadge.className = 'absolute -top-1 -right-1 bg-brand-gold text-white text-[9px] font-extrabold min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center shadow-xs';
+                                newBadge.textContent = '1';
+                                bellBtn.appendChild(newBadge);
+                            }
+                        }
+
+                        // 3. Prepend item to notification dropdown list if present
+                        const listEl = document.getElementById('notification-list');
+                        if (listEl) {
+                            if (listEl.innerHTML.includes('Belum ada notifikasi') || listEl.innerHTML.includes('Memuat...')) {
+                                listEl.innerHTML = '';
+                            }
+                            const newCard = document.createElement('div');
+                            newCard.className = 'p-3 border-b border-gray-100 bg-amber-50/40 animate-fade-in';
+                            newCard.innerHTML = `
+                                <div class="flex gap-2.5 items-start">
+                                    <div class="w-7 h-7 rounded-full bg-brand-gold/15 text-brand-gold flex items-center justify-center shrink-0 mt-0.5">
+                                        <i class="fa-solid fa-truck-fast text-xs"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-xs font-bold text-gray-900 leading-tight">${data.title || 'Update Pengiriman'}</p>
+                                        <p class="text-[11px] text-gray-600 mt-0.5 leading-snug">${data.message || ''}</p>
+                                        <span class="text-[9px] text-brand-gold-dark font-medium mt-1 inline-block">Baru saja</span>
+                                    </div>
+                                    <span class="w-2 h-2 bg-brand-gold rounded-full shrink-0 mt-1"></span>
+                                </div>
+                            `;
+                            listEl.prepend(newCard);
+                        }
+
+                        // 4. Show high-priority Toast / SweetAlert notification popup
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'info',
+                                title: data.title || 'Update Pengiriman Pesanan',
+                                html: `
+                                    <div class="text-left text-sm text-gray-700 py-1 space-y-2">
+                                        <p class="leading-relaxed">${data.message || ''}</p>
+                                        <div class="mt-2.5 p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between text-xs">
+                                            <span class="text-gray-500 font-medium">Nomor Pesanan:</span>
+                                            <strong class="text-brand-dark">#${data.order_number || data.order_id}</strong>
+                                        </div>
+                                        ${data.tracking_number ? `
+                                            <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between text-xs">
+                                                <span class="text-gray-500 font-medium">No. Resi (${data.courier_name || 'Kurir'}):</span>
+                                                <strong class="font-mono text-brand-dark">${data.tracking_number}</strong>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `,
+                                showCancelButton: true,
+                                confirmButtonColor: '#1e3a8a',
+                                cancelButtonColor: '#6b7280',
+                                confirmButtonText: '<i class="fa-solid fa-receipt mr-1.5"></i> Lihat Pesanan',
+                                cancelButtonText: 'Tutup',
+                                customClass: {
+                                    popup: 'rounded-2xl shadow-2xl border border-gray-100',
+                                    title: 'text-base font-extrabold text-brand-dark',
+                                    confirmButton: 'rounded-xl text-xs font-bold px-4 py-2.5',
+                                    cancelButton: 'rounded-xl text-xs font-medium px-4 py-2.5',
+                                }
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    window.location.href = data.link_url || '{{ route("dashboard", ["tab" => "orders"]) }}';
+                                }
+                            });
+                        } else {
+                            window.dispatchEvent(new CustomEvent('show-toast', {
+                                detail: {
+                                    type: 'info',
+                                    message: `${data.title}: ${data.message}`
+                                }
+                            }));
+                        }
+                    }
+
+                    if (userId) {
+                        const userChannel = shippingPusher.subscribe('user.' + userId);
+                        userChannel.bind('shipping.updated', handleShippingUpdate);
+                    }
+                    if (customerId) {
+                        const customerChannel = shippingPusher.subscribe('customer.' + customerId);
+                        customerChannel.bind('shipping.updated', handleShippingUpdate);
+                    }
+                } catch (err) {
+                    console.error('Shipping Pusher init error:', err);
+                }
+            });
+        </script>
+    @endif
 
     @stack('scripts')
   </body>

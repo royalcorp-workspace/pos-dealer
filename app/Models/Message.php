@@ -24,17 +24,8 @@ class Message extends Model
         return $this->belongsTo(Conversation::class);
     }
 
-    public function freshTimestamp()
+    protected function serializeDate(\DateTimeInterface $date)
     {
-        return \Illuminate\Support\Carbon::now('UTC');
-    }
-
-    protected function asDateTime($value)
-    {
-        $date = parent::asDateTime($value);
-        if (is_string($value)) {
-            return \Illuminate\Support\Carbon::parse($value, 'UTC')->setTimezone(config('app.timezone'));
-        }
-        return $date;
+        return \Illuminate\Support\Carbon::instance($date)->toISOString();
     }
 }

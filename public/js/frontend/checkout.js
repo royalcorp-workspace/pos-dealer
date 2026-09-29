@@ -279,10 +279,13 @@ document.addEventListener('DOMContentLoaded', function () {
             // Check minimum purchase against subtotal
             var currentBase = Math.max(0, subtotal - promoDiscount - productDiscount);
             if (minPurchase > 0 && currentBase < minPurchase) {
+                var warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.';
                 if (typeof addToast === 'function') {
-                    addToast('warning', 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+                    addToast('warning', warningMsg);
                 } else {
-                    alert('Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini.');
+                    window.dispatchEvent(new CustomEvent('show-toast', { 
+                        detail: { type: 'warning', message: warningMsg } 
+                    }));
                 }
                 return;
             }

@@ -25,7 +25,7 @@ class ViewServiceProvider extends ServiceProvider
             $userId = session()->get('is_logged_in')
                 ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
                 : null;
-            if ($userId && !session()->has('wishlist')) {
+            if ($userId) {
                 $customerId = \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id');
                 if ($customerId) {
                     $wishlistIds = \App\Models\Frontend\ProductsCatalog\Wishlist::where('customer_id', $customerId)->pluck('product_id')->all();

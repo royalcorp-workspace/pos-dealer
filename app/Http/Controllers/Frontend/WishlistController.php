@@ -18,7 +18,7 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+        $customerId = $this->resolveCustomerId($userId);
 
         if (!$customerId) {
             if ($request->wantsJson() || $request->ajax()) {
@@ -31,6 +31,10 @@ class WishlistController extends Controller
             ->with(['product.brand', 'product.category', 'product.images', 'product.variants'])
             ->orderBy('created_at', 'desc')
             ->get();
+
+        // Keep session in sync with database wishlist
+        $wishlistIds = $wishlists->pluck('product_id')->all();
+        session()->put('wishlist', $wishlistIds);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -53,7 +57,7 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+        $customerId = $this->resolveCustomerId($userId);
 
         if (!$customerId) {
             return response()->json([
@@ -97,7 +101,7 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+        $customerId = $this->resolveCustomerId($userId);
 
         if ($customerId) {
             Wishlist::where('customer_id', $customerId)
@@ -120,7 +124,7 @@ class WishlistController extends Controller
             ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null)
             : null;
 
-        $customerId = $userId ? \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id') : null;
+        $customerId = $this->resolveCustomerId($userId);
 
         if (!$customerId) {
             return response()->json(['count' => 0]);
@@ -129,6 +133,32 @@ class WishlistController extends Controller
         $count = Wishlist::where('customer_id', $customerId)->count();
 
         return response()->json(['count' => $count]);
+    }
+
+    private function resolveCustomerId(?string $userId): ?string
+    {
+        if (!$userId) {
+            return null;
+        }
+
+        $customerId = \Illuminate\Support\Facades\DB::table('customers')->where('user_id', $userId)->value('id');
+        if (!$customerId) {
+            $user = \App\Models\User::find($userId);
+            if ($user) {
+                $customerId = (string) Str::uuid();
+                \Illuminate\Support\Facades\DB::table('customers')->insert([
+                    'id' => $customerId,
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => $user->phone ?? '-',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        return $customerId;
     }
 
     private function getSessionId(): string

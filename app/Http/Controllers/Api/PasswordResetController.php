@@ -38,7 +38,8 @@ class PasswordResetController extends Controller
         ]);
 
         $channel = $data['channel'] ?? 'email';
-        $user = User::query()->where('email', $data['email'])->first();
+        $email = strtolower(trim($data['email']));
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
 
         if ($user) {
             $otp = str_pad((string) random_int(0, (int) (10 ** $this->otpLength() - 1)), $this->otpLength(), '0', STR_PAD_LEFT);
@@ -77,28 +78,74 @@ class PasswordResetController extends Controller
 
     public function reset(Request $request)
     {
-        $data = $request->validate([
+        $isJson = $request->expectsJson() || $request->isJson() || $request->ajax() || $request->wantsJson();
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
             'email' => ['required', 'email'],
             'otp_code' => ['required', 'string'],
             'new_password' => ['required', 'string', 'min:6', 'confirmed'],
             'channel' => ['nullable', 'in:email,sms'],
+        ], [
+            'email.required' => 'Email wajib diisi.',
+            'email.email' => 'Format email tidak valid.',
+            'otp_code.required' => 'Kode OTP wajib diisi.',
+            'new_password.required' => 'Password baru wajib diisi.',
+            'new_password.min' => 'Password minimal terdiri dari 6 karakter.',
+            'new_password.confirmed' => 'Konfirmasi password tidak cocok dengan password baru.',
         ]);
 
+        if ($validator->fails()) {
+            $errorMessage = $validator->errors()->first();
+            if ($isJson) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $errorMessage,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput($request->except('new_password', 'new_password_confirmation'))
+                ->with('error', $errorMessage);
+        }
+
+        $data = $validator->validated();
         $channel = $data['channel'] ?? 'email';
-        $user = User::query()->where('email', $data['email'])->first();
+        $email = strtolower(trim($data['email']));
+        $otpCode = trim($data['otp_code']);
+
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
         if (!$user) {
-            return response()->json(['message' => 'Invalid OTP'], 422);
+            $msg = 'Akun dengan email tersebut tidak ditemukan atau kode OTP tidak valid.';
+            if ($isJson) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg
+                ], 422);
+            }
+            return redirect()->back()
+                ->withInput($request->except('new_password', 'new_password_confirmation'))
+                ->with('error', $msg);
         }
 
         $reset = PasswordReset::query()
             ->where('user_id', $user->id)
-            ->where('otp_code', $data['otp_code'])
-            ->where('channel', $channel)
+            ->where('otp_code', $otpCode)
             ->where('used', false)
+            ->latest('created_at')
             ->first();
 
         if (!$reset || $reset->expires_at->getTimestamp() < time()) {
-            return response()->json(['message' => 'OTP expired or invalid'], 422);
+            $msg = 'Kode OTP salah atau sudah kedaluwarsa. Silakan periksa kembali kode OTP di email Anda atau minta kode OTP baru.';
+            if ($isJson) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg
+                ], 422);
+            }
+            return redirect()->back()
+                ->withInput($request->except('new_password', 'new_password_confirmation'))
+                ->with('error', $msg);
         }
 
         $reset->update(['used' => true]);
@@ -108,18 +155,23 @@ class PasswordResetController extends Controller
         ]);
 
         // Revoke refresh tokens on password reset
-        // (Table exists in DB; we avoid dependency on model existence here by direct query.)
         \App\Models\RefreshToken::query()
             ->where('user_id', $user->id)
             ->update(['revoked' => true]);
 
         $this->audit->log($user, 'password_reset_success', $request, []);
 
-        if ($request->wantsJson()) {
-            return response()->json(['message' => 'Password reset successful', 'success' => true]);
+        $successMsg = 'Password berhasil direset! Silakan masuk dengan password baru Anda.';
+
+        if ($isJson) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMsg,
+                'redirect' => route('login.show')
+            ]);
         }
 
-        return redirect()->route('login')->with('success', 'Password berhasil direset! Silakan masuk dengan password baru.');
+        return redirect()->route('login.show')->with('success', $successMsg);
     }
 }
 

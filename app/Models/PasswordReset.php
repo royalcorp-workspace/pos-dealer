@@ -19,6 +19,7 @@ class PasswordReset extends Model
     protected $fillable = [
         'user_id',
         'otp_code',
+        'token',
         'channel',
         'used',
         'expires_at',
@@ -34,6 +35,9 @@ class PasswordReset extends Model
         static::creating(function (self $model): void {
             if (empty($model->getKey())) {
                 $model->setAttribute($model->getKeyName(), (string) Str::uuid());
+            }
+            if (empty($model->getAttribute('token'))) {
+                $model->setAttribute('token', (string) Str::random(40));
             }
         });
     }

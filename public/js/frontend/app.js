@@ -140,39 +140,41 @@ window.updateCartDrawer = function (html) {
     }
 };
 
-window.updateWishlistBadge = function (delta) {
-    const countBadge = $('#wishlist-count-badge');
-    const headerIcon = $('#wishlist-icon');
-    const wishlistLink = $('#wishlist-link');
-    const currentCount = countBadge ? parseInt(countBadge.textContent || '0', 10) : 0;
-    const nextCount = Math.max(0, currentCount + delta);
+window.updateWishlistBadge = function (targetCount) {
+    const countBadge = document.getElementById('wishlist-count-badge');
+    const headerIcon = document.getElementById('wishlist-icon');
+    const wishlistLink = document.getElementById('wishlist-link');
+    
+    let nextCount = targetCount;
+    if (typeof targetCount !== 'number') {
+        const currentCount = countBadge ? parseInt(countBadge.textContent || '0', 10) : 0;
+        nextCount = Math.max(0, currentCount);
+    }
+    nextCount = Math.max(0, nextCount);
 
     if (headerIcon) {
-        headerIcon.classList.toggle('fa-solid', nextCount > 0);
-        headerIcon.classList.toggle('fa-regular', nextCount === 0);
-        headerIcon.classList.toggle('text-red-500', nextCount > 0);
-        headerIcon.classList.toggle('text-gray-700', nextCount === 0);
+        if (nextCount > 0) {
+            headerIcon.classList.remove('fa-regular', 'text-gray-700');
+            headerIcon.classList.add('fa-solid', 'text-red-500');
+        } else {
+            headerIcon.classList.remove('fa-solid', 'text-red-500');
+            headerIcon.classList.add('fa-regular', 'text-gray-700');
+        }
     }
 
     if (wishlistLink) {
         wishlistLink.setAttribute('aria-label', `Wishlist (${nextCount} Produk)`);
     }
 
-    if (nextCount > 0) {
-        let badge = countBadge;
-        if (!badge && headerIcon?.parentElement) {
-            badge = document.createElement('span');
-            badge.id = 'wishlist-count-badge';
-            badge.className = 'absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-extrabold min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center shadow-xs';
-            headerIcon.parentElement.appendChild(badge);
+    if (countBadge) {
+        countBadge.textContent = nextCount;
+        if (nextCount > 0) {
+            countBadge.classList.remove('hidden');
+            countBadge.classList.add('scale-125');
+            setTimeout(() => countBadge.classList.remove('scale-125'), 200);
+        } else {
+            countBadge.classList.add('hidden');
         }
-
-        if (badge) {
-            badge.textContent = nextCount;
-            badge.classList.remove('hidden');
-        }
-    } else if (countBadge) {
-        countBadge.classList.add('hidden');
     }
 };
 
@@ -242,40 +244,65 @@ window.toggleWishlist = function (el) {
             return;
         }
 
-        // Update all buttons and icons for this product on the page
-        const matchingButtons = document.querySelectorAll(`[data-product-id="${productId}"]`);
+        // Update all wishlist buttons for this product on the page
+        const matchingButtons = document.querySelectorAll(`[data-wishlist-btn][data-product-id="${productId}"], button[data-product-id="${productId}"]`);
         matchingButtons.forEach(btn => {
+            if (btn.hasAttribute('data-product-review') || btn.classList.contains('product-card__rating')) {
+                return;
+            }
+
             const btnIcon = btn.querySelector('i');
+            const isDetailBtn = btn.classList.contains('sm:h-13') || btn.classList.contains('rounded-2xl');
+
             if (data.in_wishlist) {
+                // ACTIVE STATE
                 if (btnIcon) {
-                    const isLarge = btn.classList.contains('sm:h-13') || btnIcon.classList.contains('text-lg');
-                    btnIcon.className = `fa-solid fa-heart text-red-500 ${isLarge ? 'text-lg' : 'text-xs sm:text-sm'}`;
+                    const isLarge = isDetailBtn || btnIcon.classList.contains('text-lg');
+                    btnIcon.className = `fa-solid fa-heart text-red-500 transition-transform duration-200 scale-110 ${isLarge ? 'text-lg' : 'text-xs sm:text-sm'}`;
                 }
-                btn.classList.add('text-red-500');
-                if (btn.classList.contains('sm:h-13') || btn.classList.contains('rounded-2xl')) {
-                    btn.classList.add('border-red-200', 'bg-red-50/40');
-                    btn.classList.remove('border-gray-200');
+                if (isDetailBtn) {
+                    btn.classList.remove('border-gray-200', 'bg-white', 'text-gray-400');
+                    btn.classList.add('border-red-300', 'bg-red-50/60', 'text-red-500', 'shadow-sm');
+                } else {
+                    btn.classList.remove('bg-white/90', 'text-gray-400', 'border-gray-200/80', 'border-gray-200', 'text-gray-700');
+                    btn.classList.add('bg-red-50', 'text-red-500', 'border', 'border-red-200', 'shadow-sm');
                 }
-                btn.classList.remove('text-gray-400', 'text-gray-700');
+                btn.setAttribute('aria-label', 'Hapus dari favorit');
+                btn.setAttribute('title', 'Hapus dari Wishlist');
             } else {
+                // INACTIVE STATE
                 if (btnIcon) {
-                    const isLarge = btn.classList.contains('sm:h-13') || btnIcon.classList.contains('text-lg');
-                    btnIcon.className = `fa-regular fa-heart text-gray-400 ${isLarge ? 'text-lg' : 'text-xs sm:text-sm'}`;
+                    const isLarge = isDetailBtn || btnIcon.classList.contains('text-lg');
+                    btnIcon.className = `fa-regular fa-heart text-gray-400 transition-transform duration-200 ${isLarge ? 'text-lg' : 'text-xs sm:text-sm'}`;
                 }
-                btn.classList.remove('text-red-500', 'border-red-200', 'bg-red-50/40');
-                if (btn.classList.contains('sm:h-13') || btn.classList.contains('rounded-2xl')) {
-                    btn.classList.add('border-gray-200');
+                if (isDetailBtn) {
+                    btn.classList.remove('border-red-300', 'bg-red-50/60', 'text-red-500', 'shadow-sm');
+                    btn.classList.add('border-gray-200', 'bg-white', 'text-gray-400');
+                } else {
+                    btn.classList.remove('bg-red-50', 'text-red-500', 'border-red-200', 'shadow-sm');
+                    btn.classList.add('bg-white/90', 'text-gray-400', 'border', 'border-gray-200/80');
                 }
-                btn.classList.add('text-gray-400');
+                btn.setAttribute('aria-label', 'Tambah ke favorit');
+                btn.setAttribute('title', 'Tambah ke Wishlist');
+
+                // If on Wishlist page (/wishlist), smoothly dim the removed product card
+                if (window.location.pathname.includes('/wishlist')) {
+                    const card = btn.closest('.product-card') || btn.closest('.group');
+                    if (card) {
+                        card.style.transition = 'opacity 0.4s ease, filter 0.4s ease';
+                        card.style.opacity = '0.35';
+                        card.style.filter = 'grayscale(80%)';
+                    }
+                }
             }
         });
 
         if (typeof data.count === 'number') {
-            const countBadge = $('#wishlist-count-badge');
-            const currentCount = countBadge ? parseInt(countBadge.textContent || '0', 10) : 0;
-            updateWishlistBadge(data.count - currentCount);
+            updateWishlistBadge(data.count);
         } else {
-            updateWishlistBadge(data.in_wishlist ? 1 : -1);
+            const currentBadge = document.getElementById('wishlist-count-badge');
+            const cur = currentBadge ? parseInt(currentBadge.textContent || '0', 10) : 0;
+            updateWishlistBadge(cur + (data.in_wishlist ? 1 : -1));
         }
 
         window.dispatchEvent(new CustomEvent('show-toast', { 
