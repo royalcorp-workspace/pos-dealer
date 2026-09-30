@@ -289,8 +289,10 @@
 
             const countBadge = document.getElementById('cart-count-badge');
             const headerTotal = document.getElementById('header-cart-total');
+            const headerItemsText = document.getElementById('header-cart-items-text');
             if (countBadge) countBadge.textContent = data.cart_count || 0;
             if (headerTotal) headerTotal.textContent = formatRupiah(data.cart_total || 0);
+            if (headerItemsText) headerItemsText.textContent = (data.cart_count || 0) + '';
 
             document.dispatchEvent(new CustomEvent('cart-drawer-updated'));
         })

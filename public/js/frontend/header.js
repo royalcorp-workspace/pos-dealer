@@ -66,6 +66,11 @@
             headerTotal.textContent = 'Rp ' + Number(total).toLocaleString('id-ID');
         }
 
+        var headerItemsText = document.getElementById('header-cart-items-text');
+        if (headerItemsText) {
+            headerItemsText.textContent = count + '';
+        }
+
         var cartDrawerBody = document.getElementById('cart-drawer-body');
         if (cartDrawerBody) {
             cartDrawerBody.setAttribute('data-cart-total', total);

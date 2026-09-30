@@ -100,7 +100,7 @@
                             <i class="fa-solid fa-wallet"></i>
                         </div>
                         <div>
-                            <h2 class="font-bold text-brand-dark text-base">Pilih Saluran Pembayaran</h2>
+                            <h2 class="font-bold text-brand-dark text-base">Pilih Metode Pembayaran</h2>
                             <p class="text-xs text-gray-500">Tersedia transfer manual dan kanal pembayaran otomatis</p>
                         </div>
                     </div>
@@ -115,7 +115,7 @@
                                 <div class="flex-1">
                                     <h4 class="font-bold text-red-900 text-sm mb-0.5">Metode Pembayaran Belum Dipilih</h4>
                                     <p class="text-xs text-red-700 leading-relaxed">
-                                        Silakan pilih salah satu saluran pembayaran di bawah ini (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan ke proses pembayaran.
+                                        Silakan pilih salah satu metode pembayaran di bawah ini (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan ke proses pembayaran.
                                     </p>
                                 </div>
                             </div>
@@ -429,23 +429,17 @@
                         <h3 class="font-bold text-brand-dark text-base">Konfirmasi Pembayaran</h3>
                     </div>
 
-                    <div id="payment-button-container">
-                        <button 
-                            type="button"
-                            onclick="processPayment()"
-                            class="w-full py-4 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl font-bold text-base tracking-wide uppercase transition-all duration-200 shadow-md hover:shadow-lg flex justify-center items-center gap-2.5 group cursor-pointer mb-3"
-                        >
-                            <i class="fa-solid fa-lock text-xs"></i>
-                            <span>Bayar Sekarang</span>
-                        </button>
+                    <!-- Order Total Recap -->
+                    <div class="p-4 bg-brand-light/40 border border-brand-muted/60 rounded-xl mb-4">
+                        <span class="text-xs uppercase tracking-wider font-bold text-gray-500 block mb-1">Total Tagihan</span>
+                        <span class="font-black text-xl text-brand-dark font-serif" id="sidebar-final-total">
+                            Rp {{ number_format($orderData['total'] ?? 0, 0, ',', '.') }}
+                        </span>
+                        <p class="text-[11px] text-gray-400 mt-1">Lakukan pembayaran untuk menyelesaikan pesanan Anda</p>
                     </div>
-                    
-                    <a href="{{ route('checkout') }}" class="w-full py-2.5 text-center text-gray-500 hover:text-brand-dark hover:bg-gray-50 rounded-xl transition-all text-xs font-semibold block">
-                        <i class="fa-solid fa-arrow-left text-[10px] mr-1"></i> Ubah Data Checkout
-                    </a>
 
                     <!-- Security Badges -->
-                    <div class="mt-6 pt-5 border-t border-gray-100 space-y-2.5 text-xs text-gray-500">
+                    <div class="space-y-2.5 text-xs text-gray-500 mb-5">
                         <div class="flex items-center gap-2.5">
                             <div class="w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                                 <i class="fa-solid fa-shield-check text-[11px]"></i>
@@ -458,6 +452,22 @@
                             </div>
                             <span>Proses Cepat & Otomatis</span>
                         </div>
+                    </div>
+
+                    <a href="{{ route('checkout') }}" class="w-full py-2.5 text-center text-gray-500 hover:text-brand-dark hover:bg-gray-50 rounded-xl transition-all text-xs font-semibold block mb-3">
+                        <i class="fa-solid fa-arrow-left text-[10px] mr-1"></i> Ubah Data Checkout
+                    </a>
+
+                    <!-- Bayar Sekarang Button positioned at the bottom -->
+                    <div id="payment-button-container">
+                        <button 
+                            type="button"
+                            onclick="processPayment()"
+                            class="w-full py-4 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl font-bold text-base tracking-wide uppercase transition-all duration-200 shadow-md hover:shadow-lg flex justify-center items-center gap-2.5 group cursor-pointer"
+                        >
+                            <i class="fa-solid fa-lock text-xs"></i>
+                            <span>Bayar Sekarang</span>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -91,6 +91,11 @@ window.updateCartHeader = function (count, total) {
         headerTotal.textContent = 'Rp ' + Number(total).toLocaleString('id-ID');
     }
 
+    const headerItemsText = document.getElementById('header-cart-items-text');
+    if (headerItemsText) {
+        headerItemsText.textContent = count + '';
+    }
+
     let badge = $('#cart-count-badge');
     if (!badge) {
         const trigger = document.querySelector('button[formaction*="cart/add"], .group.relative .fa-cart-shopping')?.closest('button');

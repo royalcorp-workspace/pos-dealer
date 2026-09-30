@@ -56,7 +56,9 @@ class ProductCategory extends Model
 
     public function children(): HasMany
     {
-        return $this->hasMany(ProductCategory::class, 'parent_id');
+        return $this->hasMany(ProductCategory::class, 'parent_id')
+            ->where('deleted', false)
+            ->orderBy('sort_order');
     }
 
     public function products(): HasMany
@@ -67,18 +69,29 @@ class ProductCategory extends Model
     public function getProductsCountWithChildren(): int
     {
         $ids = [$this->id];
-        $childrenIds = $this->children()->where('deleted', false)->pluck('id')->toArray();
+        $childrenIds = $this->relationLoaded('children')
+            ? $this->children->where('deleted', false)->pluck('id')->toArray()
+            : $this->children()->where('deleted', false)->pluck('id')->toArray();
+
         $ids = array_merge($ids, $childrenIds);
 
         foreach ($childrenIds as $childId) {
-            $child = self::find($childId);
+            $child = $this->relationLoaded('children')
+                ? $this->children->firstWhere('id', $childId)
+                : self::find($childId);
+
             if ($child) {
-                $grandchildrenIds = $child->children()->where('deleted', false)->pluck('id')->toArray();
+                $grandchildrenIds = $child->relationLoaded('children')
+                    ? $child->children->where('deleted', false)->pluck('id')->toArray()
+                    : $child->children()->where('deleted', false)->pluck('id')->toArray();
                 $ids = array_merge($ids, $grandchildrenIds);
             }
         }
 
         return Product::where('deleted', false)
+            ->where(function ($q) {
+                $q->where('show_on_web', true)->orWhereNull('show_on_web');
+            })
             ->whereIn('category_id', array_unique($ids))
             ->count();
     }

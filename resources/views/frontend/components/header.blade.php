@@ -1,29 +1,5 @@
 @php
-    $customerId = null;
-    if (session()->get('is_logged_in')) {
-        $user = session()->get('user', []);
-        $userId = $user['id'] ?? $user['sub'] ?? null;
-        $email = $user['email'] ?? null;
-        if ($userId) {
-            $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $userId)->first();
-            if (!$customer && $email) {
-                $customer = \App\Models\Frontend\Customer\Customer::where('email', $email)->first();
-            }
-            $customerId = $customer?->id;
-        }
-    }
-    $sessionId = session()->get('guest_session_id', session()->getId());
-    
-    $buffer = \App\Models\Frontend\Buffer\Buffer::where(function ($q) use ($customerId, $sessionId) {
-        if ($customerId) {
-            $q->where('customer_id', $customerId);
-            if ($sessionId) {
-                $q->orWhere('session_id', $sessionId);
-            }
-        } else if ($sessionId) {
-            $q->where('session_id', $sessionId);
-        }
-    })->first();
+    $buffer = \App\Models\Frontend\Buffer\Buffer::resolveActiveCart();
 
     $cart = [];
     if ($buffer) {
@@ -454,13 +430,23 @@
                 </button>
             @endif
 
-            <!-- Cart Drawer Trigger (Dynamic State: Clean Icon when Empty, Expanding Pill when Loaded) -->
+            <!-- Cart Drawer Trigger (Dynamic State: Clean Icon when Empty, Expanding Pill with Item Count when Loaded) -->
             <button 
-                x-data="{ count: {{ $cartItemCount }}, total: {{ $cartTotal }} }"
+                x-data="{ 
+                    count: {{ $cartItemCount }} > 0 ? {{ $cartItemCount }} : (parseInt(localStorage.getItem('cart_count')) || 0), 
+                    total: {{ $cartTotal }} > 0 ? {{ $cartTotal }} : (parseFloat(localStorage.getItem('cart_total')) || 0),
+                    init() {
+                        if ({{ $cartItemCount }} > 0) {
+                            localStorage.setItem('cart_count', {{ $cartItemCount }});
+                            localStorage.setItem('cart_total', {{ $cartTotal }});
+                        }
+                        this.$watch('count', val => localStorage.setItem('cart_count', val));
+                        this.$watch('total', val => localStorage.setItem('cart_total', val));
+                    }
+                }"
                 @cart-added.window="if($event.detail.cart_count !== undefined) { count = $event.detail.cart_count; total = $event.detail.cart_total || 0; }"
+                @cart-updated.window="if($event.detail.count !== undefined) { count = $event.detail.count; total = $event.detail.total || 0; }"
                 @cart-drawer-updated.window="
-                    // Fetch if needed, or rely on the JS DOM updates.
-                    // Actually, let's just let the DOM update the text, but Alpine handles visibility
                     setTimeout(() => {
                         let badge = document.getElementById('cart-count-badge');
                         if (badge) count = parseInt(badge.textContent) || 0;
@@ -470,7 +456,7 @@
                 "
                 @click="isCartOpen = true"
                 class="flex items-center transition-all duration-300 focus:outline-none cursor-pointer group relative"
-                :class="count > 0 ? 'bg-brand-light/80 hover:bg-brand-gold/15 px-3 sm:px-4 py-2 rounded-full border border-brand-muted/80 hover:border-brand-gold/50 gap-2 sm:gap-2.5' : 'justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80'"
+                :class="count > 0 ? 'bg-amber-50/90 hover:bg-brand-gold/20 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full border-2 border-brand-gold/70 hover:border-brand-gold shadow-xs gap-2 sm:gap-2.5' : 'justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80'"
                 title="Buka Keranjang"
                 aria-label="Keranjang Belanja"
             >
@@ -478,19 +464,18 @@
                     <i class="fa-solid fa-bag-shopping text-base text-gray-700 group-hover:text-brand-dark transition-colors"></i>
                     <span 
                         id="cart-count-badge" 
-                        x-show="count > 0"
-                        x-transition:enter="transition ease-out duration-300 transform"
-                        x-transition:enter-start="opacity-0 scale-50"
-                        x-transition:enter-end="opacity-100 scale-100"
-                        x-cloak
-                        class="absolute -top-2 -right-2 bg-brand-dark text-brand-gold text-[9px] font-black min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center shadow-xs border border-brand-gold/40"
+                        x-text="count"
+                        class="absolute -top-2.5 -right-2.5 text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-xs ring-2 ring-white tabular-nums transition-colors"
+                        :class="count > 0 ? 'bg-red-600 text-white' : 'bg-stone-300 text-stone-600'"
                     >
                         {{ $cartItemCount }}
                     </span>
                 </div>
-                <div x-show="count > 0" x-cloak class="hidden sm:flex flex-col items-start leading-none">
-                    <span class="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Keranjang</span>
-                    <span id="header-cart-total" class="text-xs font-extrabold text-brand-dark group-hover:text-brand-gold-dark transition-colors mt-0.5 font-sans">
+                <div x-show="count > 0" x-cloak class="flex flex-col items-start leading-tight">
+                    <span class="text-[10px] sm:text-[11px] font-black text-brand-dark uppercase tracking-wider flex items-center gap-1 font-sans">
+                        <span id="header-cart-items-text" x-text="count + ' Barang'">{{ $cartItemCount }}</span>
+                    </span>
+                    <span id="header-cart-total" class="text-[11px] sm:text-xs font-extrabold text-brand-gold-dark group-hover:text-brand-dark transition-colors font-sans">
                         Rp {{ number_format($cartTotal, 0, ',', '.') }}
                     </span>
                 </div>
@@ -561,46 +546,42 @@
                         x-transition:leave="transition ease-in duration-150"
                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                         x-transition:leave-end="opacity-0 translate-y-2 scale-98"
-                        class="absolute top-full left-0 w-[550px] lg:w-[650px] bg-white shadow-xl border border-brand-muted/80 rounded-2xl p-4 z-50 overflow-hidden"
+                        class="absolute top-full left-0 w-[840px] lg:w-[960px] bg-white shadow-2xl border border-stone-200/90 rounded-2xl p-6 z-50 overflow-hidden font-sans"
                     >
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="mb-4 pb-3 border-b border-gray-100 flex items-center justify-between">
+                            <span class="font-bold text-sm tracking-tight text-brand-dark inline-block border-b-2 border-brand-dark pb-0.5">{{ __('Product Categories') }}</span>
+                            <a href="{{ route('categories') }}" class="text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors flex items-center gap-1">
+                                <span>{{ __('Semua Kategori') }}</span>
+                                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </a>
+                        </div>
+
+                        <div class="space-y-4">
                             @foreach($categories as $category)
-                                <div class="p-2.5 rounded-xl hover:bg-brand-light transition-colors group text-left">
+                                <div class="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-8 py-2.5 border-b border-gray-100/70 last:border-b-0 hover:bg-[#FAF8F5]/60 px-3 rounded-xl transition-colors">
+                                    <!-- Parent (Bold) -->
                                     <a 
                                         href="{{ route('category.show', $category->slug) }}" 
-                                        class="flex items-center justify-between"
+                                        class="w-44 shrink-0 font-bold text-brand-dark text-base hover:text-brand-gold-dark transition-colors tracking-tight font-sans"
                                     >
-                                        <span class="font-bold text-brand-dark text-sm group-hover:text-brand-gold-dark transition-colors block">
-                                            {{ html_entity_decode($category->name) }}
-                                        </span>
-                                        <svg class="w-4 h-4 text-gray-300 group-hover:text-brand-gold group-hover:translate-x-0.5 transition-all" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        {{ html_entity_decode($category->name) }}
                                     </a>
-                                    @if($category->children && $category->children->count() > 0)
-                                        <div class="flex flex-wrap gap-1.5 mt-1.5">
-                                            @foreach($category->children->take(4) as $child)
-                                                <a href="{{ route('category.show', $child->slug) }}" class="text-[11px] text-gray-500 hover:text-brand-gold-dark hover:underline bg-gray-50 hover:bg-brand-light px-2 py-0.5 rounded-md border border-gray-100 transition-colors">
+
+                                    <!-- Children kesamping (Horizontal) -->
+                                    <div class="flex flex-wrap items-baseline gap-x-8 gap-y-2 flex-1">
+                                        @if($category->children && $category->children->count() > 0)
+                                            @foreach($category->children as $child)
+                                                <a 
+                                                    href="{{ route('category.show', $child->slug) }}" 
+                                                    class="text-xs sm:text-sm text-stone-700 hover:text-brand-dark hover:font-semibold hover:underline transition-all whitespace-nowrap"
+                                                >
                                                     {{ html_entity_decode($child->name) }}
                                                 </a>
                                             @endforeach
-                                            @if($category->children->count() > 4)
-                                                <a href="{{ route('category.show', $category->slug) }}" class="text-[10px] text-brand-gold-dark font-semibold self-center hover:underline">
-                                                    +{{ $category->children->count() - 4 }} lagi
-                                                </a>
-                                            @endif
-                                        </div>
-                                    @elseif($category->description)
-                                        <span class="text-[11px] text-gray-500 line-clamp-1 mt-0.5 block">
-                                            {{ $category->description }}
-                                        </span>
-                                    @endif
+                                        @endif
+                                    </div>
                                 </div>
                             @endforeach
-                        </div>
-                        <div class="pt-2 border-t border-brand-muted/50 mt-2">
-                            <a href="{{ route('categories') }}" class="flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
-                                <span>{{ __('Semua Kategori Produk') }}</span>
-                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            </a>
                         </div>
                     </div>
                 </li>
@@ -758,11 +739,11 @@
                                 <svg class="w-3.5 h-3.5 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             </a>
                             @if($category->children && $category->children->count() > 0)
-                                <div class="pl-4 pr-1 py-1 space-y-1 border-l-2 border-brand-gold/30 ml-3">
+                                <div class="pl-4 pr-1 py-1.5 flex flex-wrap gap-1.5 border-l-2 border-brand-gold/30 ml-3">
                                     @foreach($category->children as $child)
                                         <a 
                                             href="{{ route('category.show', $child->slug) }}" 
-                                            class="block py-1 px-2 rounded text-xs text-gray-600 hover:text-brand-gold-dark hover:bg-white transition-colors text-left"
+                                            class="inline-block py-1 px-2.5 rounded-lg text-xs text-stone-600 bg-white/80 border border-stone-200/60 hover:text-brand-dark hover:border-brand-gold transition-colors text-left"
                                             @click="isMobileMenuOpen = false"
                                         >
                                             {{ html_entity_decode($child->name) }}

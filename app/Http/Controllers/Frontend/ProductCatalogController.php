@@ -23,6 +23,28 @@ class ProductCatalogController extends Controller
             $genericSlug = $request->route()->parameter('slug');
 
             if ($catSlug) {
+                $legacySlugMap = [
+                    'kasur-spring-bed' => 'spring-mattress',
+                    'kasur-matras' => 'spring-mattress',
+                    'headboard-sandaran' => 'headboard',
+                    'protector' => 'mattress-protector',
+                    'kasur-busa-foam' => 'foam-mattress',
+                    'bantal-guling' => 'pillow-case',
+                    'aksesoris-tidur' => 'accessories',
+                    'elite-pillow' => 'pillow-case',
+                    'bolster' => 'pillow-case',
+                    'elite-mattress' => 'spring-mattress',
+                    'bj-matrass' => 'mattress',
+                    'royal' => 'foam-mattress',
+                    'serenity' => 'spring-mattress',
+                    'lady' => 'bed-sheet',
+                    'moro' => 'bed-linen',
+                ];
+
+                if (isset($legacySlugMap[$catSlug])) {
+                    return redirect()->route('category.show', $legacySlugMap[$catSlug], 301);
+                }
+
                 $filterType = 'category';
                 $filterValue = $catSlug;
                 if (!\App\Models\Frontend\ProductsCatalog\ProductCategory::where('slug', $filterValue)->where('deleted', false)->exists()) abort(404);
@@ -299,6 +321,7 @@ class ProductCatalogController extends Controller
         $hasAnyNonIgnoredAttr = false;
         
         $detectedCompletenessTitle = null;
+        $detectedSizeTitle = null;
         $hasThicknessSetting = false;
         $hasExplicitThicknessFlag = false;
 
@@ -306,6 +329,9 @@ class ProductCatalogController extends Controller
             $rawA = $v->getRawOriginal('attributes');
             $pA = is_string($rawA) ? json_decode($rawA, true) : $rawA;
             if (is_array($pA)) {
+                if (!empty($pA['_size_title'])) {
+                    $detectedSizeTitle = trim((string)$pA['_size_title']);
+                }
                 if (!empty($pA['_completeness_title'])) {
                     $detectedCompletenessTitle = trim((string)$pA['_completeness_title']);
                 }
@@ -319,6 +345,7 @@ class ProductCatalogController extends Controller
                 }
             }
         }
+        $sizeTitle = $detectedSizeTitle ?: 'Ukuran';
         $completenessTitle = $detectedCompletenessTitle ?: 'Kelengkapan';
         $isThicknessEnabled = $hasExplicitThicknessFlag ? $hasThicknessSetting : $hasThicknessSetting;
 
@@ -349,7 +376,7 @@ class ProductCatalogController extends Controller
                 $variantAttributes = [];
             }
             
-            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
+            $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_size_title', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
             foreach ($variantAttributes as $key => $value) {
                 if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
                     continue;
@@ -358,6 +385,9 @@ class ProductCatalogController extends Controller
                 $normValue = (string) $value;
                 if (strcasecmp($normKey, 'feel') === 0 || strcasecmp($normKey, 'completeness') === 0 || strcasecmp($normKey, 'kelengkapan') === 0) {
                     $normKey = $completenessTitle;
+                }
+                if (strcasecmp($normKey, 'ukuran') === 0 || strcasecmp($normKey, $sizeTitle) === 0) {
+                    $normKey = $sizeTitle;
                 }
                 if (strcasecmp($normValue, 'mattress only') === 0 || strcasecmp($normValue, 'mattress') === 0) {
                     $normValue = 'Kasur Saja';
@@ -381,10 +411,16 @@ class ProductCatalogController extends Controller
                 $hasAnyNonIgnoredAttr = true;
             }
             
-            // 1. Ensure "Ukuran" is added
+            // 1. Ensure Size is added under $sizeTitle
             $ukuranVal = null;
-            if (!empty($variantAttributes['Ukuran'])) {
+            if (!empty($variantAttributes[$sizeTitle])) {
+                $ukuranVal = (string) $variantAttributes[$sizeTitle];
+            } elseif (!empty($variantAttributes['Ukuran'])) {
                 $ukuranVal = (string) $variantAttributes['Ukuran'];
+            } elseif (!empty($variantAttributes['Dimensi'])) {
+                $ukuranVal = (string) $variantAttributes['Dimensi'];
+            } elseif (!empty($variantAttributes['Size'])) {
+                $ukuranVal = (string) $variantAttributes['Size'];
             } elseif (!empty($variantAttributes['width']) && !empty($variantAttributes['length'])) {
                 $w = (int)$variantAttributes['width'];
                 $l = (int)$variantAttributes['length'];
@@ -403,18 +439,18 @@ class ProductCatalogController extends Controller
             }
 
             if ($ukuranVal) {
-                if (!isset($attributeGroups['Ukuran'])) {
-                    $attributeGroups['Ukuran'] = [];
+                if (!isset($attributeGroups[$sizeTitle])) {
+                    $attributeGroups[$sizeTitle] = [];
                 }
                 $alreadyExists = false;
-                foreach ($attributeGroups['Ukuran'] as $existingUkuran) {
+                foreach ($attributeGroups[$sizeTitle] as $existingUkuran) {
                     if (strcasecmp(trim($existingUkuran), trim($ukuranVal)) === 0) {
                         $alreadyExists = true;
                         break;
                     }
                 }
                 if (!$alreadyExists) {
-                    $attributeGroups['Ukuran'][] = $ukuranVal;
+                    $attributeGroups[$sizeTitle][] = $ukuranVal;
                 }
             }
 
@@ -513,7 +549,11 @@ class ProductCatalogController extends Controller
         }
         unset($optionsList);
 
-        return view('frontend.product.show', compact('product', 'attributeGroups', 'relatedProducts', 'suggestAddons'));
+        if ($sizeTitle !== 'Ukuran' && isset($attributeGroups['Ukuran'])) {
+            unset($attributeGroups['Ukuran']);
+        }
+
+        return view('frontend.product.show', compact('product', 'attributeGroups', 'sizeTitle', 'completenessTitle', 'relatedProducts', 'suggestAddons'));
     }
 
     public function searchSuggestions(Request $request)
