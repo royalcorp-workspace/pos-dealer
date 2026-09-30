@@ -44,14 +44,6 @@ class DashboardController extends Controller
         );
         $userId = $user['id'] ?? $user['sub'] ?? null;
       
-        $orders = $this->getOrdersForCurrentUser((string) ($user['email'] ?? ''), $userId);
-        $addresses = Address::where('user_id', $userId)
-            ->with(['subDistrict', 'city'])
-            ->latest()
-            ->get();
-
-        $orderStatusLabels = \App\Models\Frontend\Order::statusLabels();
-
         $customer = null;
         if ($userId) {
             $customer = Customer::where('user_id', $userId)->first();
@@ -59,8 +51,27 @@ class DashboardController extends Controller
         if (!$customer && !empty($user['email'])) {
             $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($user['email']))])->first();
         }
+        $customerId = $customer?->id;
 
-        return view('frontend.dashboard', compact('mockProduct', 'activeDeviceSessions', 'orders', 'addresses', 'orderStatusLabels', 'customer'));
+        $orders = $this->getOrdersForCurrentUser((string) ($user['email'] ?? ''), $userId);
+        $addresses = Address::where(function ($q) use ($userId, $customerId) {
+                if ($userId) {
+                    $q->where('user_id', $userId);
+                }
+                if ($customerId) {
+                    $q->orWhere('customer_id', $customerId);
+                }
+            })
+            ->where('deleted', false)
+            ->with(['subDistrict.city.province', 'city'])
+            ->orderByDesc('is_primary')
+            ->latest()
+            ->get();
+
+        $provinces = \App\Models\Frontend\Location\Province::orderBy('name')->get();
+        $orderStatusLabels = \App\Models\Frontend\Order::statusLabels();
+
+        return view('frontend.dashboard', compact('mockProduct', 'activeDeviceSessions', 'orders', 'addresses', 'orderStatusLabels', 'customer', 'provinces'));
     }
 
     public function updateProfile(Request $request)
@@ -166,129 +177,308 @@ class DashboardController extends Controller
 
     public function addresses()
     {
-        if (!session()->get('is_logged_in')) {
-            return redirect()->route('home')->with('show_login', true);
-        }
-
-        $user = session()->get('user', []);
-        $userId = $user['id'] ?? $user['sub'] ?? null;
-        $addresses = Address::where('user_id', $userId)->latest()->get();
-
-        return view('frontend.dashboard-addresses', compact('addresses'));
+        return redirect()->route('dashboard', ['tab' => 'addresses']);
     }
 
     public function storeAddress(Request $request)
     {
         if (!session()->get('is_logged_in')) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Silakan login terlebih dahulu.'], 401);
+            }
             return redirect()->route('home')->with('show_login', true);
         }
 
         $request->validate([
             'label' => 'required|string|max:50',
             'recipient_name' => 'required|string|max:100',
-            'phone' => 'required|string|max:20',
-            'sub_district_id' => 'required|uuid|exists:sub_districts,id',
+            'phone' => 'required|string|max:25',
+            'sub_district_id' => 'required|string|exists:sub_districts,id',
             'address' => 'required|string|max:500',
+            'postal_code' => 'nullable|string|max:10',
         ]);
 
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
 
-        if (!$userId) {
-            return redirect()->route('dashboard.addresses')->with('error', 'Data pengguna tidak valid. Silakan login kembali.');
+        $customer = null;
+        if ($userId) {
+            $customer = Customer::where('user_id', $userId)->first();
+        }
+        if (!$customer && !empty($email)) {
+            $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
         }
 
-        $subDistrict = SubDistrict::findOrFail($request->sub_district_id);
-
-        if ($request->boolean('is_primary')) {
-            Address::where('user_id', $userId)->update(['is_primary' => false]);
+        if (!$userId && !$customer) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Data pengguna tidak valid. Silakan login kembali.'], 401);
+            }
+            return redirect()->route('dashboard', ['tab' => 'addresses'])->with('error', 'Data pengguna tidak valid. Silakan login kembali.');
         }
 
-        Address::create([
-            'id' => Str::uuid(),
+        $subDistrict = SubDistrict::with('city')->findOrFail($request->sub_district_id);
+        $cityId = $subDistrict->city_id;
+        $cityName = $subDistrict->city?->name ?? null;
+        $subDistrictName = $subDistrict->sub_district;
+        $postalCode = $request->filled('postal_code') ? $request->postal_code : ($subDistrict->postal_code ?? null);
+
+        $isPrimary = $request->boolean('is_primary');
+
+        // If user has no existing active address, auto set as primary
+        $existingCount = Address::where(function ($q) use ($userId, $customer) {
+            if ($userId) $q->where('user_id', $userId);
+            if ($customer) $q->orWhere('customer_id', $customer->id);
+        })->where('deleted', false)->count();
+
+        if ($existingCount === 0) {
+            $isPrimary = true;
+        }
+
+        if ($isPrimary) {
+            Address::where(function ($q) use ($userId, $customer) {
+                if ($userId) $q->where('user_id', $userId);
+                if ($customer) $q->orWhere('customer_id', $customer->id);
+            })->update(['is_primary' => false]);
+        }
+
+        $address = Address::create([
+            'id' => Str::uuid()->toString(),
             'user_id' => $userId,
+            'customer_id' => $customer?->id,
             'sub_district_id' => $request->sub_district_id,
-            'city_id' => $subDistrict->city_id,
+            'city_id' => $cityId,
+            'city_name' => $cityName,
+            'sub_district_name' => $subDistrictName,
             'label' => $request->label,
             'recipient_name' => $request->recipient_name,
             'phone' => $request->phone,
             'address' => $request->address,
-            'postal_code' => $subDistrict->postal_code,
-            'is_primary' => $request->boolean('is_primary'),
+            'postal_code' => $postalCode,
+            'is_primary' => $isPrimary,
+            'deleted' => false,
+            'creator' => $userId,
+            'editor' => $userId,
         ]);
 
-        return redirect()->route('dashboard.addresses')->with('success', 'Alamat berhasil ditambahkan.');
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Alamat berhasil ditambahkan.',
+                'address' => $address,
+            ]);
+        }
+
+        return redirect()->route('dashboard', ['tab' => 'addresses'])->with('success', 'Alamat berhasil ditambahkan.');
     }
 
     public function updateAddress(Request $request, string $id)
     {
         if (!session()->get('is_logged_in')) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Silakan login terlebih dahulu.'], 401);
+            }
             return redirect()->route('home')->with('show_login', true);
         }
 
         $address = Address::findOrFail($id);
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
 
-        if ($address->user_id !== $userId) {
+        $customer = null;
+        if ($userId) {
+            $customer = Customer::where('user_id', $userId)->first();
+        }
+        if (!$customer && !empty($email)) {
+            $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
+        }
+
+        $authorized = false;
+        if ($userId && (string)$address->user_id === (string)$userId) {
+            $authorized = true;
+        }
+        if ($customer && (string)$address->customer_id === (string)$customer->id) {
+            $authorized = true;
+        }
+
+        if (!$authorized) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk mengubah alamat ini.'], 403);
+            }
             abort(403);
         }
 
         $request->validate([
             'label' => 'required|string|max:50',
             'recipient_name' => 'required|string|max:100',
-            'phone' => 'required|string|max:20',
+            'phone' => 'required|string|max:25',
+            'sub_district_id' => 'nullable|string|exists:sub_districts,id',
             'address' => 'required|string|max:500',
+            'postal_code' => 'nullable|string|max:10',
         ]);
 
-        if ($request->boolean('is_primary')) {
-            Address::where('user_id', $userId)->where('id', '!=', $id)->update(['is_primary' => false]);
-        }
-
-        $address->update([
+        $updateData = [
             'label' => $request->label,
             'recipient_name' => $request->recipient_name,
             'phone' => $request->phone,
             'address' => $request->address,
-            'postal_code' => $request->postal_code,
-            'is_primary' => $request->boolean('is_primary'),
-        ]);
+            'editor' => $userId,
+        ];
 
-        return redirect()->route('dashboard.addresses')->with('success', 'Alamat berhasil diperbarui.');
+        if ($userId && empty($address->user_id)) {
+            $updateData['user_id'] = $userId;
+        }
+        if ($customer && empty($address->customer_id)) {
+            $updateData['customer_id'] = $customer->id;
+        }
+
+        if ($request->filled('sub_district_id') && $request->sub_district_id !== $address->sub_district_id) {
+            $subDistrict = SubDistrict::with('city')->findOrFail($request->sub_district_id);
+            $updateData['sub_district_id'] = $subDistrict->id;
+            $updateData['city_id'] = $subDistrict->city_id;
+            $updateData['city_name'] = $subDistrict->city?->name ?? null;
+            $updateData['sub_district_name'] = $subDistrict->sub_district;
+            if (!$request->filled('postal_code')) {
+                $updateData['postal_code'] = $subDistrict->postal_code;
+            }
+        }
+
+        if ($request->filled('postal_code')) {
+            $updateData['postal_code'] = $request->postal_code;
+        }
+
+        if ($request->has('is_primary')) {
+            $isPrimary = $request->boolean('is_primary');
+            if ($isPrimary) {
+                Address::where(function ($q) use ($userId, $customer) {
+                    if ($userId) $q->where('user_id', $userId);
+                    if ($customer) $q->orWhere('customer_id', $customer->id);
+                })->where('id', '!=', $id)->update(['is_primary' => false]);
+            }
+            $updateData['is_primary'] = $isPrimary;
+        }
+
+        $address->update($updateData);
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Alamat berhasil diperbarui.',
+                'address' => $address,
+            ]);
+        }
+
+        return redirect()->route('dashboard', ['tab' => 'addresses'])->with('success', 'Alamat berhasil diperbarui.');
     }
 
     public function deleteAddress(string $id)
     {
         if (!session()->get('is_logged_in')) {
+            if (request()->expectsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Silakan login terlebih dahulu.'], 401);
+            }
             return redirect()->route('home')->with('show_login', true);
         }
 
         $address = Address::findOrFail($id);
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
 
-        if ($address->user_id !== $userId) {
+        $customer = null;
+        if ($userId) {
+            $customer = Customer::where('user_id', $userId)->first();
+        }
+        if (!$customer && !empty($email)) {
+            $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
+        }
+
+        $authorized = false;
+        if ($userId && (string)$address->user_id === (string)$userId) $authorized = true;
+        if ($customer && (string)$address->customer_id === (string)$customer->id) $authorized = true;
+
+        if (!$authorized) {
+            if (request()->expectsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk menghapus alamat ini.'], 403);
+            }
             abort(403);
         }
 
+        $wasPrimary = $address->is_primary;
+        $address->update(['deleted' => true]);
         $address->delete();
-        return redirect()->route('dashboard.addresses')->with('success', 'Alamat berhasil dihapus.');
+
+        // If the deleted address was primary, make the next active one primary
+        if ($wasPrimary) {
+            $next = Address::where(function ($q) use ($userId, $customer) {
+                if ($userId) $q->where('user_id', $userId);
+                if ($customer) $q->orWhere('customer_id', $customer->id);
+            })->where('deleted', false)->first();
+
+            if ($next) {
+                $next->update(['is_primary' => true]);
+            }
+        }
+
+        if (request()->expectsJson() || request()->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Alamat berhasil dihapus.',
+            ]);
+        }
+
+        return redirect()->route('dashboard', ['tab' => 'addresses'])->with('success', 'Alamat berhasil dihapus.');
     }
 
     public function setPrimaryAddress(string $id)
     {
         if (!session()->get('is_logged_in')) {
+            if (request()->expectsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Silakan login terlebih dahulu.'], 401);
+            }
             return redirect()->route('home')->with('show_login', true);
         }
 
         $address = Address::findOrFail($id);
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
+        $email = $user['email'] ?? null;
 
-        Address::where('user_id', $userId)->update(['is_primary' => false]);
+        $customer = null;
+        if ($userId) {
+            $customer = Customer::where('user_id', $userId)->first();
+        }
+        if (!$customer && !empty($email)) {
+            $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
+        }
+
+        $authorized = false;
+        if ($userId && (string)$address->user_id === (string)$userId) $authorized = true;
+        if ($customer && (string)$address->customer_id === (string)$customer->id) $authorized = true;
+
+        if (!$authorized) {
+            if (request()->expectsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Anda tidak memiliki hak untuk mengubah alamat ini.'], 403);
+            }
+            abort(403);
+        }
+
+        Address::where(function ($q) use ($userId, $customer) {
+            if ($userId) $q->where('user_id', $userId);
+            if ($customer) $q->orWhere('customer_id', $customer->id);
+        })->update(['is_primary' => false]);
+
         $address->update(['is_primary' => true]);
 
-        return redirect()->route('dashboard.addresses')->with('success', 'Alamat utama berhasil diubah.');
+        if (request()->expectsJson() || request()->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Alamat utama berhasil diubah.',
+            ]);
+        }
+
+        return redirect()->route('dashboard', ['tab' => 'addresses'])->with('success', 'Alamat utama berhasil diubah.');
     }
 
     private function getOrdersForCurrentUser(string $email, $userId = null)

@@ -131,9 +131,11 @@ class HomeController extends Controller
 
         $selectedCatIds = $catMeta['selected_categories'] ?? [];
 
+        $categories = collect();
         if (!empty($selectedCatIds) && is_array($selectedCatIds)) {
             $categories = ProductCategory::where('deleted', false)
                 ->whereIn('id', $selectedCatIds)
+                ->whereNull('parent_id')
                 ->with(['children' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
                 ->withCount('products')
                 ->get()
@@ -141,12 +143,14 @@ class HomeController extends Controller
                     return array_search($cat->id, $selectedCatIds);
                 })
                 ->values();
-        } else {
+        }
+
+        if ($categories->isEmpty()) {
             $categories = ProductCategory::where('deleted', false)
                 ->whereNull('parent_id')
                 ->with(['children' => fn($q) => $q->where('deleted', false)->orderBy('sort_order')])
                 ->withCount('products')
-                ->take(8)
+                ->orderBy('sort_order')
                 ->get();
         }
 

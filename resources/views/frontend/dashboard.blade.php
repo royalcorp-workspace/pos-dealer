@@ -259,30 +259,64 @@
 
                         <div class="grid gap-4">
                             @forelse($addresses as $address)
+                                @php
+                                    $subDistrictName = $address->subDistrict?->sub_district ?? ($address->sub_district_name ?? '');
+                                    $districtName = $address->subDistrict?->district ?? '';
+                                    $cityName = $address->subDistrict?->city?->name ?? ($address->city?->name ?? ($address->city_name ?? ''));
+                                    $provinceName = $address->subDistrict?->city?->province?->name ?? ($address->city?->province?->name ?? '');
+
+                                    $locationLine = array_filter([
+                                        $subDistrictName . ($districtName ? ' (Kec. ' . $districtName . ')' : ''),
+                                        $cityName,
+                                        $provinceName,
+                                        $address->postal_code
+                                    ]);
+
+                                    $addressData = [
+                                        'id' => $address->id,
+                                        'label' => $address->label,
+                                        'recipient_name' => $address->recipient_name,
+                                        'phone' => $address->phone,
+                                        'address' => $address->address,
+                                        'postal_code' => $address->postal_code,
+                                        'province_id' => $address->subDistrict?->city?->province_id ?? ($address->city?->province_id ?? null),
+                                        'city_id' => $address->city_id ?? ($address->subDistrict?->city_id ?? null),
+                                        'sub_district_id' => $address->sub_district_id,
+                                        'is_primary' => (bool) $address->is_primary,
+                                    ];
+                                @endphp
                                 <div class="relative rounded-2xl border {{ $address->is_primary ? 'border-brand-gold bg-brand-light/40' : 'border-brand-muted bg-white' }} p-5 transition-colors">
                                     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                                        <div class="space-y-2">
+                                        <div class="space-y-1.5 min-w-0 flex-1">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <h4 class="font-extrabold text-brand-dark">{{ $address->label }}</h4>
+                                                <h4 class="font-extrabold text-brand-dark text-base">{{ $address->label }}</h4>
                                                 @if($address->is_primary)
-                                                    <span class="inline-flex items-center rounded-full bg-brand-gold/20 text-brand-gold-dark text-[10px] font-extrabold px-2.5 py-1 uppercase tracking-wider">Utama</span>
+                                                    <span class="inline-flex items-center rounded-full bg-brand-gold/20 text-brand-gold-dark text-[10px] font-extrabold px-2.5 py-0.5 uppercase tracking-wider">Utama</span>
                                                 @endif
                                             </div>
-                                            <div class="text-sm text-gray-700">
-                                                <p>{{ $address->recipient_name }}</p>
-                                                <p>{{ $address->phone }}</p>
-                                                <p>{{ $address->address }}</p>
-                                                <p>{{ $address->postal_code }} {{ $address->subDistrict->name ?? '' }}, {{ $address->city->name ?? '' }}</p>
+                                            <div class="text-xs sm:text-sm text-gray-700 space-y-0.5">
+                                                <p class="font-bold text-gray-900">{{ $address->recipient_name }} <span class="font-normal text-gray-500">({{ $address->phone }})</span></p>
+                                                <p class="text-gray-600 leading-relaxed">{{ $address->address }}</p>
+                                                <p class="text-xs text-gray-500 font-medium">{{ implode(', ', $locationLine) }}</p>
                                             </div>
                                         </div>
-                                        <div class="flex flex-wrap gap-2 sm:flex-col sm:items-end">
-                                            <button type="button" onclick="editAddress('{{ $address->id }}', '{{ $address->label }}', '{{ $address->recipient_name }}', '{{ $address->phone }}', '{{ $address->address }}')" class="px-4 py-2 rounded-xl border border-brand-muted bg-white text-brand-dark hover:bg-brand-light text-sm font-extrabold transition-colors">
-                                                Ubah
-                                            </button>
+                                        <div class="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end shrink-0">
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" onclick='editAddress(@json($addressData))' class="px-3.5 py-1.5 rounded-xl border border-brand-muted bg-white text-brand-dark hover:bg-brand-light text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5">
+                                                    <i class="fa-solid fa-pen-to-square text-[10px]"></i> Ubah
+                                                </button>
+                                                <form action="{{ route('dashboard.addresses.delete', $address->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus alamat ini?');" class="inline">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="px-2.5 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-bold transition-colors cursor-pointer" title="Hapus alamat">
+                                                        <i class="fa-solid fa-trash-can text-[11px]"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
                                             @unless($address->is_primary)
                                                 <form action="{{ route('dashboard.addresses.primary', $address->id) }}" method="POST" onsubmit="return confirm('Jadikan alamat ini sebagai utama?');">
                                                     @csrf
-                                                    <button type="submit" class="px-4 py-2 rounded-xl border border-brand-gold/30 bg-brand-gold/10 text-brand-gold-dark hover:bg-brand-gold/20 text-sm font-extrabold transition-colors">
+                                                    <button type="submit" class="px-3.5 py-1.5 rounded-xl border border-brand-gold/30 bg-brand-gold/10 text-brand-gold-dark hover:bg-brand-gold/20 text-xs font-bold transition-colors cursor-pointer">
                                                         Jadikan Utama
                                                     </button>
                                                 </form>

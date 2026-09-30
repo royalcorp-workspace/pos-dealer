@@ -407,7 +407,7 @@
                                 <div class="attribute-group-container" data-attribute-group="{{ $groupName }}">
                                     <div class="flex items-center justify-between mb-2.5">
                                         <label class="text-xs uppercase tracking-wider font-bold text-gray-700 flex items-center gap-1.5">
-                                            @if(stripos($groupName, 'ukuran') !== false || stripos($groupName, 'size') !== false)
+                                            @if(stripos($groupName, 'ukuran') !== false || stripos($groupName, 'size') !== false || stripos($groupName, 'dimensi') !== false || (isset($sizeTitle) && strcasecmp($groupName, $sizeTitle) === 0))
                                                 <i class="fa-solid fa-ruler-combined text-brand-gold text-xs"></i>
                                             @elseif(stripos($groupName, 'tebal') !== false || stripos($groupName, 'tinggi') !== false || stripos($groupName, 'height') !== false)
                                                 <i class="fa-solid fa-arrows-up-down text-brand-gold text-xs"></i>
@@ -674,7 +674,7 @@
                                 disabled
                             >
                                 <i class="fa-solid fa-bag-shopping text-brand-gold text-base" id="add-to-cart-icon"></i>
-                                <span id="add-to-cart-text">{{ $hasVariants ? __('Pilih Ukuran Terlebih Dahulu') : ($hasColors ? __('Pilih Warna Terlebih Dahulu') : __('Tambah ke Keranjang')) }}</span>
+                                <span id="add-to-cart-text">{{ $hasVariants ? __('Pilih Variasi Terlebih Dahulu') : ($hasColors ? __('Pilih Warna Terlebih Dahulu') : __('Tambah ke Keranjang')) }}</span>
                             </button>
 
                             <!-- Wishlist Heart Button -->
@@ -969,6 +969,7 @@
 @push('scripts')
 @php
     $detectedCompletenessTitle = null;
+    $detectedSizeTitle = null;
     $hasThicknessSetting = false;
     $hasExplicitThicknessFlag = false;
 
@@ -976,6 +977,9 @@
         $rawA = $v->getRawOriginal('attributes');
         $pA = is_string($rawA) ? json_decode($rawA, true) : $rawA;
         if (is_array($pA)) {
+            if (!empty($pA['_size_title'])) {
+                $detectedSizeTitle = trim((string)$pA['_size_title']);
+            }
             if (!empty($pA['_completeness_title'])) {
                 $detectedCompletenessTitle = trim((string)$pA['_completeness_title']);
             }
@@ -989,42 +993,53 @@
             }
         }
     }
-    $completenessTitle = $detectedCompletenessTitle ?: 'Kelengkapan';
+    $sizeTitle = $detectedSizeTitle ?: ($sizeTitle ?? 'Ukuran');
+    $completenessTitle = $detectedCompletenessTitle ?: ($completenessTitle ?? 'Kelengkapan');
     $isThicknessEnabled = $hasExplicitThicknessFlag ? $hasThicknessSetting : $hasThicknessSetting;
 
-    $mappedVariants = collect($validVariants ?? [])->map(function($v) use ($completenessTitle, $isThicknessEnabled) {
+    $mappedVariants = collect($validVariants ?? [])->map(function($v) use ($sizeTitle, $completenessTitle, $isThicknessEnabled) {
         $rawAttrs = $v->getRawOriginal('attributes');
         $parsedAttrs = [];
         if ($rawAttrs) {
             $parsedAttrs = is_string($rawAttrs) ? json_decode($rawAttrs, true) : $rawAttrs;
             if (is_array($parsedAttrs)) {
-                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
+                $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_size_title', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
                 
-                // 1. Ukuran
-                if (empty($parsedAttrs['Ukuran'])) {
-                    if (isset($parsedAttrs['width']) && isset($parsedAttrs['length'])) {
+                // 1. Ukuran / Custom Size Title
+                if (empty($parsedAttrs[$sizeTitle])) {
+                    if (!empty($parsedAttrs['Ukuran'])) {
+                        $parsedAttrs[$sizeTitle] = (string)$parsedAttrs['Ukuran'];
+                    } elseif (!empty($parsedAttrs['Dimensi'])) {
+                        $parsedAttrs[$sizeTitle] = (string)$parsedAttrs['Dimensi'];
+                    } elseif (!empty($parsedAttrs['Size'])) {
+                        $parsedAttrs[$sizeTitle] = (string)$parsedAttrs['Size'];
+                    } elseif (isset($parsedAttrs['width']) && isset($parsedAttrs['length'])) {
                         $w = (int)$parsedAttrs['width'];
                         $l = (int)$parsedAttrs['length'];
                         $wStr = $w < 100 ? '0' . $w : (string)$w;
-                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
+                        $parsedAttrs[$sizeTitle] = "{$wStr} X {$l}";
                     } elseif (!empty($v->width) && !empty($v->length)) {
                         $w = (int)$v->width;
                         $l = (int)$v->length;
                         $wStr = $w < 100 ? '0' . $w : (string)$w;
-                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
+                        $parsedAttrs[$sizeTitle] = "{$wStr} X {$l}";
                     } elseif (preg_match('/(\d{2,3})\s*[xX]\s*(\d{3})/i', (string)$v->variant_name, $m)) {
                         $w = (int)$m[1];
                         $l = (int)$m[2];
                         $wStr = $w < 100 ? '0' . $w : (string)$w;
-                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
+                        $parsedAttrs[$sizeTitle] = "{$wStr} X {$l}";
                     }
                 } else {
-                    if (preg_match('/(\d{2,3})\s*[xX]\s*(\d{3})/i', (string)$parsedAttrs['Ukuran'], $m)) {
+                    if (preg_match('/(\d{2,3})\s*[xX]\s*(\d{3})/i', (string)$parsedAttrs[$sizeTitle], $m)) {
                         $w = (int)$m[1];
                         $l = (int)$m[2];
                         $wStr = $w < 100 ? '0' . $w : (string)$w;
-                        $parsedAttrs['Ukuran'] = "{$wStr} X {$l}";
+                        $parsedAttrs[$sizeTitle] = "{$wStr} X {$l}";
                     }
+                }
+
+                if ($sizeTitle !== 'Ukuran' && isset($parsedAttrs['Ukuran'])) {
+                    unset($parsedAttrs['Ukuran']);
                 }
 
                 // 2. Completeness / Custom Option
@@ -1073,6 +1088,9 @@
                     $normV = (string) $val;
                     if (strcasecmp($normK, 'feel') === 0 || strcasecmp($normK, 'completeness') === 0 || strcasecmp($normK, 'kelengkapan') === 0) {
                         $normK = $completenessTitle;
+                    }
+                    if (strcasecmp($normK, 'ukuran') === 0 || strcasecmp($normK, $sizeTitle) === 0) {
+                        $normK = $sizeTitle;
                     }
                     if (strcasecmp($normV, 'mattress only') === 0 || strcasecmp($normV, 'mattress') === 0) {
                         $normV = 'Kasur Saja';

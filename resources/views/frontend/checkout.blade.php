@@ -161,399 +161,7 @@
                         </a>
                     </div>
                 @else
-                    <!-- Customer Information -->
-                    <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="flex flex-wrap justify-between items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center font-bold text-sm shadow-2xs">
-                                    <i class="fa-solid fa-user text-xs"></i>
-                                </div>
-                                <div>
-                                    <h2 class="text-base font-bold text-brand-dark">1. Informasi Penerima</h2>
-                                    <p class="text-xs text-gray-500">Data kontak dan alamat lengkap pengiriman</p>
-                                </div>
-                            </div>
-                            @if($savedAddresses->isNotEmpty())
-                                <button type="button" onclick="toggleAddressSelector()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-dark bg-brand-gold/15 hover:bg-brand-gold/25 transition-colors">
-                                    <i class="fa-solid fa-map-location-dot text-brand-gold-dark"></i>
-                                    Pilih Alamat Tersimpan
-                                </button>
-                            @endif
-                        </div>
-
-                        @if($savedAddresses->isNotEmpty())
-                            @php
-                                $defaultAddress = $savedAddresses->firstWhere('is_primary', true) ?? $savedAddresses->first();
-                            @endphp
-                            <div id="address-selector" class="hidden mb-6 p-4 bg-brand-light rounded-2xl border border-brand-muted/60">
-                                <div class="flex items-center justify-between mb-3">
-                                    <span class="text-xs font-bold uppercase tracking-wider text-brand-dark">Daftar Alamat Tersimpan</span>
-                                    <span class="text-[11px] text-gray-400">Klik untuk mengisi formulir otomatis</span>
-                                </div>
-                                <div class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-                                    @foreach($savedAddresses as $addr)
-                                        <label class="flex items-start gap-3 p-3.5 bg-white border border-gray-200 rounded-xl cursor-pointer hover:border-brand-gold hover:bg-amber-50/20 transition-all shadow-2xs">
-                                            <input type="radio" name="selected_address_id" value="{{ $addr->id }}" class="mt-1 accent-brand-gold" onchange="fillAddress(this)" {{ $addr->id === $defaultAddress->id ? 'checked' : '' }}>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex items-center gap-2">
-                                                    <span class="font-bold text-sm text-brand-dark">{{ $addr->label }}</span>
-                                                    @if($addr->is_primary)
-                                                        <span class="text-[10px] font-extrabold bg-brand-gold/20 text-brand-gold-dark px-2 py-0.5 rounded-full">Utama</span>
-                                                    @endif
-                                                </div>
-                                                <p class="text-xs font-semibold text-gray-700 mt-0.5">{{ $addr->recipient_name }} &bull; <span class="font-normal">{{ $addr->phone }}</span></p>
-                                                <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">{{ $addr->address }}, {{ $addr->subDistrict->city->name ?? '' }} {{ $addr->postal_code }}</p>
-                                            </div>
-                                        </label>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @else
-                            @php
-                                $defaultAddress = null;
-                            @endphp
-                        @endif
-
-                        @php
-                            $sessionUser = session()->get('user', []);
-                            $defaultName = old('name', $form['name'] ?? $defaultAddress?->recipient_name ?? ($defaultCustomerAddr['name'] ?? ($sessionUser['name'] ?? '')));
-                            $defaultEmail = old('email', $form['email'] ?? ($defaultCustomerAddr['email'] ?? ($sessionUser['email'] ?? '')));
-                            $defaultPhone = old('phone', $form['phone'] ?? $defaultAddress?->phone ?? ($defaultCustomerAddr['phone'] ?? ($sessionUser['phone'] ?? '')));
-                            $defaultCity = old('city', $form['city'] ?? $defaultAddress?->subDistrict->city->name ?? ($defaultCustomerAddr['city_name'] ?? ''));
-                            $defaultAddressText = old('address', $form['address'] ?? $defaultAddress?->address ?? ($defaultCustomerAddr['address'] ?? ''));
-                            $defaultPostal = old('postal_code', $form['postal_code'] ?? $defaultAddress?->postal_code ?? ($defaultCustomerAddr['postal_code'] ?? ''));
-                        @endphp
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-regular fa-envelope text-brand-gold"></i> Email <span class="text-red-500">*</span>
-                                </label>
-                                <input type="email" name="email" value="{{ $defaultEmail }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="email@example.com">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-regular fa-user text-brand-gold"></i> Nama Lengkap <span class="text-red-500">*</span>
-                                </label>
-                                <input type="text" name="name" value="{{ $defaultName }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="Nama lengkap penerima">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-phone text-brand-gold text-[11px]"></i> Nomor Telepon / WA <span class="text-red-500">*</span>
-                                </label>
-                                <input type="tel" name="phone" value="{{ $defaultPhone }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="08xx xxxx xxxx">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-map-location-dot text-brand-gold text-[11px]"></i> Provinsi <span class="text-red-500">*</span>
-                                </label>
-                                <select name="province_id" id="checkout-province" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
-                                    <option value="">Pilih Provinsi</option>
-                                    @foreach($provinces as $prov)
-                                        <option value="{{ $prov->id }}" {{ (old('province_id', $selectedProvinceId ?? '') == $prov->id) ? 'selected' : '' }}>
-                                            {{ $prov->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-city text-brand-gold text-[11px]"></i> Kota / Kabupaten <span class="text-red-500">*</span>
-                                </label>
-                                <select name="city_id" id="checkout-city" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" {{ empty($cities) || $cities->isEmpty() ? 'disabled' : '' }}>
-                                    <option value="">{{ empty($cities) || $cities->isEmpty() ? 'Pilih Provinsi Terlebih Dahulu' : 'Pilih Kota/Kabupaten' }}</option>
-                                    @foreach($cities as $c)
-                                        <option value="{{ $c->id }}" {{ (old('city_id', $selectedCityId ?? '') == $c->id) ? 'selected' : '' }}>
-                                            {{ $c->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                    <i class="fa-solid fa-building text-brand-gold text-[11px]"></i> Kecamatan / Kelurahan <span class="text-red-500">*</span>
-                                </label>
-                                <select name="sub_district_id" id="checkout-sub-district" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" {{ empty($subDistricts) || $subDistricts->isEmpty() ? 'disabled' : '' }}>
-                                    <option value="">{{ empty($subDistricts) || $subDistricts->isEmpty() ? 'Pilih Kota Terlebih Dahulu' : 'Pilih Kecamatan/Kelurahan' }}</option>
-                                    @foreach($subDistricts as $sd)
-                                        <option value="{{ $sd['id'] }}" data-postal="{{ $sd['postal_code'] ?? '' }}" {{ (old('sub_district_id', $form['sub_district_id'] ?? $selectedSubDistrictId ?? '') == $sd['id']) ? 'selected' : '' }}>
-                                            {{ $sd['label'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                <i class="fa-solid fa-location-dot text-brand-gold text-[11px]"></i> Alamat Lengkap <span class="text-red-500">*</span>
-                            </label>
-                            <textarea name="address" required rows="3" class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="Jl. Sudirman No. 123, Blok A, RT/RW, Patokan Lokasi">{{ $defaultAddressText }}</textarea>
-                        </div>
-                        <div class="mt-4">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
-                                <i class="fa-solid fa-envelopes-bulk text-brand-gold text-[11px]"></i> Kode Pos
-                            </label>
-                            <input type="text" name="postal_code" value="{{ $defaultPostal }}" class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="12345">
-                        </div>
-                    </div>
-
-                    <!-- Section 2: Courier / Shipping Options -->
-                    <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
-                            <div class="w-9 h-9 rounded-xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center font-bold text-sm shadow-2xs">
-                                <i class="fa-solid fa-truck text-xs"></i>
-                            </div>
-                            <div>
-                                <h2 class="text-base font-bold text-brand-dark">2. Opsi Pengiriman</h2>
-                                <p class="text-xs text-gray-500">Pilih ekspedisi atau kurir pengiriman untuk tujuan Anda</p>
-                            </div>
-                        </div>
-
-                        @if(isset($enforcedCourierType) && $enforcedCourierType)
-                            <div class="mb-4 p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
-                                <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm shrink-0"></i>
-                                <span>
-                                    Produk dalam keranjang Anda diset khusus hanya mendukung pengiriman melalui <strong>{{ $enforcedCourierType === 'toko' ? 'Kurir Toko' : 'Kurir Ekspedisi' }}</strong>.
-                                </span>
-                            </div>
-                        @endif
-
-                        <div>
-                            <select name="courier" required class="w-full px-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
-                                <option value="">-- Pilih Ekspedisi / Kurir Pengiriman --</option>
-                                @foreach($couriers as $courier)
-                                    @php
-                                        $details = $courierPrices[$courier->code] ?? null;
-                                        $isAvailable = $details['is_available'] ?? true;
-                                        $calculatedCost = $details['shipping_cost'] ?? ($courier->shippingAddresses->where('type', 1)->first()->price ?? ($courier->shippingAddresses->first()->price ?? 25000));
-                                        $isCalculated = $details['is_calculated'] ?? false;
-                                        $billableWeight = $details['billable_weight'] ?? 1;
-                                        $hasFixed = $details['has_fixed_items'] ?? false;
-                                        $hasDim = $details['has_dimension_items'] ?? false;
-                                    @endphp
-                                    <option value="{{ $courier->code }}" 
-                                            data-courier-name="{{ $courier->name }}"
-                                            data-base-price="{{ $details['base_price'] ?? $calculatedCost }}"
-                                            data-available="{{ $isAvailable ? '1' : '0' }}"
-                                            {{ !$isAvailable ? 'disabled' : '' }}
-                                            {{ (old('courier', $form['courier'] ?? '') == $courier->code) ? 'selected' : '' }}>
-                                        @if(!$isAvailable)
-                                            {{ $courier->name }} - Di Luar Jangkauan (Tidak Melayani Wilayah Ini)
-                                        @else
-                                            {{ $courier->name }} - Rp {{ number_format($calculatedCost, 0, ',', '.') }}
-                                            @if($hasFixed && $hasDim)
-                                                (Tetap + {{ $billableWeight }} kg)
-                                            @elseif($hasFixed)
-                                                (Ongkir Tetap)
-                                            @elseif($isCalculated && $billableWeight > 0)
-                                                ({{ $billableWeight }} kg)
-                                            @else
-                                                (Tarif Tetap)
-                                            @endif
-                                            @if(!empty($details['eta_label']))
-                                                | Estimasi tiba: {{ $details['eta_label'] }}
-                                            @endif
-                                        @endif
-                                    </option>
-                                @endforeach
-                            </select>
-                            @php
-                                $selectedCourierCode = old('courier', $form['courier'] ?? '');
-                                $selectedCourierDetails = $courierPrices[$selectedCourierCode] ?? null;
-                                $selectedEta = $selectedCourierDetails['eta_label'] ?? null;
-                                $selectedEtaSource = $selectedCourierDetails['eta_source'] ?? null;
-                            @endphp
-                            <div id="courier-eta-badge" class="{{ empty($selectedEta) ? 'hidden' : '' }} mt-3 p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <i class="fa-solid fa-clock text-blue-600"></i>
-                                    <span>Estimasi Tiba: <strong id="courier-eta-text">{{ $selectedEta ?? '' }}</strong></span>
-                                </div>
-                                <span id="courier-eta-source" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-200/60 text-blue-800 uppercase tracking-wider">
-                                    {{ $selectedEtaSource === 'biteship' ? 'Biteship' : ($selectedEtaSource === 'store' ? 'Kurir Toko' : 'Estimasi') }}
-                                </span>
-                            </div>
-                            <div id="courier-unavailable-alert" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
-                                <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-600 shrink-0"></i>
-                                <span id="courier-unavailable-message">Kurir yang dipilih belum melayani pengiriman ke kota/wilayah tujuan ini. Silakan pilih kurir lain atau ganti alamat tujuan.</span>
-                            </div>
-                            @error('courier')
-                                <p class="text-xs text-red-500 mt-1.5 flex items-center gap-1">
-                                    <i class="fa-solid fa-circle-exclamation"></i> {{ $message }}
-                                </p>
-                            @enderror
-                        </div>
-
-                        <div id="checkout-dimension-weight-info" class="mt-3 text-xs">
-                            @if(!empty($cartWeightDetails['has_fixed_items']) && !empty($cartWeightDetails['has_dimension_items']))
-                                <div class="flex items-start gap-2 text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3.5 py-2.5">
-                                    <i class="fa-solid fa-scale-balanced mt-0.5 text-emerald-600 shrink-0"></i>
-                                    <span>Kombinasi Ongkir: Produk bertarif tetap (Rp {{ number_format($cartWeightDetails['fixed_shipping_cost'] ?? 0, 0, ',', '.') }}) + Produk dimensi (<strong>{{ $cartWeightDetails['chargeable_weight'] }} kg</strong>, Fisik: {{ $cartWeightDetails['actual_weight'] }} kg, Volumetrik: {{ $cartWeightDetails['volumetric_weight'] }} kg).</span>
-                                </div>
-                            @elseif(!empty($cartWeightDetails['has_fixed_items']))
-                                <div class="flex items-start gap-2 text-blue-800 bg-blue-50/80 border border-blue-200/80 rounded-xl px-3.5 py-2.5">
-                                    <i class="fa-solid fa-box text-blue-600 mt-0.5 shrink-0"></i>
-                                    <span>Ongkos kirim menggunakan tarif tetap produk/varian (Total: <strong>Rp {{ number_format($cartWeightDetails['fixed_shipping_cost'] ?? 0, 0, ',', '.') }}</strong>).</span>
-                                </div>
-                            @elseif(!empty($cartWeightDetails['is_calculable']))
-                                <div class="flex items-start gap-2 text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3.5 py-2.5">
-                                    <i class="fa-solid fa-calculator text-emerald-600 mt-0.5 shrink-0"></i>
-                                    <span>Perhitungan berat total: <strong>{{ $cartWeightDetails['chargeable_weight'] }} kg</strong> (Berat fisik: {{ $cartWeightDetails['actual_weight'] }} kg, Volumetrik: {{ $cartWeightDetails['volumetric_weight'] }} kg). Ongkir dikalkulasikan berdasarkan berat ini.</span>
-                                </div>
-                            @else
-                                <div class="flex items-start gap-2 text-gray-600 bg-gray-50/80 border border-gray-200/80 rounded-xl px-3.5 py-2.5">
-                                    <i class="fa-solid fa-circle-info text-gray-400 mt-0.5 shrink-0"></i>
-                                    <span>Dimensi/berat produk tidak tersedia. Ongkir menggunakan <strong>Tarif Tetap (Flat Rate)</strong>.</span>
-                                </div>
-                            @endif
-                        </div>
-                        <script id="checkout-courier-shipping-prices" type="application/json">
-                            @json(collect($courierPrices)->mapWithKeys(function($val, $key) {
-                                return [$key => floatval($val['shipping_cost'] ?? 0)];
-                            }))
-                        </script>
-                        <script id="checkout-courier-shipping-details" type="application/json">
-                            @json($courierPrices)
-                        </script>
-                    </div>
-
-                    <!-- Section 3: Voucher & Discount Coupons -->
-                    <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="flex justify-between items-center gap-4 mb-5 pb-4 border-b border-gray-100">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center font-bold text-sm shadow-2xs">
-                                    <i class="fa-solid fa-ticket text-xs"></i>
-                                </div>
-                                <div>
-                                    <h2 class="text-base font-bold text-brand-dark">3. Kupon & Voucher Diskon</h2>
-                                    <p class="text-xs text-gray-500">Gunakan voucher diskon belanja Anda</p>
-                                </div>
-                            </div>
-                            <span class="inline-flex items-center gap-1 rounded-full bg-brand-gold/15 px-3 py-1 text-xs font-bold text-brand-gold-dark">
-                                <i class="fa-solid fa-tag text-[10px]"></i> {{ $vouchers->count() }} Tersedia
-                            </span>
-                        </div>
-
-                        <input type="hidden" name="voucher_code" id="voucher-code" value="{{ implode(',', $selectedVoucherCodes) }}">
-                        <input type="hidden" name="voucher_codes" id="voucher-codes" value="{{ implode(',', $selectedVoucherCodes) }}">
-                        <input type="hidden" name="voucher_discount" id="voucher-discount-value" value="{{ $selectedVoucher['discount'] ?? 0 }}">
-
-                        <div class="flex gap-2.5 mb-4">
-                            <div class="relative flex-1">
-                                <i class="fa-solid fa-barcode absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                                <input type="text" id="manual-voucher-input" placeholder="Masukkan kode voucher..." class="w-full pl-9 pr-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm uppercase tracking-wider font-mono transition-all" maxlength="20">
-                            </div>
-                            <button type="button" onclick="validateAndApplyVoucher()" class="px-5 py-3 bg-brand-dark text-brand-gold hover:text-white rounded-xl font-bold text-sm hover:bg-brand-darker transition-colors shadow-sm whitespace-nowrap">
-                                Gunakan
-                            </button>
-                        </div>
-                        <div id="manual-voucher-feedback" class="text-xs mb-3 font-medium"></div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
-                            @foreach($vouchers as $voucher)
-                                @php
-                                    $typeLabel = match((int)$voucher->type) {
-                                        1 => 'Persen',
-                                        2 => 'Nominal',
-                                        3 => 'Gratis Ongkir',
-                                        4 => 'Bonus Produk',
-                                        default => 'Tidak diketahui',
-                                    };
-                                    $isUsable = $voucher->is_usable ?? true;
-                                    $isSelected = in_array(strtoupper($voucher->code), $selectedVoucherCodes, true) || (($selectedVoucher['code'] ?? '') === $voucher->code);
-                                @endphp
-                                <button type="button"
-                                    @if($isUsable)
-                                        onclick="selectCoupon(this)"
-                                        class="coupon-card group cursor-pointer text-left rounded-2xl border transition-all duration-200 p-4 relative overflow-hidden focus:outline-none {{ $isSelected ? 'border-brand-gold bg-brand-light shadow-md ring-2 ring-brand-gold/30' : 'border-gray-200 bg-white hover:border-brand-gold/60 hover:shadow-md' }}"
-                                    @else
-                                        class="coupon-card opacity-50 bg-gray-50 border-gray-200 pointer-events-none cursor-not-allowed text-left rounded-2xl border p-4 transition-all focus:outline-none"
-                                    @endif
-                                    data-code="{{ $voucher->code }}"
-                                    data-title="{{ $voucher->title }}"
-                                    data-discount-type="{{ $voucher->type == 1 ? 'percentage' : ($voucher->type == 2 ? 'fixed' : ($voucher->type == 3 ? 'shipping' : 'bonus')) }}"
-                                    data-discount-value="{{ floatval($voucher->value) }}"
-                                    data-max-discount="{{ $voucher->max_discount ?? '' }}"
-                                    data-min-purchase="{{ (float)($voucher->min_purchase ?? 0) }}"
-                                    data-allow-stacking="{{ $voucher->allow_stacking ? 1 : 0 }}"
-                                    data-products="[]">
-                                    <div class="flex items-start justify-between gap-2">
-                                        <div class="min-w-0 flex-1">
-                                            <p class="font-bold text-sm text-brand-dark truncate group-hover:text-brand-gold-dark transition-colors">{{ $voucher->title }}</p>
-                                            <p class="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{{ $voucher->description }}</p>
-                                        </div>
-                                        <span class="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-red-600 shrink-0 border border-red-100">
-                                            {{ $voucher->value }}{{ $voucher->type == 1 ? '%' : '' }} {{ $typeLabel }}
-                                        </span>
-                                    </div>
-                                    <div class="mt-3 flex flex-wrap items-center gap-1.5">
-                                        <span class="inline-flex items-center rounded-md bg-brand-light px-2 py-0.5 text-[10px] font-bold text-brand-gold-dark border border-brand-muted">
-                                            {{ $voucher->scopeLabel() }}
-                                        </span>
-                                        <span class="inline-flex items-center rounded-md {{ $voucher->allow_stacking ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-600 border-gray-200' }} border px-2 py-0.5 text-[10px] font-bold">
-                                            {{ $voucher->allow_stacking ? 'Bisa Digabung' : 'Single' }}
-                                        </span>
-                                        @if((float)($voucher->min_purchase ?? 0) > 0)
-                                            <span class="inline-flex items-center rounded-md bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[10px] font-bold">
-                                                Min. Rp {{ number_format($voucher->min_purchase, 0, ',', '.') }}
-                                            </span>
-                                            @if($cartTotal < (float)$voucher->min_purchase)
-                                                <span class="inline-flex items-center rounded-md bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-bold">
-                                                    Kurang Rp {{ number_format((float)$voucher->min_purchase - $cartTotal, 0, ',', '.') }}
-                                                </span>
-                                            @endif
-                                        @endif
-                                    </div>
-                                    <div class="mt-3 pt-2.5 border-t border-dashed border-gray-200 flex items-center justify-between">
-                                        <span class="font-mono text-xs font-bold text-brand-dark bg-gray-100 px-2 py-0.5 rounded border border-gray-200">{{ $voucher->code }}</span>
-                                        @if($isUsable)
-                                            @if((float)($voucher->min_purchase ?? 0) > 0 && $cartTotal < (float)$voucher->min_purchase)
-                                                <span class="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex items-center gap-1 select-coupon-label">
-                                                    <i class="fa-solid fa-circle-exclamation text-[10px]"></i> Belum Cukup
-                                                </span>
-                                            @else
-                                                <span class="text-xs font-bold text-brand-gold-dark select-coupon-label">{{ $isSelected ? 'Dipilih' : 'Pilih' }}</span>
-                                            @endif
-                                        @else
-                                            <span class="text-[10px] font-bold text-red-500 uppercase tracking-wider select-coupon-label">Limit Habis</span>
-                                        @endif
-                                    </div>
-                                    @if(!$isUsable)
-                                        <div class="mt-2 text-[10px] font-bold text-red-600 uppercase tracking-wider border-t pt-1">
-                                            Kupon sudah pernah digunakan
-                                        </div>
-                                    @endif
-                                </button>
-                            @endforeach
-                        </div>
-
-                        <div id="selected-coupon-text" class="mt-4 rounded-xl bg-brand-light p-3 text-xs text-gray-700 border border-brand-muted flex items-center gap-2">
-                            <i class="fa-solid fa-circle-check text-brand-gold-dark"></i>
-                            @if(count($selectedVoucherCodes) > 0)
-                                <span>Kupon dipilih: <strong class="text-brand-dark font-mono font-bold">{{ implode(', ', $selectedVoucherCodes) }}</strong></span>
-                            @else
-                                <span>Belum ada kupon dipilih.</span>
-                            @endif
-                        </div>
-                        <div id="bonus-products-display" class="space-y-2 mt-2">
-                            @foreach($selectedVouchers as $sv)
-                                @if((int)$sv->type === 4 && !empty($sv->products) && $sv->products->isNotEmpty())
-                                    <div class="mt-3 flex items-start gap-2.5 bg-green-50 text-green-800 p-3 rounded-xl border border-green-200 text-xs font-semibold">
-                                        <i class="fa-solid fa-gift text-sm text-green-600 mt-0.5 shrink-0"></i>
-                                        <div>
-                                            <p class="font-extrabold">Selamat! Anda mendapatkan Bonus Produk:</p>
-                                            <ul class="list-disc pl-4 mt-1 space-y-0.5">
-                                                @foreach($sv->products as $bp)
-                                                    <li>{{ (int)$sv->value }}x {{ $bp->name }}</li>
-                                                @endforeach
-                                            </ul>
-                                        </div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        </div>
-                    </div>
-
-                    <!-- Section 4: Order Summary (Products List) -->
+                    <!-- Section 1: Order Summary (Products List - Item Yang Dibeli Di Atas) -->
                     <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
                         <div class="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
                             <div class="flex items-center gap-3">
@@ -561,7 +169,7 @@
                                     <i class="fa-solid fa-bag-shopping text-xs"></i>
                                 </div>
                                 <div>
-                                    <h2 class="text-base font-bold text-brand-dark">4. Produk Dipesan</h2>
+                                    <h2 class="text-base font-bold text-brand-dark">1. Produk Dipesan</h2>
                                     <p class="text-xs text-gray-500">Periksa kembali daftar item pesanan Anda</p>
                                 </div>
                             </div>
@@ -718,6 +326,286 @@
                             @endforeach
                         </div>
                     </div>
+
+                    <!-- Section 2: Customer Information -->
+                    <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex flex-wrap justify-between items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center font-bold text-sm shadow-2xs">
+                                    <i class="fa-solid fa-user text-xs"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-base font-bold text-brand-dark">2. Informasi Penerima</h2>
+                                    <p class="text-xs text-gray-500">Data kontak dan alamat lengkap pengiriman</p>
+                                </div>
+                            </div>
+                            @if($savedAddresses->isNotEmpty())
+                                <button type="button" onclick="toggleAddressSelector()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-dark bg-brand-gold/15 hover:bg-brand-gold/25 transition-colors">
+                                    <i class="fa-solid fa-map-location-dot text-brand-gold-dark"></i>
+                                    Pilih Alamat Tersimpan
+                                </button>
+                            @endif
+                        </div>
+
+                        @if($savedAddresses->isNotEmpty())
+                            @php
+                                $defaultAddress = $savedAddresses->firstWhere('is_primary', true) ?? $savedAddresses->first();
+                            @endphp
+                            <div id="address-selector" class="hidden mb-6 p-4 bg-brand-light rounded-2xl border border-brand-muted/60">
+                                <div class="flex items-center justify-between mb-3">
+                                    <span class="text-xs font-bold uppercase tracking-wider text-brand-dark">Daftar Alamat Tersimpan</span>
+                                    <span class="text-[11px] text-gray-400">Klik untuk mengisi formulir otomatis</span>
+                                </div>
+                                <div class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                                    @foreach($savedAddresses as $addr)
+                                        <label class="flex items-start gap-3 p-3.5 bg-white border border-gray-200 rounded-xl cursor-pointer hover:border-brand-gold hover:bg-amber-50/20 transition-all shadow-2xs">
+                                            <input type="radio" name="selected_address_id" value="{{ $addr->id }}" class="mt-1 accent-brand-gold" onchange="fillAddress(this)" {{ $addr->id === $defaultAddress->id ? 'checked' : '' }}>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-bold text-sm text-brand-dark">{{ $addr->label }}</span>
+                                                    @if($addr->is_primary)
+                                                        <span class="text-[10px] font-extrabold bg-brand-gold/20 text-brand-gold-dark px-2 py-0.5 rounded-full">Utama</span>
+                                                    @endif
+                                                </div>
+                                                <p class="text-xs font-semibold text-gray-700 mt-0.5">{{ $addr->recipient_name }} &bull; <span class="font-normal">{{ $addr->phone }}</span></p>
+                                                <p class="text-xs text-gray-500 mt-0.5 leading-relaxed">{{ $addr->address }}, {{ $addr->subDistrict->city->name ?? '' }} {{ $addr->postal_code }}</p>
+                                            </div>
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @else
+                            @php
+                                $defaultAddress = null;
+                            @endphp
+                        @endif
+
+                        @php
+                            $sessionUser = session()->get('user', []);
+                            $defaultName = old('name', $form['name'] ?? $defaultAddress?->recipient_name ?? ($defaultCustomerAddr['name'] ?? ($sessionUser['name'] ?? '')));
+                            $defaultEmail = old('email', $form['email'] ?? ($defaultCustomerAddr['email'] ?? ($sessionUser['email'] ?? '')));
+                            $defaultPhone = old('phone', $form['phone'] ?? $defaultAddress?->phone ?? ($defaultCustomerAddr['phone'] ?? ($sessionUser['phone'] ?? '')));
+                            $defaultCity = old('city', $form['city'] ?? $defaultAddress?->subDistrict->city->name ?? ($defaultCustomerAddr['city_name'] ?? ''));
+                            $defaultAddressText = old('address', $form['address'] ?? $defaultAddress?->address ?? ($defaultCustomerAddr['address'] ?? ''));
+                            $defaultPostal = old('postal_code', $form['postal_code'] ?? $defaultAddress?->postal_code ?? ($defaultCustomerAddr['postal_code'] ?? ''));
+                        @endphp
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-regular fa-envelope text-brand-gold"></i> Email <span class="text-red-500">*</span>
+                                </label>
+                                <input type="email" name="email" value="{{ $defaultEmail }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="email@example.com">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-regular fa-user text-brand-gold"></i> Nama Lengkap <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" name="name" value="{{ $defaultName }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="Nama lengkap penerima">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-phone text-brand-gold text-[11px]"></i> Nomor Telepon / WA <span class="text-red-500">*</span>
+                                </label>
+                                <input type="tel" name="phone" value="{{ $defaultPhone }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="08xx xxxx xxxx">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-map-location-dot text-brand-gold text-[11px]"></i> Provinsi <span class="text-red-500">*</span>
+                                </label>
+                                <select name="province_id" id="checkout-province" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
+                                    <option value="">Pilih Provinsi</option>
+                                    @foreach($provinces as $prov)
+                                        <option value="{{ $prov->id }}" {{ (old('province_id', $selectedProvinceId ?? '') == $prov->id) ? 'selected' : '' }}>
+                                            {{ $prov->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-city text-brand-gold text-[11px]"></i> Kota / Kabupaten <span class="text-red-500">*</span>
+                                </label>
+                                <select name="city_id" id="checkout-city" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" {{ empty($cities) || $cities->isEmpty() ? 'disabled' : '' }}>
+                                    <option value="">{{ empty($cities) || $cities->isEmpty() ? 'Pilih Provinsi Terlebih Dahulu' : 'Pilih Kota/Kabupaten' }}</option>
+                                    @foreach($cities as $c)
+                                        <option value="{{ $c->id }}" {{ (old('city_id', $selectedCityId ?? '') == $c->id) ? 'selected' : '' }}>
+                                            {{ $c->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-building text-brand-gold text-[11px]"></i> Kecamatan / Kelurahan <span class="text-red-500">*</span>
+                                </label>
+                                <select name="sub_district_id" id="checkout-sub-district" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" {{ empty($subDistricts) || $subDistricts->isEmpty() ? 'disabled' : '' }}>
+                                    <option value="">{{ empty($subDistricts) || $subDistricts->isEmpty() ? 'Pilih Kota Terlebih Dahulu' : 'Pilih Kecamatan/Kelurahan' }}</option>
+                                    @foreach($subDistricts as $sd)
+                                        <option value="{{ $sd['id'] }}" data-postal="{{ $sd['postal_code'] ?? '' }}" {{ (old('sub_district_id', $form['sub_district_id'] ?? $selectedSubDistrictId ?? '') == $sd['id']) ? 'selected' : '' }}>
+                                            {{ $sd['label'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                <i class="fa-solid fa-location-dot text-brand-gold text-[11px]"></i> Alamat Lengkap <span class="text-red-500">*</span>
+                            </label>
+                            <textarea name="address" required rows="3" class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="Jl. Sudirman No. 123, Blok A, RT/RW, Patokan Lokasi">{{ $defaultAddressText }}</textarea>
+                        </div>
+                        <div class="mt-4">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
+                                <i class="fa-solid fa-envelopes-bulk text-brand-gold text-[11px]"></i> Kode Pos
+                            </label>
+                            <input type="text" name="postal_code" value="{{ $defaultPostal }}" class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="12345">
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Courier / Shipping Options -->
+                    <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+                            <div class="w-9 h-9 rounded-xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center font-bold text-sm shadow-2xs">
+                                <i class="fa-solid fa-truck text-xs"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-base font-bold text-brand-dark">3. Opsi Pengiriman</h2>
+                                <p class="text-xs text-gray-500">Pilih ekspedisi atau kurir pengiriman untuk tujuan Anda</p>
+                            </div>
+                        </div>
+
+                        @if(isset($enforcedCourierType) && $enforcedCourierType)
+                            <div class="mb-4 p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
+                                <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5 text-sm shrink-0"></i>
+                                <span>
+                                    Produk dalam keranjang Anda diset khusus hanya mendukung pengiriman melalui <strong>{{ $enforcedCourierType === 'toko' ? 'Kurir Toko' : 'Kurir Ekspedisi' }}</strong>.
+                                </span>
+                            </div>
+                        @endif
+
+                        <div>
+                            <select name="courier" required class="w-full px-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
+                                <option value="">-- Pilih Ekspedisi / Kurir Pengiriman --</option>
+                                @foreach($couriers as $courier)
+                                    @php
+                                        $details = $courierPrices[$courier->code] ?? null;
+                                        $isAvailable = $details['is_available'] ?? true;
+                                        $calculatedCost = $details['shipping_cost'] ?? ($courier->shippingAddresses->where('type', 1)->first()->price ?? ($courier->shippingAddresses->first()->price ?? 25000));
+                                        $isCalculated = $details['is_calculated'] ?? false;
+                                        $billableWeight = $details['billable_weight'] ?? 1;
+                                        $hasFixed = $details['has_fixed_items'] ?? false;
+                                        $hasDim = $details['has_dimension_items'] ?? false;
+                                    @endphp
+                                    <option value="{{ $courier->code }}" 
+                                            data-courier-name="{{ $courier->name }}"
+                                            data-base-price="{{ $details['base_price'] ?? $calculatedCost }}"
+                                            data-available="{{ $isAvailable ? '1' : '0' }}"
+                                            {{ !$isAvailable ? 'disabled' : '' }}
+                                            {{ (old('courier', $form['courier'] ?? '') == $courier->code) ? 'selected' : '' }}>
+                                        @if(!$isAvailable)
+                                            {{ $courier->name }} - Di Luar Jangkauan (Tidak Melayani Wilayah Ini)
+                                        @else
+                                            {{ $courier->name }} - Rp {{ number_format($calculatedCost, 0, ',', '.') }}
+                                            @if($hasFixed && $hasDim)
+                                                (Tetap + {{ $billableWeight }} kg)
+                                            @elseif($hasFixed)
+                                                (Ongkir Tetap)
+                                            @elseif($isCalculated && $billableWeight > 0)
+                                                ({{ $billableWeight }} kg)
+                                            @else
+                                                (Tarif Tetap)
+                                            @endif
+                                            @if(!empty($details['eta_label']))
+                                                | Estimasi tiba: {{ $details['eta_label'] }}
+                                            @endif
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </select>
+                            @php
+                                $selectedCourierCode = old('courier', $form['courier'] ?? '');
+                                $selectedCourierDetails = $courierPrices[$selectedCourierCode] ?? null;
+                                $selectedEta = $selectedCourierDetails['eta_label'] ?? null;
+                                $selectedEtaSource = $selectedCourierDetails['eta_source'] ?? null;
+                            @endphp
+                            <div id="courier-eta-badge" class="{{ empty($selectedEta) ? 'hidden' : '' }} mt-3 p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fa-solid fa-clock text-blue-600"></i>
+                                    <span>Estimasi Tiba: <strong id="courier-eta-text">{{ $selectedEta ?? '' }}</strong></span>
+                                </div>
+                                <span id="courier-eta-source" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-200/60 text-blue-800 uppercase tracking-wider">
+                                    {{ $selectedEtaSource === 'biteship' ? 'Biteship' : ($selectedEtaSource === 'store' ? 'Kurir Toko' : 'Estimasi') }}
+                                </span>
+                            </div>
+                            <div id="courier-unavailable-alert" class="hidden mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                                <i class="fa-solid fa-triangle-exclamation mt-0.5 text-amber-600 shrink-0"></i>
+                                <span id="courier-unavailable-message">Kurir yang dipilih belum melayani pengiriman ke kota/wilayah tujuan ini. Silakan pilih kurir lain atau ganti alamat tujuan.</span>
+                            </div>
+                            @error('courier')
+                                <p class="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                                    <i class="fa-solid fa-circle-exclamation"></i> {{ $message }}
+                                </p>
+                            @enderror
+                        </div>
+
+                        <div id="checkout-dimension-weight-info" class="mt-3 text-xs">
+                            @if(!empty($cartWeightDetails['has_fixed_items']) && !empty($cartWeightDetails['has_dimension_items']))
+                                <div class="flex items-start gap-2 text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3.5 py-2.5">
+                                    <i class="fa-solid fa-scale-balanced mt-0.5 text-emerald-600 shrink-0"></i>
+                                    <span>Kombinasi Ongkir: Produk bertarif tetap (Rp {{ number_format($cartWeightDetails['fixed_shipping_cost'] ?? 0, 0, ',', '.') }}) + Produk dimensi (<strong>{{ $cartWeightDetails['chargeable_weight'] }} kg</strong>, Fisik: {{ $cartWeightDetails['actual_weight'] }} kg, Volumetrik: {{ $cartWeightDetails['volumetric_weight'] }} kg).</span>
+                                </div>
+                            @elseif(!empty($cartWeightDetails['has_fixed_items']))
+                                <div class="flex items-start gap-2 text-blue-800 bg-blue-50/80 border border-blue-200/80 rounded-xl px-3.5 py-2.5">
+                                    <i class="fa-solid fa-box text-blue-600 mt-0.5 shrink-0"></i>
+                                    <span>Ongkos kirim menggunakan tarif tetap produk/varian (Total: <strong>Rp {{ number_format($cartWeightDetails['fixed_shipping_cost'] ?? 0, 0, ',', '.') }}</strong>).</span>
+                                </div>
+                            @elseif(!empty($cartWeightDetails['is_calculable']))
+                                <div class="flex items-start gap-2 text-emerald-800 bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3.5 py-2.5">
+                                    <i class="fa-solid fa-calculator text-emerald-600 mt-0.5 shrink-0"></i>
+                                    <span>Perhitungan berat total: <strong>{{ $cartWeightDetails['chargeable_weight'] }} kg</strong> (Berat fisik: {{ $cartWeightDetails['actual_weight'] }} kg, Volumetrik: {{ $cartWeightDetails['volumetric_weight'] }} kg). Ongkir dikalkulasikan berdasarkan berat ini.</span>
+                                </div>
+                            @else
+                                <div class="flex items-start gap-2 text-gray-600 bg-gray-50/80 border border-gray-200/80 rounded-xl px-3.5 py-2.5">
+                                    <i class="fa-solid fa-circle-info text-gray-400 mt-0.5 shrink-0"></i>
+                                    
+                                </div>
+                            @endif
+                        </div>
+                        <script id="checkout-courier-shipping-prices" type="application/json">
+                            @json(collect($courierPrices)->mapWithKeys(function($val, $key) {
+                                return [$key => floatval($val['shipping_cost'] ?? 0)];
+                            }))
+                        </script>
+                        <script id="checkout-courier-shipping-details" type="application/json">
+                            @json($courierPrices)
+                        </script>
+                    </div>
+
+                    <!-- Hidden Voucher State Preserved From Cart Drawer -->
+                    <input type="hidden" name="voucher_code" id="voucher-code" value="{{ implode(',', $selectedVoucherCodes) }}">
+                    <input type="hidden" name="voucher_codes" id="voucher-codes" value="{{ implode(',', $selectedVoucherCodes) }}">
+                    <input type="hidden" name="voucher_discount" id="voucher-discount-value" value="{{ $selectedVoucher['discount'] ?? 0 }}">
+
+                    @if(!empty($selectedVouchers))
+                        <div id="bonus-products-display" class="space-y-2">
+                            @foreach($selectedVouchers as $sv)
+                                @if((int)$sv->type === 4 && !empty($sv->products) && $sv->products->isNotEmpty())
+                                    <div class="flex items-start gap-2.5 bg-green-50 text-green-800 p-3.5 rounded-2xl border border-green-200 text-xs font-semibold">
+                                        <i class="fa-solid fa-gift text-sm text-green-600 mt-0.5 shrink-0"></i>
+                                        <div>
+                                            <p class="font-extrabold">Bonus Produk Dari Kupon ({{ $sv->code }}):</p>
+                                            <ul class="list-disc pl-4 mt-1 space-y-0.5">
+                                                @foreach($sv->products as $bp)
+                                                    <li>{{ (int)$sv->value }}x {{ $bp->name }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    </div>
+                                @endif
+                            @endforeach
+                        </div>
+                    @endif
                 @endif
             </div>
             

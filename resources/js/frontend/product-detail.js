@@ -762,5 +762,74 @@ document.addEventListener('DOMContentLoaded', function() {
         b.textContent = '';
     });
 
-    checkSelection();
+    // Auto-select if only 1 option exists and activate add to cart button
+    autoSelectSingleOptions();
 });
+
+function autoSelectSingleOptions() {
+    // 1. Check attribute groups
+    const attrGroups = document.querySelectorAll('.attribute-group-container');
+    if (attrGroups.length > 0) {
+        attrGroups.forEach(group => {
+            const btns = group.querySelectorAll('.attribute-btn:not(:disabled)');
+            if (btns.length === 1) {
+                selectAttribute(btns[0]);
+            }
+        });
+
+        // If there's only 1 product variant defined in window.productVariants
+        if (window.productVariants && window.productVariants.length === 1) {
+            const singleV = window.productVariants[0];
+            if (singleV && singleV.attributes) {
+                for (const [groupName, attrVal] of Object.entries(singleV.attributes)) {
+                    const btn = document.querySelector(`.attribute-btn[data-attribute-group="${groupName}"][data-attribute-value="${attrVal}"]:not(:disabled)`) ||
+                                document.querySelector(`.attribute-btn[data-attribute-value="${attrVal}"]:not(:disabled)`);
+                    if (btn) {
+                        selectAttribute(btn);
+                    }
+                }
+            }
+        }
+    } else {
+        // 2. Variant cards fallback
+        const variantCards = document.querySelectorAll('.variant-card-btn:not(:disabled)');
+        if (variantCards.length === 1) {
+            selectVariantCard(variantCards[0]);
+        }
+
+        // 3. Legacy variant buttons
+        const legacyBtns = document.querySelectorAll('.legacy-variant-btn:not(:disabled)');
+        if (legacyBtns.length === 1) {
+            selectVariant(legacyBtns[0]);
+        }
+
+        // 4. Dropdown fallback
+        const vSelect = document.getElementById('variant-select-dropdown');
+        if (vSelect) {
+            const validOptions = Array.from(vSelect.options).filter(opt => opt.value !== '');
+            if (validOptions.length === 1) {
+                vSelect.value = validOptions[0].value;
+                vSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    }
+
+    // 5. Colors: auto-select if only 1 color exists
+    const colorBtns = document.querySelectorAll('[data-color-id]:not(:disabled)');
+    if (colorBtns.length === 1) {
+        selectColor(colorBtns[0]);
+    }
+
+    // 6. If productVariants has 1 variant and no groups/cards were detected but variantInput exists
+    const variantInput = document.getElementById('variant-id-input');
+    if (variantInput && !variantInput.value && window.productVariants && window.productVariants.length === 1) {
+        const onlyV = window.productVariants[0];
+        if (onlyV && onlyV.id) {
+            variantInput.value = onlyV.id;
+            applyVariantPrice(onlyV);
+        }
+    }
+
+    // Update selection state and activate add to cart button
+    checkSelection();
+}

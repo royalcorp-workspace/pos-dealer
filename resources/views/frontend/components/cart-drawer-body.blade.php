@@ -1,30 +1,6 @@
 @php
     if (!isset($cart)) {
-        $customerId = null;
-        if (session()->get('is_logged_in')) {
-            $user = session()->get('user', []);
-            $userId = $user['id'] ?? $user['sub'] ?? null;
-            $email = $user['email'] ?? null;
-            if ($userId) {
-                $customer = \App\Models\Frontend\Customer\Customer::where('user_id', $userId)->first();
-                if (!$customer && $email) {
-                    $customer = \App\Models\Frontend\Customer\Customer::where('email', $email)->first();
-                }
-                $customerId = $customer?->id;
-            }
-        }
-        $sessionId = session()->get('guest_session_id', session()->getId());
-        
-        $buffer = \App\Models\Frontend\Buffer\Buffer::where(function ($q) use ($customerId, $sessionId) {
-            if ($customerId) {
-                $q->where('customer_id', $customerId);
-                if ($sessionId) {
-                    $q->orWhere('session_id', $sessionId);
-                }
-            } else if ($sessionId) {
-                $q->where('session_id', $sessionId);
-            }
-        })->first();
+        $buffer = \App\Models\Frontend\Buffer\Buffer::resolveActiveCart();
 
         $cart = [];
         if ($buffer) {
@@ -439,7 +415,7 @@
                             <strong id="cart-selected-title" class="text-brand-dark"></strong>
                         </div>
                         <div class="flex items-center gap-2 mt-0.5 text-red-600">
-                            <span class="text-xs">Estimasi hemat:</span>
+                            <span class="text-xs">Hemat Hingga:</span>
                             <strong id="cart-selected-discount"></strong>
                         </div>
                     </div>

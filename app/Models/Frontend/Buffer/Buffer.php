@@ -64,4 +64,59 @@ class Buffer extends Model
     {
         return $this->hasMany(BufferItem::class, 'buffer_id', 'id');
     }
+
+    public static function resolveActiveCart(): ?self
+    {
+        $customerId = null;
+        if (session()->get('is_logged_in')) {
+            $user = session()->get('user', []);
+            $userId = $user['id'] ?? $user['sub'] ?? null;
+            $email = $user['email'] ?? null;
+            if ($userId) {
+                $customer = FrontendCustomer::where('user_id', $userId)->first();
+                if (!$customer && $email) {
+                    $customer = FrontendCustomer::where('email', $email)->first();
+                }
+                $customerId = $customer?->id;
+            }
+        }
+
+        $sessionGuestId = session()->get('guest_session_id');
+        $cookieToken = request()->cookie('guest_session_id');
+        $cookieBufferId = request()->cookie('buffer_cart_id');
+        $currentSessionId = session()->getId();
+
+        $sessionIds = array_values(array_filter(array_unique([$sessionGuestId, $cookieToken, $currentSessionId])));
+
+        $query = self::where(function ($q) use ($customerId, $sessionIds) {
+            if ($customerId) {
+                $q->where('customer_id', $customerId);
+                if (!empty($sessionIds)) {
+                    $q->orWhereIn('session_id', $sessionIds);
+                }
+            } elseif (!empty($sessionIds)) {
+                $q->whereIn('session_id', $sessionIds);
+            }
+        });
+
+        // 1. Buffer that has items, latest updated
+        $buffer = (clone $query)->whereHas('items')->latest('updated_at')->first();
+
+        // 2. Cookie buffer_cart_id if has items
+        if (!$buffer && $cookieBufferId) {
+            $buffer = self::where('id', $cookieBufferId)->whereHas('items')->first();
+        }
+
+        // 3. Fallback: latest updated matching query
+        if (!$buffer) {
+            $buffer = (clone $query)->latest('updated_at')->first();
+        }
+
+        // 4. Fallback: buffer by cookie buffer_cart_id even if empty
+        if (!$buffer && $cookieBufferId) {
+            $buffer = self::where('id', $cookieBufferId)->first();
+        }
+
+        return $buffer;
+    }
 }

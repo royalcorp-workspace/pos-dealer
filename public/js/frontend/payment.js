@@ -19,13 +19,13 @@ window.processPayment = function () {
             accordionsWrapper.classList.add('p-2.5', 'rounded-2xl', 'border-2', 'border-red-400', 'bg-red-50/20');
         }
         window.dispatchEvent(new CustomEvent('show-toast', { 
-            detail: { type: 'warning', message: 'Silakan pilih saluran metode pembayaran terlebih dahulu.' } 
+            detail: { type: 'warning', message: 'Silakan pilih  metode pembayaran terlebih dahulu.' } 
         }));
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'warning',
                 title: 'Pilih Metode Pembayaran',
-                text: 'Silakan pilih salah satu saluran pembayaran (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan.',
+                text: 'Silakan pilih salah satu metode pembayaran (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan.',
                 confirmButtonColor: '#1e3a8a',
                 confirmButtonText: 'Mengerti'
             });
@@ -235,6 +235,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (finalTotalLabel) {
                 finalTotalLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(baseTotal + charge);
             }
+            var sidebarTotalLabel = document.getElementById('sidebar-final-total');
+            if (sidebarTotalLabel) {
+                sidebarTotalLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(baseTotal + charge);
+            }
         }
         
         // 2. Tampilkan Instruksi Transfer Manual (jika dipilih)
@@ -368,12 +372,12 @@ document.addEventListener('DOMContentLoaded', function() {
             countdownEl.classList.add('text-gray-400');
             countdownEl.classList.remove('text-red-600');
             // Show expired message or disable payment button if needed
-            var btn = document.querySelector('button[onclick="processPayment()"]');
-            if(btn) {
+            var btns = document.querySelectorAll('button[onclick="processPayment()"]');
+            btns.forEach(function(btn) {
                 btn.disabled = true;
                 btn.classList.add('opacity-50', 'cursor-not-allowed');
                 btn.innerHTML = 'Waktu Habis';
-            }
+            });
             return;
         }
         
