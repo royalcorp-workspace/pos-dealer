@@ -45,6 +45,7 @@ class AuthTokenService
             'iss' => env('APP_URL', 'localhost'),
             'sub' => (string) $user->id,
             'email' => $user->email,
+            'name' => $user->name,
             'iat' => $now,
             'exp' => $now + $this->accessTokenTtlSeconds(),
             'typ' => 'access',

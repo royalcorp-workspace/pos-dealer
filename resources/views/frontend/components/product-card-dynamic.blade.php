@@ -85,8 +85,8 @@
     itemscope
     itemtype="https://schema.org/Product"
 >
-    <!-- Product Image Container (Sleek 16/11 aspect ratio) -->
-    <div class="relative aspect-[16/11] bg-[#FAF8F5] overflow-hidden flex items-center justify-center p-2.5">
+    <!-- Product Image Container (Square on mobile for larger uncropped display, 16/11 on desktop) -->
+    <div class="relative aspect-square sm:aspect-[16/11] bg-[#FAF8F5] overflow-hidden flex items-center justify-center p-1.5 sm:p-2.5">
         <a href="{{ route('products.show', $product->slug) }}" class="flex items-center justify-center w-full h-full">
             <img 
                 src="{{ $product->thumbnail_url ?? 'https://via.placeholder.com/400x300' }}" 
@@ -94,7 +94,7 @@
                 itemprop="image"
                 loading="lazy"
                 decoding="async"
-                class="product-card__image max-w-full max-h-full object-contain transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
+                class="product-card__image w-full h-full max-w-full max-h-full object-contain transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
                 onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';"
             />
         </a>

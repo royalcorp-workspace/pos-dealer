@@ -42,8 +42,8 @@
 
     <!-- FEATURED CATEGORIES (MINIMAL) -->
     <section class="container mx-auto px-4 py-16 md:py-24">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            @foreach($categories->take(4) as $cat)
+        <div class="grid grid-cols-1 md:grid-cols-2 {{ $categories->take(5)->count() === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4' }} gap-8">
+            @foreach($categories->take(5) as $cat)
             <div class="group cursor-pointer">
                 <div class="overflow-hidden rounded-sm mb-6 bg-white aspect-[3/4]">
                     <img src="{{ $cat->thumbnail_url ?? asset('images/dummy/cat.jpg') }}" alt="{{ $cat->name }}" class="w-full h-full object-cover mix-blend-multiply group-hover:scale-105 transition duration-700">
@@ -70,7 +70,7 @@
                 </a>
             </div>
 
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12">
+            <div class="grid grid-cols-2 {{ $recommended->take(8)->count() === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4' }} gap-x-6 gap-y-12">
                 @foreach($recommended->take(8) as $product)
                     @include('frontend.components.product-card', ['product' => $product])
                 @endforeach

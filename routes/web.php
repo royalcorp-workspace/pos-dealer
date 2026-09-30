@@ -37,7 +37,9 @@ Route::get('/product/{product:slug}', [ProductCatalogController::class, 'show'])
 Route::get('/category/{categorySlug}', [ProductCatalogController::class, 'index'])->name('category.show');
 
 Route::get('/brands', [PageController::class, 'brands'])->name('brands');
+Route::redirect('/brand', '/brands', 301);
 Route::get('/brands/{brandSlug}', [ProductCatalogController::class, 'index'])->name('brands.show');
+Route::get('/brand/{brandSlug}', [ProductCatalogController::class, 'index']);
 Route::get('/categories', [PageController::class, 'categories'])->name('categories');
 Route::get('/bundling', [ProductBundlingController::class, 'index'])->name('bundling.index');
 Route::get('/bundling/{bundle:slug}', [ProductBundlingController::class, 'show'])->name('bundling.show');

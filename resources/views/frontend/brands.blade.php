@@ -63,12 +63,27 @@
             <h1 class="text-3xl md:text-4xl font-extrabold text-brand-dark mb-4 font-serif">Brand</h1>
             <p class="text-gray-500 max-w-2xl mx-auto font-medium">Temukan berbagai koleksi dari brand matras dan perlengkapan tidur terkemuka dunia dengan standar kualitas internasional.</p>
         </div>
+        @php
+            $brandCount = count($brandsWithProducts);
+            $brandGridCols = match (true) {
+                $brandCount === 1 => 'grid-cols-1 max-w-md mx-auto',
+                $brandCount === 2 => 'grid-cols-2 max-w-2xl mx-auto',
+                $brandCount === 3 => 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 max-w-5xl mx-auto',
+                $brandCount === 4 => 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4',
+                $brandCount === 5 => 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-5',
+                $brandCount === 6 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6',
+                $brandCount === 7, $brandCount === 8 => 'grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4',
+                $brandCount % 5 === 0 => 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
+                $brandCount % 4 === 0 => 'grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4',
+                default => 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
+            };
+        @endphp
 
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+        <div class="grid {{ $brandGridCols }} gap-6">
             @foreach($brandsWithProducts as $brand)
                 <a 
                     href="{{ route('brands.show', $brand->slug) }}" 
-                    class="bg-white border border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer group h-40"
+                    class="bg-white border border-brand-muted hover:border-brand-gold hover:shadow-lg transition-all rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer group h-40 {{ ($brandCount % 2 !== 0 && $loop->last) ? 'col-span-2 sm:col-span-1' : '' }}"
                 >
                     @if($brand->logo)
                         <img src="{{ cms_asset($brand->logo) }}" alt="{{ $brand->name }}" loading="lazy" decoding="async" class="w-16 h-16 object-contain mb-3" />

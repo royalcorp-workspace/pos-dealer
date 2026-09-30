@@ -81,6 +81,9 @@ class Order extends Model
             if (!$model->order_number) {
                 $model->order_number = 'ORD-' . date('Ymd') . '-' . strtoupper(uniqid(substr(md5(Str::random(8)), 0, 4)));
             }
+            if ($model->status === null || $model->status === self::STATUS_DRAFT || $model->status === 0) {
+                $model->status = self::STATUS_PENDING_APPROVAL;
+            }
         });
     }
 

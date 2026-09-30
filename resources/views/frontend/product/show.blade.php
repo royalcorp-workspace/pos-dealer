@@ -268,8 +268,8 @@
                 }"
                 @set-main-image.window="setMainImage($event.detail)"
             >
-                <!-- Main Stage Image with Smooth Hover Zoom & Navigation -->
-                <div class="aspect-[4/3] bg-gradient-to-b from-[#FAF8F5] to-[#F3F1EC] rounded-3xl overflow-hidden border border-[#EFECE6] relative shadow-sm group flex items-center justify-center p-2 sm:p-4">
+                <!-- Main Stage Image with Smooth Hover Zoom & Navigation (aspect-square on mobile for larger, uncropped display) -->
+                <div class="aspect-square sm:aspect-[4/3] bg-gradient-to-b from-[#FAF8F5] to-[#F3F1EC] rounded-2xl sm:rounded-3xl overflow-hidden border border-[#EFECE6] relative shadow-sm group flex items-center justify-center p-1.5 sm:p-4">
                     <img 
                         :src="currentImage" 
                         alt="{{ $product->alt_text ?? $product->name }}" 

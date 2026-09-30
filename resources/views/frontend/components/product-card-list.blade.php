@@ -77,9 +77,9 @@
 
 
 <div class="bg-white border border-brand-muted rounded-2xl flex gap-4 overflow-hidden hover:shadow-lg transition-shadow relative">
-    <div class="w-48 h-48 bg-[#FAF8F5] flex-shrink-0 relative flex items-center justify-center p-2.5">
+    <div class="w-32 h-32 sm:w-48 sm:h-48 bg-[#FAF8F5] flex-shrink-0 relative flex items-center justify-center p-1.5 sm:p-2.5">
         <a href="{{ route('products.show', $product->slug) }}" class="flex items-center justify-center w-full h-full">
-            <img src="{{ $product->thumbnail_url ?? asset('images/dummy/header.jpg') }}" alt="{{ $product->name }}" loading="lazy" decoding="async" class="max-w-full max-h-full object-contain" />
+            <img src="{{ $product->thumbnail_url ?? asset('images/dummy/header.jpg') }}" alt="{{ $product->name }}" loading="lazy" decoding="async" class="w-full h-full max-w-full max-h-full object-contain" />
         </a>
         <div class="absolute top-1.5 left-1.5 flex flex-col gap-1 z-10">
             @if($defaultDiscountBadge)

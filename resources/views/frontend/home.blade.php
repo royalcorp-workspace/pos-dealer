@@ -520,8 +520,19 @@
                         'chips' => ['Matras Topper', 'Sprei Katun', 'Pelindung Kasur'],
                     ],
                 ];
+
+                $catCount = count($quickCategories);
+                $catGridCols = match (true) {
+                    $catCount === 1 => 'grid-cols-1 max-w-md mx-auto',
+                    $catCount === 2 => 'grid-cols-2 max-w-2xl mx-auto',
+                    $catCount === 3 => 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 max-w-5xl mx-auto',
+                    $catCount === 5 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+                    $catCount === 6 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6',
+                    $catCount % 5 === 0 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+                    default => 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4',
+                };
             @endphp
-            <div class="grid grid-cols-2 {{ count($quickCategories) === 3 ? 'lg:grid-cols-3' : (count($quickCategories) === 2 ? 'lg:grid-cols-2' : (count($quickCategories) === 1 ? 'lg:grid-cols-1 max-w-md mx-auto' : 'lg:grid-cols-4')) }} gap-4 sm:gap-6">
+            <div class="grid {{ $catGridCols }} gap-4 sm:gap-6">
                 @foreach($quickCategories as $index => $cat)
                     @php
                         $visual = $categoryVisuals[$cat->slug] ?? [
@@ -538,7 +549,7 @@
                     @endphp
                     <a 
                         href="{{ route('category.show', $cat->slug) }}" 
-                        class="group flex flex-col bg-white rounded-2xl sm:rounded-3xl border border-brand-muted/80 overflow-hidden shadow-xs hover:border-brand-gold hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 focus:outline-hidden"
+                        class="group flex flex-col bg-white rounded-2xl sm:rounded-3xl border border-brand-muted/80 overflow-hidden shadow-xs hover:border-brand-gold hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 focus:outline-hidden {{ ($catCount % 2 !== 0 && $loop->last) ? 'col-span-2 sm:col-span-1' : '' }}"
                     >
                         <!-- Visual Image Container -->
                         <div class="relative w-full aspect-[4/3] bg-brand-muted overflow-hidden">
@@ -865,9 +876,21 @@
                 </a>
             </div>
 
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+            @php
+                $bundleCount = $bundles->count();
+                $bundleGridCols = match (true) {
+                    $bundleCount === 1 => 'grid-cols-1 max-w-md mx-auto',
+                    $bundleCount === 2 => 'grid-cols-2 max-w-2xl mx-auto',
+                    $bundleCount === 3 => 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 max-w-5xl mx-auto',
+                    $bundleCount === 5 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+                    $bundleCount === 6 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6',
+                    $bundleCount % 5 === 0 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+                    default => 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-4',
+                };
+            @endphp
+            <div class="grid {{ $bundleGridCols }} gap-3 sm:gap-6">
                 @foreach($bundles as $bundle)
-                    <div class="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col h-full group">
+                    <div class="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-shadow duration-300 overflow-hidden flex flex-col h-full group {{ ($bundleCount % 2 !== 0 && $loop->last) ? 'col-span-2 sm:col-span-1' : '' }}">
                         <a href="{{ route('bundling.show', $bundle->slug) }}" class="block">
                             <div class="relative aspect-[4/3] overflow-hidden bg-gray-100">
                                 @if($bundle->thumbnail_url)
@@ -927,22 +950,33 @@
                 </div>
             </div>
             
-            <!-- 5 Columns Product Grid -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5 recommended-products-grid">
+            <!-- Dynamic Product Grid (Flexible & Precise: Default 5 Grid) -->
+            @php
+                $recCount = count($recommended);
+                $recGridCols = match (true) {
+                    $recCount === 1 => 'grid-cols-1 max-w-md mx-auto',
+                    $recCount === 2 => 'grid-cols-2 max-w-2xl mx-auto',
+                    $recCount === 3 => 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 max-w-5xl mx-auto',
+                    $recCount === 6 => 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6',
+                    default => 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5',
+                };
+            @endphp
+            <div class="grid {{ $recGridCols }} gap-3 sm:gap-4 lg:gap-5 recommended-products-grid">
                 @foreach($recommended as $product)
-                    <div class="flex flex-col h-full">
+                    <div class="flex flex-col h-full {{ ($recCount % 2 !== 0 && $loop->last) ? 'col-span-2 sm:col-span-1' : '' }}">
                         @include('frontend.components.product-card-dynamic', ['product' => $product])
                     </div>
                 @endforeach
             </div>
             
-            @if($recommendedTotal > 10)
+            @if($recommendedTotal > $recCount)
             <div class="mt-10 text-center">
                 <button 
                     type="button"
                     class="load-more-btn group px-8 py-3 rounded-full font-bold text-sm text-brand-dark bg-white border border-brand-dark/30 shadow-xs transition-all duration-300 hover:bg-brand-dark hover:text-white hover:border-brand-dark hover:shadow-lg focus:outline-none cursor-pointer active:scale-95"
                     data-route="{{ route('home.load-more') }}"
-                    data-offset="10"
+                    data-offset="{{ $recCount }}"
+                    data-limit="10"
                 >
                     {!! __('Muat Lebih Banyak Produk') !!} <span class="group-hover:translate-x-1 transition-transform inline-block">&rarr;</span>
                 </button>

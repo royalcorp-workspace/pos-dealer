@@ -82,15 +82,31 @@
             </p>
         </div>
 
+        @php
+            $catPageCount = count($categories);
+            $catPageGridCols = match (true) {
+                $catPageCount === 1 => 'grid-cols-1 max-w-md mx-auto',
+                $catPageCount === 2 => 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto',
+                $catPageCount === 3 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto',
+                $catPageCount === 4 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4',
+                $catPageCount === 5 => 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5',
+                $catPageCount === 6 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6',
+                $catPageCount === 7, $catPageCount === 8 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4',
+                $catPageCount % 5 === 0 => 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5',
+                $catPageCount % 4 === 0 => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4',
+                default => 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4',
+            };
+        @endphp
+
         <!-- Categories Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-5 sm:gap-6">
+        <div class="grid {{ $catPageGridCols }} gap-5 sm:gap-6">
             @foreach($categories as $category)
                 @php
                     $iconClass = $categoryIconMap[$category->slug] ?? 'fa-solid fa-star';
                 @endphp
                 <a 
                     href="{{ route('category.show', $category->slug) }}" 
-                    class="bg-white border border-[#EFEBE4] hover:border-brand-gold hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-3xl p-6 sm:p-7 flex flex-col justify-between group relative overflow-hidden min-h-[250px] shadow-2xs"
+                    class="bg-white border border-[#EFEBE4] hover:border-brand-gold hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-3xl p-6 sm:p-7 flex flex-col justify-between group relative overflow-hidden min-h-[250px] shadow-2xs {{ ($catPageCount % 2 !== 0 && $loop->last) ? 'sm:col-span-2 xl:col-span-1' : '' }}"
                 >
                     <!-- Ambient Glow -->
                     <div class="absolute -right-12 -bottom-12 w-36 h-36 bg-brand-gold/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500 pointer-events-none"></div>

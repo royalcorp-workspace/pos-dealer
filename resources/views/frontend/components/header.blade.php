@@ -437,11 +437,12 @@
                 <a 
                     href="{{ route('dashboard') }}"
                     class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-light/60 hover:bg-brand-light border border-brand-muted/80 text-brand-dark text-xs font-bold transition-all group"
+                    title="{{ $user['name'] ?? __('Akun') }}"
                 >
-                    <div class="w-6 h-6 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold text-[10px]">
-                        {{ substr($user['name'] ?? 'B', 0, 1) }}
+                    <div class="w-6 h-6 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold text-[10px] shrink-0">
+                        {{ strtoupper(substr($user['name'] ?? 'B', 0, 1)) }}
                     </div>
-                    <span class="hidden lg:block">{{ __('Akun') }}</span>
+                    <span class="hidden sm:inline-block max-w-[130px] lg:max-w-[170px] truncate">{{ $user['name'] ?? __('Akun') }}</span>
                 </a>
             @else
                 <button 
@@ -705,6 +706,19 @@
         x-data="{ openSection: null }"
     >
         <div class="p-4 space-y-4 font-sans">
+            @if($isLoggedIn)
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 p-3 rounded-2xl bg-brand-light/70 border border-brand-muted/80 font-bold text-brand-dark text-sm hover:border-brand-gold/60 transition-all" @click="isMobileMenuOpen = false">
+                    <div class="w-9 h-9 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold text-sm shrink-0 shadow-xs">
+                        {{ strtoupper(substr($user['name'] ?? 'B', 0, 1)) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <span class="block truncate font-bold text-brand-dark text-sm">{{ $user['name'] ?? __('Akun Saya') }}</span>
+                        <span class="text-[11px] text-gray-500 font-normal truncate block">{{ $user['email'] ?? '' }}</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-brand-gold shrink-0"></i>
+                </a>
+            @endif
+
             <!-- Home Link -->
             <a href="{{ route('home') }}" class="flex items-center justify-between p-3 rounded-xl bg-brand-light font-bold text-brand-dark text-sm" @click="isMobileMenuOpen = false">
                 <span>{{ __('Home') }}</span>
