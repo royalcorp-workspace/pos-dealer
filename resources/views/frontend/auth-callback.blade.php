@@ -20,3 +20,7 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+    <script defer src="{{ asset('js/frontend/auth-callback.js') }}?v={{ filemtime(public_path('js/frontend/auth-callback.js')) }}"></script>
+@endpush

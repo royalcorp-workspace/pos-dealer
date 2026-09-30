@@ -195,6 +195,11 @@ class GoogleAuthController extends Controller
                 $updateData['firebase_token'] = $firebaseToken;
             }
 
+            if (!empty($name)) {
+                $updateData['name'] = $name;
+                $user->name = $name;
+            }
+
             $user->update($updateData);
 
             // Pastikan data customer juga sinkron
@@ -203,7 +208,7 @@ class GoogleAuthController extends Controller
                     ['email' => $user->email],
                     [
                         'user_id' => $user->id,
-                        'name' => $user->name ?: ($name ?: $user->email),
+                        'name' => !empty($name) ? $name : ($user->name ?: $user->email),
                     ]
                 );
             } catch (\Throwable $e) {

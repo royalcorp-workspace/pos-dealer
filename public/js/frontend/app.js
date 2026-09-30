@@ -395,7 +395,8 @@ document.addEventListener('click', function (e) {
     btn.disabled = true;
     btn.style.opacity = '0.6';
 
-    fetch(route + '?offset=' + offset + '&limit=4', {
+    const limit = parseInt(btn.dataset.limit || '10', 10);
+    fetch(route + '?offset=' + offset + '&limit=' + limit, {
         headers: {
             'X-Requested-With': 'XMLHttpRequest',
             'Accept': 'application/json'
@@ -412,7 +413,7 @@ document.addEventListener('click', function (e) {
             });
             btn.dataset.offset = offset + data.count;
         }
-        if (data.count < 4) {
+        if (data.count < limit) {
             btn.style.display = 'none';
         }
         btn.disabled = false;

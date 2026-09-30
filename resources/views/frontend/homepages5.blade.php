@@ -57,14 +57,14 @@
         </div>
 
         <div x-show="tab === 'bestsellers'" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="grid grid-cols-2 {{ $bestsellers->take(8)->count() === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4' }} gap-6">
                 @foreach($bestsellers->take(8) as $product)
                     @include('frontend.components.product-card', ['product' => $product])
                 @endforeach
             </div>
         </div>
         <div x-show="tab === 'recommended'" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="grid grid-cols-2 {{ $recommended->take(8)->count() === 5 ? 'md:grid-cols-5' : 'md:grid-cols-4' }} gap-6">
                 @foreach($recommended->take(8) as $product)
                     @include('frontend.components.product-card', ['product' => $product])
                 @endforeach

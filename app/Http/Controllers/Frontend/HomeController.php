@@ -68,7 +68,7 @@ class HomeController extends Controller
         $selectedRekomendasiIds = $rekomendasiMeta['selected_products'] ?? [];
 
         if (!empty($selectedRekomendasiIds) && is_array($selectedRekomendasiIds)) {
-            $recommended = Product::where('deleted', false)
+            $allRecommended = Product::where('deleted', false)
                 ->whereIn('id', $selectedRekomendasiIds)
                 ->with(['brand', 'category', 'images', 'variants', 'tags'])
                 ->get()
@@ -76,7 +76,8 @@ class HomeController extends Controller
                     return array_search($p->id, $selectedRekomendasiIds);
                 })
                 ->values();
-            $recommendedTotal = $recommended->count();
+            $recommendedTotal = $allRecommended->count();
+            $recommended = $allRecommended->take(10);
         } else {
             $recommended = Product::where('deleted', false)
                 ->where(function ($q) {
@@ -905,20 +906,49 @@ class HomeController extends Controller
 
     public function loadMore(Request $request)
     {
-        $offset = $request->query('offset', 10);
-        $limit = $request->query('limit', 10);
+        $offset = (int) $request->query('offset', 10);
+        $limit = (int) $request->query('limit', 10);
 
-        $query = Product::where('deleted', false);
-
-        if ($request->query('sort')) {
-            $query->orderByRaw($this->getSortExpression($request->query('sort')));
-        }
-
-        $products = $query
-            ->with(['brand', 'category', 'images', 'variants', 'tags'])
-            ->skip($offset)
-            ->take($limit)
+        $homepageSections = HomepageSection::where('is_visible', true)
+            ->orderBy('sort_order', 'asc')
             ->get();
+        $rekomendasiSection = $homepageSections->first(function ($s) {
+            return in_array($s->section_key, ['rekomendasi', 'recommended'])
+                || str_contains(strtolower($s->section_key), 'rekomendasi')
+                || str_contains(strtolower($s->section_key), 'recommend');
+        });
+        $rekomendasiMeta = $rekomendasiSection && is_array($rekomendasiSection->meta)
+            ? $rekomendasiSection->meta
+            : (is_string($rekomendasiSection?->meta) ? json_decode($rekomendasiSection->meta, true) : []);
+        $selectedRekomendasiIds = $rekomendasiMeta['selected_products'] ?? [];
+
+        if (!empty($selectedRekomendasiIds) && is_array($selectedRekomendasiIds)) {
+            $products = Product::where('deleted', false)
+                ->whereIn('id', $selectedRekomendasiIds)
+                ->with(['brand', 'category', 'images', 'variants', 'tags'])
+                ->get()
+                ->sortBy(function($p) use ($selectedRekomendasiIds) {
+                    return array_search($p->id, $selectedRekomendasiIds);
+                })
+                ->slice($offset, $limit)
+                ->values();
+        } else {
+            $query = Product::where('deleted', false)
+                ->where(function ($q) {
+                    $q->where('is_bundle', false)
+                      ->orWhereNull('is_bundle');
+                });
+
+            if ($request->query('sort')) {
+                $query->orderByRaw($this->getSortExpression($request->query('sort')));
+            }
+
+            $products = $query
+                ->with(['brand', 'category', 'images', 'variants', 'tags'])
+                ->skip($offset)
+                ->take($limit)
+                ->get();
+        }
 
         $html = '';
         foreach ($products as $product) {

@@ -244,7 +244,7 @@ class AuthController extends Controller
         $payload = $this->decodeAccessToken($data['access_token']);
 
         $email = trim((string) ($payload->email ?? ''));
-        $name = (string) ($payload->name ?? ($email ? explode('@', $email)[0] : 'Member'));
+        $name = (string) ($payload->name ?? '');
         $normalizedEmail = strtolower($email);
 
         $user = User::query()->whereRaw('LOWER(email) = ?', [$normalizedEmail])->first();
@@ -252,16 +252,21 @@ class AuthController extends Controller
         if (!$user) {
             $user = User::create([
                 'id' => \Illuminate\Support\Str::uuid()->toString(),
-                'name' => $name,
+                'name' => !empty($name) ? $name : ($email ? explode('@', $email)[0] : 'Member'),
                 'email' => $email,
                 'email_verified' => true,
                 'email_verified_at' => now(),
             ]);
         } else {
-            $user->update([
+            $updateData = [
                 'email_verified' => true,
                 'email_verified_at' => $user->email_verified_at ?? now(),
-            ]);
+            ];
+            if (!empty($name)) {
+                $updateData['name'] = $name;
+                $user->name = $name;
+            }
+            $user->update($updateData);
         }
 
         // Ensure customer record exists and is linked to the user
@@ -269,7 +274,7 @@ class AuthController extends Controller
             ['email' => $user->email],
             [
                 'user_id' => $user->id,
-                'name' => $name ?: $user->name,
+                'name' => $user->name ?: (!empty($name) ? $name : $user->email),
             ]
         );
 
@@ -331,9 +336,10 @@ class AuthController extends Controller
         session()->put('is_logged_in', true);
         session()->put('access_token', $data['access_token']);
         session()->put('refresh_token', $data['refresh_token']);
+        session()->forget('must_set_password');
         session()->put('user', [
             'id' => $user->id,
-            'name' => $user->name,
+            'name' => $user->name ?: ($customer->name ?? (!empty($name) ? $name : 'Member')),
             'email' => $user->email,
             'type' => 'Google Member',
         ]);
@@ -341,18 +347,9 @@ class AuthController extends Controller
         $this->deviceSessions->register($request, $user, $email);
         $this->deviceSessions->enforceLimit($user, $email, $this->deviceSessions->deviceId($request));
 
-        $isFirstTime = empty($user->password);
-        if ($isFirstTime) {
-            session()->put('must_set_password', true);
-            return response()->json([
-                'success' => true,
-                'redirect' => route('auth.set-password'),
-            ]);
-        }
-
         return response()->json([
             'success' => true,
-            'redirect' => route('dashboard'),
+            'redirect' => route('home'),
         ]);
     }
 

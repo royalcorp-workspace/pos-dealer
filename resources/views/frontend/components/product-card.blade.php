@@ -79,15 +79,15 @@
 <div 
     class="product-card group relative bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1 transition-all duration-300 flex flex-col h-full font-sans {{ $isSoldOut ? 'opacity-80' : '' }}"
 >
-    <!-- Product Image Container -->
-    <div class="relative aspect-[4/3] bg-[#FAF8F5] overflow-hidden flex items-center justify-center p-2.5">
+    <!-- Product Image Container (Square on mobile for larger uncropped display, 4/3 on desktop) -->
+    <div class="relative aspect-square sm:aspect-[4/3] bg-[#FAF8F5] overflow-hidden flex items-center justify-center p-1.5 sm:p-2.5">
         <a href="{{ route('products.show', $product['id'] ?? $product->id) }}" class="flex items-center justify-center w-full h-full">
             <img 
                 src="{{ $product['image'] ?? ($product->thumbnail_url ?? '') }}" 
                 alt="{{ $product['name'] ?? $product->name }}" 
                 loading="lazy"
                 decoding="async"
-                class="product-card__image max-w-full max-h-full object-contain transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
+                class="product-card__image w-full h-full max-w-full max-h-full object-contain transition-transform duration-700 group-hover:scale-105 {{ $isSoldOut ? 'grayscale' : '' }}"
                 onerror="this.onerror=null;this.src='{{ asset('images/dummy/header.jpg') }}';"
             />
         </a>

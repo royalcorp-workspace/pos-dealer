@@ -58,21 +58,21 @@ window.handleGoogleSignInFromModal = function(e) {
                         access_token: result.data.access_token,
                         refresh_token: result.data.refresh_token
                     })
-                }).then(function() {
+                }).then(function(sessionRes) {
+                    return sessionRes.json().catch(function() { return {}; });
+                }).then(function(sessionData) {
                     var isCheckout = window.location.pathname.includes('checkout');
                     if (isCheckout) {
                         var checkoutForm = document.getElementById('checkout-form');
                         if (checkoutForm) {
                             try { window.Alpine.$data(document.querySelector('body')).isAuthOpen = false; } catch(e) {}
                             setTimeout(function() { checkoutForm.submit(); }, 1000);
-                        } else {
-                            window.location.href = '/dashboard';
+                            return;
                         }
-                    } else {
-                        window.location.href = '/dashboard';
                     }
+                    window.location.href = sessionData?.redirect || '/';
                 }).catch(function() {
-                    window.location.href = '/dashboard';
+                    window.location.href = '/';
                 });
             } else if (result.data && result.data.action === 'register') {
                 var params = {
