@@ -75,6 +75,9 @@ trait BufferCartTrait
             'editor' => $userId,
         ]);
 
+        session()->put('buffer_cart_id', $buffer->id);
+        session()->put('guest_session_id', $sessionId);
+
         try {
             cookie()->queue(cookie()->make('buffer_cart_id', $buffer->id, 60 * 24 * 30));
             cookie()->queue(cookie()->make('guest_session_id', $sessionId, 60 * 24 * 30));
@@ -87,8 +90,9 @@ trait BufferCartTrait
     {
         $customerId = $this->resolveCustomerId();
         $sessionId = $this->getSessionId();
+        $sessionBufferId = session()->get('buffer_cart_id');
         $cookieToken = request()->cookie('guest_session_id');
-        $cookieBufferId = request()->cookie('buffer_cart_id');
+        $cookieBufferId = request()->cookie('buffer_cart_id') ?: $sessionBufferId;
 
         $query = Buffer::where(function ($q) use ($customerId, $sessionId, $cookieToken) {
             if ($customerId) {
@@ -108,9 +112,12 @@ trait BufferCartTrait
         // 1. Highest priority: buffer that actually has items, latest updated
         $buffer = (clone $query)->whereHas('items')->latest('updated_at')->first();
 
-        // 2. If not found by session/customer, check if cookie 'buffer_cart_id' points to a buffer with items
+        // 2. If not found by session/customer, check if cookie/session 'buffer_cart_id' points to a buffer with items
         if (!$buffer && $cookieBufferId) {
             $buffer = Buffer::where('id', $cookieBufferId)->whereHas('items')->first();
+        }
+        if (!$buffer && $sessionBufferId) {
+            $buffer = Buffer::where('id', $sessionBufferId)->whereHas('items')->first();
         }
 
         // 3. Fallback: most recently updated buffer matching query
@@ -118,9 +125,12 @@ trait BufferCartTrait
             $buffer = (clone $query)->latest('updated_at')->first();
         }
 
-        // 4. Fallback: buffer by cookie buffer_cart_id even if empty
+        // 4. Fallback: buffer by cookie/session buffer_cart_id even if empty
         if (!$buffer && $cookieBufferId) {
             $buffer = Buffer::where('id', $cookieBufferId)->first();
+        }
+        if (!$buffer && $sessionBufferId) {
+            $buffer = Buffer::where('id', $sessionBufferId)->first();
         }
 
         if ($buffer) {

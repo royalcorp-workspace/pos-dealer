@@ -72,6 +72,36 @@
         currentCartTotal = getLatestCartTotal();
         window.currentCartTotal = currentCartTotal;
 
+        // Auto-drop vouchers that no longer meet min_purchase
+        let droppedAny = false;
+        selectedCartCoupons = selectedCartCoupons.filter(function (c) {
+            if (c.minPurchase && c.minPurchase > 0 && currentCartTotal < c.minPurchase) {
+                droppedAny = true;
+                if (typeof addToast === 'function') {
+                    addToast('warning', 'Voucher ' + c.code + ' dilepas karena total belanja kurang dari ' + formatRupiah(c.minPurchase));
+                }
+                return false;
+            }
+            return true;
+        });
+
+        if (droppedAny) {
+            localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCartCoupons));
+            if (selectedCartCoupons.length > 0) {
+                localStorage.setItem('selectedCartCoupon', JSON.stringify(selectedCartCoupons[0]));
+            } else {
+                localStorage.removeItem('selectedCartCoupon');
+                localStorage.removeItem('selectedCartCoupons');
+            }
+            $$('.coupon-option').forEach(function (item) {
+                const isSelected = selectedCartCoupons.some(function (c) { return c.code === item.dataset.code; });
+                item.classList.toggle('border-brand-gold', isSelected);
+                item.classList.toggle('bg-brand-light', isSelected);
+                const label = item.querySelector('.coupon-option-label');
+                if (label) label.textContent = isSelected ? 'Dipilih' : 'Pilih';
+            });
+        }
+
         if (!selectedCartCoupons || selectedCartCoupons.length === 0) {
             selectedCartCoupon = null;
             const selectedEl = document.getElementById('cart-selected-coupon');
@@ -110,11 +140,15 @@
 
         let discountSummary = '';
         if (regularCoupons.length > 0 && shippingCoupons.length > 0) {
-            discountSummary = '- ' + formatRupiah(regularDiscount) + ' + Gratis Ongkir';
+            if (regularDiscount > 0) {
+                discountSummary = '- ' + formatRupiah(regularDiscount) + ' + Gratis Ongkir';
+            } else {
+                discountSummary = 'Gratis Ongkir (Dihitung saat checkout)';
+            }
         } else if (regularCoupons.length > 0) {
-            discountSummary = '- ' + formatRupiah(regularDiscount);
-        } else {
-            discountSummary = 'Gratis Ongkir';
+            discountSummary = regularDiscount > 0 ? ('- ' + formatRupiah(regularDiscount)) : 'Diskon Kupon Diterapkan';
+        } else if (shippingCoupons.length > 0) {
+            discountSummary = 'Gratis Ongkir (Dihitung saat checkout)';
         }
 
         if (selectedCartCoupons.length === 1) {
@@ -134,6 +168,24 @@
         if (totalEl) totalEl.textContent = formatRupiah(Math.max(0, currentCartTotal - regularDiscount));
         if (selectedCouponEl) selectedCouponEl.classList.remove('hidden');
         if (discountRow) discountRow.classList.remove('hidden');
+
+        syncCartCouponsWithServer(selectedCartCoupons);
+    }
+
+    function syncCartCouponsWithServer(coupons) {
+        var token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!token) return;
+        var codes = (coupons || []).map(function(c) { return c.code; });
+        fetch('/checkout/sync-vouchers', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ voucher_codes: codes })
+        }).catch(function(err) {});
     }
 
     window.deselectCartCoupon = function () {
@@ -141,6 +193,7 @@
         selectedCartCoupon = null;
         localStorage.removeItem('selectedCartCoupon');
         localStorage.removeItem('selectedCartCoupons');
+        syncCartCouponsWithServer([]);
 
         $$('.coupon-option').forEach(function (item) {
             item.classList.remove('border-brand-gold', 'bg-brand-light');
@@ -173,6 +226,7 @@
 
         const code = button.dataset.code;
         const isNewShipping = isShippingCouponType(button.dataset.discountType);
+        const minPurchase = parseFloat(button.dataset.minPurchase) || 0;
 
         // Check if already selected -> toggle off
         const existingIdx = selectedCartCoupons.findIndex(function (c) { return c.code === code; });
@@ -193,6 +247,48 @@
             }
         }
 
+        if (minPurchase > 0 && currentCartTotal < minPurchase) {
+            const shortfall = minPurchase - currentCartTotal;
+            const warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini (Kurang ' + formatRupiah(shortfall) + ').';
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Minimum Belanja Belum Terpenuhi',
+                    html: `
+                        <div class="text-left text-sm text-gray-700 py-1 space-y-2">
+                            <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong>.</p>
+                            <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                                <div class="flex justify-between">
+                                    <span>Total Keranjang:</span>
+                                    <span class="font-bold">${formatRupiah(currentCartTotal)}</span>
+                                </div>
+                                <div class="flex justify-between text-red-600 font-bold">
+                                    <span>Kurang Belanja:</span>
+                                    <span>${formatRupiah(shortfall)}</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-500">Tambahkan produk senilai <strong>${formatRupiah(shortfall)}</strong> lagi ke keranjang Anda untuk menikmati promo ini.</p>
+                        </div>
+                    `,
+                    confirmButtonColor: '#1e3a8a',
+                    confirmButtonText: 'Mengerti',
+                    customClass: {
+                        popup: 'rounded-2xl shadow-xl'
+                    }
+                });
+            } else if (typeof window.alert === 'function') {
+                window.alert(warningMsg);
+            }
+
+            if (typeof addToast === 'function') {
+                addToast('warning', warningMsg);
+            } else {
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'warning', message: warningMsg } }));
+            }
+            return;
+        }
+
         const discountTypeNum = button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : 3);
         const coupon = {
             code: button.dataset.code,
@@ -202,6 +298,7 @@
             discountType: discountTypeNum,
             discountValue: parseFloat(button.dataset.discountValue) || 0,
             maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
+            minPurchase: minPurchase,
             allow_stacking: button.dataset.allowStacking === '1' ? 1 : 0
         };
 
@@ -388,6 +485,41 @@
                 if (input) input.value = '';
             } else {
                 if (feedback) feedback.innerHTML = '<span class="text-red-500">' + data.message + '</span>';
+                if (data.is_min_purchase || (data.message && data.message.toLowerCase().includes('minimum'))) {
+                    var shortfall = data.shortfall || (data.min_purchase ? Math.max(0, data.min_purchase - cartTotal) : 0);
+                    var minPurchase = data.min_purchase || 0;
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Minimum Belanja Belum Terpenuhi',
+                            html: `
+                                <div class="text-left text-sm text-gray-700 py-1 space-y-2">
+                                    <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong>.</p>
+                                    <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                                        <div class="flex justify-between">
+                                            <span>Total Keranjang:</span>
+                                            <span class="font-bold">${formatRupiah(cartTotal)}</span>
+                                        </div>
+                                        ${shortfall > 0 ? `
+                                        <div class="flex justify-between text-red-600 font-bold">
+                                            <span>Kurang Belanja:</span>
+                                            <span>${formatRupiah(shortfall)}</span>
+                                        </div>
+                                        ` : ''}
+                                    </div>
+                                    <p class="text-xs text-gray-500">${data.message}</p>
+                                </div>
+                            `,
+                            confirmButtonColor: '#1e3a8a',
+                            confirmButtonText: 'Mengerti',
+                            customClass: {
+                                popup: 'rounded-2xl shadow-xl'
+                            }
+                        });
+                    } else if (typeof window.alert === 'function') {
+                        window.alert(data.message);
+                    }
+                }
             }
         })
         .catch(function () {
@@ -430,6 +562,7 @@
                         discountType: button.dataset.discountType === 'percentage' ? 1 : (button.dataset.discountType === 'fixed' ? 2 : (button.dataset.discountType === 'shipping' ? 3 : 4)),
                         discountValue: parseFloat(button.dataset.discountValue) || 0,
                         maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
+                        minPurchase: parseFloat(button.dataset.minPurchase) || 0,
                         allow_stacking: allowStacking ? 1 : 0
                     };
                     selectedCartCoupons.push(c);
