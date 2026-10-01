@@ -556,6 +556,13 @@ class CheckoutController extends Controller
             }
         }
 
+        $submittedShippingCost = $request->filled('shipping_cost') ? (float) $request->input('shipping_cost') : null;
+        if ($submittedShippingCost !== null && $submittedShippingCost >= 0) {
+            $shippingCost = $submittedShippingCost;
+        } else {
+            $shippingCost = $this->getShippingCost($request->courier, $subDistrictId ?? '', $cart);
+        }
+
         $voucherDiscount = 0;
         $productVoucherDiscount = 0;
         $shippingVoucherDiscount = 0;
@@ -563,8 +570,7 @@ class CheckoutController extends Controller
         $appliedVouchers = [];
         $voucherCodes = $this->parseVoucherCodes($request);
         if ($voucherCodes) {
-            $shippingCostForVoucher = $this->getShippingCost($request->courier, $subDistrictId ?? '', $cart);
-            $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCostForVoucher);
+            $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCost);
             $voucherDiscount = $voucherResult['discount'];
             $productVoucherDiscount = $voucherResult['product_voucher_discount'] ?? 0;
             $shippingVoucherDiscount = $voucherResult['shipping_voucher_discount'] ?? 0;
@@ -572,13 +578,12 @@ class CheckoutController extends Controller
             $appliedVouchers = $voucherResult['vouchers'];
         }
 
-        $shippingCost = $this->getShippingCost($request->courier, $subDistrictId ?? '', $cart);
         $shippingVoucherDiscount = min($shippingVoucherDiscount, $shippingCost);
         $voucherDiscount = $productVoucherDiscount + $shippingVoucherDiscount;
 
         $subtotal = $originalCartTotal;
         $totalPromoDiscount = $totalStaticDiscount + $priceProductSettingDiscount;
-        $discountedProductSubtotal = max(0, $subtotal - $totalPromoDiscount - $productVoucherDiscount);
+        $discountedProductSubtotal = max(0, $originalCartTotal - $totalStaticDiscount - $priceProductSettingDiscount - $productVoucherDiscount);
         $actualShippingCost = max(0, $shippingCost - $shippingVoucherDiscount);
         $total = $discountedProductSubtotal + $actualShippingCost;
 
@@ -653,18 +658,43 @@ class CheckoutController extends Controller
         if ($finalSubDistrictId) {
             $subDistrictModel = \App\Models\Frontend\Location\SubDistrict::with('city.province')->find($finalSubDistrictId);
             if ($subDistrictModel) {
-                $recipientName = $request->name;
-                $phone = $request->phone;
-                $addressText = $request->address;
-                $postalCode = $request->postal_code ?? $subDistrictModel->postal_code;
+                $cleanPhone = preg_replace('/[\s\-]/', '', trim((string) $request->phone));
+                $phone = !empty($cleanPhone) ? $cleanPhone : trim((string) $request->phone);
+                $recipientName = trim((string) $request->name);
+                $addressText = trim((string) $request->address);
+                $postalCode = trim((string) $request->postal_code) ?: ($subDistrictModel->postal_code ?? '');
 
-                if (session()->get('is_logged_in') && $addressId) {
-                    $savedAddress = Address::find($addressId);
-                    if ($savedAddress) {
-                        $recipientName = !empty(trim($request->name ?? '')) ? $request->name : $savedAddress->recipient_name;
-                        $phone = !empty(trim($request->phone ?? '')) ? $request->phone : $savedAddress->phone;
-                        $addressText = !empty(trim($request->address ?? '')) ? $request->address : $savedAddress->address;
-                        $postalCode = !empty(trim($request->postal_code ?? '')) ? $request->postal_code : ($savedAddress->postal_code ?? $subDistrictModel->postal_code);
+                if (session()->get('is_logged_in')) {
+                    $userId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
+                    $customer = null;
+                    if ($userId) {
+                        $customer = Customer::where('user_id', $userId)->first();
+                    }
+                    if (!$customer && !empty($request->email)) {
+                        $customer = Customer::whereRaw('LOWER(email) = ?', [strtolower(trim($request->email))])->first();
+                    }
+                    if ($customer && !empty($phone)) {
+                        $customer->update([
+                            'phone' => $phone,
+                            'name' => $recipientName ?: $customer->name,
+                        ]);
+                    }
+                    if ($addressId) {
+                        $savedAddress = Address::find($addressId);
+                        if ($savedAddress && !empty($phone)) {
+                            $savedAddress->update([
+                                'phone' => $phone,
+                                'recipient_name' => $recipientName ?: $savedAddress->recipient_name,
+                            ]);
+                        }
+                    }
+                    if (session()->has('user')) {
+                        $sessionUser = session()->get('user');
+                        $sessionUser['phone'] = $phone;
+                        if (!empty($recipientName)) {
+                            $sessionUser['name'] = $recipientName;
+                        }
+                        session()->put('user', $sessionUser);
                     }
                 }
 
@@ -689,6 +719,10 @@ class CheckoutController extends Controller
         $dbTotal = max(0, $dbSubtotal - $productVoucherDiscount) + $actualShippingCost;
 
         $shippingCalc = $this->calculateShippingDetails($request->courier, (string) ($finalSubDistrictId ?? $subDistrictId ?? ''), $cart);
+        $resolvedEtaLabel = $request->input('shipping_eta_label') ?: ($shippingCalc['eta_label'] ?? null);
+        $resolvedEtaSource = $request->input('shipping_eta_source') ?: ($shippingCalc['eta_source'] ?? null);
+        $resolvedServiceName = $request->input('shipping_service_name') ?: ($shippingCalc['service_name'] ?? null);
+        $resolvedServiceCode = $request->input('shipping_service_code') ?: ($shippingCalc['service_code'] ?? null);
 
         // Update Buffer without creating Order in orders table!
         $bufferMeta = array_merge($buffer->meta ?? [], [
@@ -705,13 +739,13 @@ class CheckoutController extends Controller
             ],
             'courier' => $request->courier,
             'courier_id' => $courierModel?->id,
-            'shipping_eta_label' => $shippingCalc['eta_label'] ?? null,
+            'shipping_eta_label' => $resolvedEtaLabel,
             'shipping_duration' => $shippingCalc['duration'] ?? null,
-            'shipping_eta_source' => $shippingCalc['eta_source'] ?? null,
+            'shipping_eta_source' => $resolvedEtaSource,
             'shipping_eta_dates' => $shippingCalc['eta_dates'] ?? null,
-            'shipping_service_name' => $shippingCalc['service_name'] ?? null,
-            'shipping_service_code' => $shippingCalc['service_code'] ?? null,
-            'courier_service_type' => $shippingCalc['service_code'] ?? null,
+            'shipping_service_name' => $resolvedServiceName,
+            'shipping_service_code' => $resolvedServiceCode,
+            'courier_service_type' => $resolvedServiceCode,
             'applied_vouchers' => $appliedVouchers,
             'voucher_codes' => $voucherCodes,
             'voucher_code' => implode(',', $voucherCodes),
@@ -783,13 +817,15 @@ class CheckoutController extends Controller
             'courier' => $request->courier,
             'courier_id' => $courierModel?->id,
             'shipping_cost' => $shippingCost,
+            'eta_label' => $resolvedEtaLabel,
             'original_cart_total' => $originalCartTotal,
             'promo_discount' => $totalPromoDiscount,
+            'total_static_discount' => $totalStaticDiscount,
+            'price_product_setting_discount' => $priceProductSettingDiscount,
             'product_voucher_discount' => $productVoucherDiscount,
             'shipping_voucher_discount' => $shippingVoucherDiscount,
             'applied_vouchers' => $appliedVouchers,
             'subtotal' => $dbSubtotal,
-            'price_product_setting_discount' => $priceProductSettingDiscount,
             'voucher_discount' => $voucherDiscount,
             'total_discount' => $totalPromoDiscount + $voucherDiscount,
             'total' => $dbTotal,
@@ -802,6 +838,17 @@ class CheckoutController extends Controller
             'resolved_items' => $resolvedItems,
         ];
 
+        Session::put('checkout_form_data', [
+            'name' => $recipientName,
+            'email' => $request->email,
+            'phone' => $phone,
+            'address' => $addressText,
+            'postal_code' => $postalCode,
+            'sub_district_id' => $finalSubDistrictId,
+            'courier' => $request->courier,
+            'shipping_cost' => $shippingCost,
+            'selected_address_id' => $addressId,
+        ]);
         Session::put('selected_voucher_codes', $voucherCodes);
         Session::put('order_data', $orderData);
         Session::put('checkout_data', $orderData);
@@ -867,6 +914,7 @@ class CheckoutController extends Controller
                 'subtotal' => (float) $buffer->subtotal,
                 'original_cart_total' => (float) ($meta['original_cart_total'] ?? $buffer->subtotal),
                 'promo_discount' => (float) ($meta['promo_discount'] ?? (($meta['total_static_discount'] ?? 0) + ($meta['price_product_setting_discount'] ?? 0))),
+                'total_static_discount' => (float) ($meta['total_static_discount'] ?? 0),
                 'product_voucher_discount' => (float) ($meta['product_voucher_discount'] ?? 0),
                 'shipping_voucher_discount' => (float) ($meta['shipping_voucher_discount'] ?? 0),
                 'applied_vouchers' => $meta['applied_vouchers'] ?? [],
@@ -879,21 +927,38 @@ class CheckoutController extends Controller
                 'voucher_codes' => $meta['voucher_codes'] ?? [],
                 'voucher_id' => $buffer->voucher_id,
                 'voucher_ids' => $meta['voucher_ids'] ?? [],
-                'items' => array_map(function ($item) {
-                    return [
-                        'id' => $item['id'],
-                        'product_id' => $item['product_id'],
-                        'variant_id' => $item['variant_id'] ?? null,
-                        'name' => $item['name'],
-                        'image' => $item['image'] ?? '',
-                        'sell_price' => (float) $item['sell_price'],
-                        'quantity' => (int) $item['quantity'],
-                        'item_note' => $item['item_note'] ?? '',
-                        'discount_nominal' => (float) ($item['discount_nominal'] ?? 0),
-                        'discount_percent' => (float) ($item['discount_percent'] ?? 0),
-                        'total' => (float) $item['sell_price'] * (int) $item['quantity'],
-                    ];
-                }, $cart),
+                'items' => !empty($meta['resolved_items']) 
+                    ? array_map(function ($res) {
+                        $it = $res['item'] ?? [];
+                        return [
+                            'id' => $it['id'] ?? '',
+                            'product_id' => $it['product_id'] ?? '',
+                            'variant_id' => $res['variant_id'] ?? null,
+                            'name' => $it['name'] ?? '',
+                            'image' => $it['image'] ?? '',
+                            'sell_price' => (float) ($res['base_price'] ?? $res['original_price'] ?? ($it['sell_price'] ?? 0)),
+                            'quantity' => (int) ($it['quantity'] ?? 1),
+                            'item_note' => $it['item_note'] ?? '',
+                            'discount_nominal' => (float) ($res['discount_nominal'] ?? 0),
+                            'discount_percent' => (float) ($res['discount_percent'] ?? 0),
+                            'total' => (float) ($res['item_total'] ?? (($it['sell_price'] ?? 0) * ($it['quantity'] ?? 1))),
+                        ];
+                    }, $meta['resolved_items'])
+                    : array_map(function ($item) {
+                        return [
+                            'id' => $item['id'],
+                            'product_id' => $item['product_id'],
+                            'variant_id' => $item['variant_id'] ?? null,
+                            'name' => $item['name'],
+                            'image' => $item['image'] ?? '',
+                            'sell_price' => (float) ($item['original_price'] ?? $item['base_price'] ?? $item['sell_price']),
+                            'quantity' => (int) $item['quantity'],
+                            'item_note' => $item['item_note'] ?? '',
+                            'discount_nominal' => (float) ($item['discount_nominal'] ?? 0),
+                            'discount_percent' => (float) ($item['discount_percent'] ?? 0),
+                            'total' => (float) $item['sell_price'] * (int) $item['quantity'],
+                        ];
+                    }, $cart),
             ];
             session()->put('order_data', $orderData);
         }
@@ -1188,6 +1253,8 @@ class CheckoutController extends Controller
                         'shipping_service_name' => $shippingCalc['service_name'] ?? null,
                         'shipping_service_code' => $shippingCalc['service_code'] ?? null,
                         'courier_service_type' => $shippingCalc['service_code'] ?? null,
+                        'payment_method_name' => $paymentMethodModel?->name,
+                        'payment_method_code' => $paymentMethod,
                         'items' => !empty($itemsForOrderData) ? $itemsForOrderData : array_values($cart),
                     ]
                 );

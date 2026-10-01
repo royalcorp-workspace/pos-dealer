@@ -628,6 +628,13 @@
                     <input type="hidden" name="voucher_codes" id="voucher-codes" value="{{ implode(',', $selectedVoucherCodes) }}">
                     <input type="hidden" name="voucher_discount" id="voucher-discount-value" value="{{ $selectedVoucher['discount'] ?? 0 }}">
 
+                    <!-- Hidden Shipping Details Sent to Server -->
+                    <input type="hidden" name="shipping_cost" id="input-shipping-cost" value="{{ $form['shipping_cost'] ?? 0 }}">
+                    <input type="hidden" name="shipping_service_name" id="input-shipping-service-name" value="{{ $selectedCourierDetails['service_name'] ?? '' }}">
+                    <input type="hidden" name="shipping_service_code" id="input-shipping-service-code" value="{{ $selectedCourierDetails['service_code'] ?? '' }}">
+                    <input type="hidden" name="shipping_eta_label" id="input-shipping-eta-label" value="{{ $selectedEta ?? '' }}">
+                    <input type="hidden" name="shipping_eta_source" id="input-shipping-eta-source" value="{{ $selectedEtaSource ?? '' }}">
+
                     @if(!empty($selectedVouchers))
                         <div id="bonus-products-display" class="space-y-2">
                             @foreach($selectedVouchers as $sv)
@@ -672,23 +679,23 @@
 
                     <div class="space-y-3 mb-6 text-sm">
                         {{-- 1. Sub Total Produk --}}
-                        <div class="flex justify-between items-center text-gray-600">
-                            <span>Sub Total Produk</span>
-                            <span class="font-bold text-brand-dark" id="checkout-subtotal-display">Rp {{ number_format($originalCartTotal, 0, ',', '.') }}</span>
+                        <div class="flex justify-between items-center text-gray-600 gap-2">
+                            <span class="min-w-0">Sub Total Produk</span>
+                            <span class="font-bold text-brand-dark shrink-0 whitespace-nowrap text-right" id="checkout-subtotal-display">Rp {{ number_format($originalCartTotal, 0, ',', '.') }}</span>
                         </div>
 
                         {{-- 2. Diskon Promo --}}
                         @php
-                            $totalPromoDiscount = ($totalPercentDiscount ?? 0) + ($totalNominalDiscount ?? 0) + ($priceProductSettingDiscount ?? 0);
+                            $staticPromoDiscount = ($totalPercentDiscount ?? 0) + ($totalNominalDiscount ?? 0);
                         @endphp
-                        <div class="flex justify-between items-center text-red-600 {{ $totalPromoDiscount > 0 ? '' : 'hidden' }}" id="checkout-promo-row">
-                            <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-tag text-xs text-red-500"></i> Diskon Promo</span>
-                            <span class="font-bold" id="checkout-promo-val">- Rp {{ number_format($totalPromoDiscount, 0, ',', '.') }}</span>
+                        <div class="flex justify-between items-center text-red-600 gap-2 {{ $staticPromoDiscount > 0 ? '' : 'hidden' }}" id="checkout-promo-row">
+                            <span class="text-gray-600 flex items-center gap-1.5 min-w-0 truncate"><i class="fa-solid fa-tag text-xs text-red-500 shrink-0"></i> <span class="truncate">Diskon Promo</span></span>
+                            <span class="font-bold shrink-0 whitespace-nowrap text-right" id="checkout-promo-val">- Rp {{ number_format($staticPromoDiscount, 0, ',', '.') }}</span>
                         </div>
 
-                        <div class="flex justify-between items-center text-red-600 {{ ($priceProductSettingDiscount ?? 0) > 0 ? '' : 'hidden' }}" id="product-discount-row">
-                            <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-boxes-stacked text-xs text-red-500"></i> Diskon Volume</span>
-                            <span class="font-bold" id="product-discount">- Rp {{ number_format($priceProductSettingDiscount ?? 0, 0, ',', '.') }}</span>
+                        <div class="flex justify-between items-center text-red-600 gap-2 {{ ($priceProductSettingDiscount ?? 0) > 0 ? '' : 'hidden' }}" id="product-discount-row">
+                            <span class="text-gray-600 flex items-center gap-1.5 min-w-0 truncate"><i class="fa-solid fa-boxes-stacked text-xs text-red-500 shrink-0"></i> <span class="truncate">Diskon Volume</span></span>
+                            <span class="font-bold shrink-0 whitespace-nowrap text-right" id="product-discount">- Rp {{ number_format($priceProductSettingDiscount ?? 0, 0, ',', '.') }}</span>
                         </div>
 
                         {{-- 3. Voucher Diskon (gabungan all voucher diskon) --}}
@@ -699,35 +706,35 @@
                             }
                             $singleProductVoucherCode = !empty($productVoucherCodes) ? reset($productVoucherCodes) : '';
                         @endphp
-                        <div class="flex justify-between items-center text-red-600" id="checkout-voucher-row" style="{{ ($productVoucherDiscount ?? 0) > 0 ? '' : 'display: none;' }}">
-                            <span class="text-gray-600 flex items-center gap-1.5" id="checkout-voucher-label"><i class="fa-solid fa-ticket text-xs text-red-500"></i> Voucher Diskon{{ $singleProductVoucherCode ? ' (' . $singleProductVoucherCode . ')' : '' }}</span>
-                            <span class="font-bold" id="voucher-discount">- Rp {{ number_format($productVoucherDiscount ?? 0, 0, ',', '.') }}</span>
+                        <div class="flex justify-between items-center text-red-600 gap-2" id="checkout-voucher-row" style="{{ ($productVoucherDiscount ?? 0) > 0 ? '' : 'display: none;' }}">
+                            <span class="text-gray-600 flex items-center gap-1.5 min-w-0 truncate" id="checkout-voucher-label"><i class="fa-solid fa-ticket text-xs text-red-500 shrink-0"></i> <span class="truncate">Voucher Diskon{{ $singleProductVoucherCode ? ' (' . $singleProductVoucherCode . ')' : '' }}</span></span>
+                            <span class="font-bold shrink-0 whitespace-nowrap text-right" id="voucher-discount">- Rp {{ number_format($productVoucherDiscount ?? 0, 0, ',', '.') }}</span>
                         </div>
 
                         {{-- 4. Shipping --}}
-                        <div class="flex justify-between items-center text-gray-600">
-                            <span id="checkout-shipping-label">Shipping</span>
-                            <span class="text-brand-dark font-bold" id="shipping-cost">Rp {{ number_format($form['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
+                        <div class="flex justify-between items-center text-gray-600 gap-2">
+                            <span class="min-w-0" id="checkout-shipping-label">Shipping</span>
+                            <span class="text-brand-dark font-bold shrink-0 whitespace-nowrap text-right" id="shipping-cost">Rp {{ number_format($form['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
                         </div>
 
-                        <div class="flex justify-between items-center text-xs text-blue-700 bg-blue-50/60 px-2.5 py-1.5 rounded-lg {{ empty($selectedEta) ? 'hidden' : '' }}" id="checkout-shipping-eta-row">
-                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-clock text-[11px] text-blue-500"></i> Estimasi Tiba</span>
-                            <span class="font-semibold" id="checkout-shipping-eta-val">{{ $selectedEta ?? '' }}</span>
+                        <div class="flex justify-between items-center text-xs text-blue-700 bg-blue-50/60 px-2.5 py-1.5 rounded-lg gap-2 {{ empty($selectedEta) ? 'hidden' : '' }}" id="checkout-shipping-eta-row">
+                            <span class="flex items-center gap-1.5 min-w-0 truncate"><i class="fa-solid fa-clock text-[11px] text-blue-500 shrink-0"></i> <span class="truncate">Estimasi Tiba</span></span>
+                            <span class="font-semibold shrink-0 whitespace-nowrap text-right" id="checkout-shipping-eta-val">{{ $selectedEta ?? '' }}</span>
                         </div>
 
                         {{-- 5. Voucher Gratis Ongkir (motong biaya kirim only, jangan sampai potong harga barang) --}}
-                        <div class="flex justify-between items-center text-red-600" id="checkout-shipping-voucher-row" style="{{ ($shippingVoucherDiscount ?? 0) > 0 ? '' : 'display: none;' }}">
-                            <span class="text-gray-600 flex items-center gap-1.5" id="checkout-shipping-voucher-label"><i class="fa-solid fa-truck-fast text-xs text-emerald-600"></i> Voucher Gratis Ongkir</span>
-                            <span class="font-bold" id="shipping-voucher-discount">- Rp {{ number_format($shippingVoucherDiscount ?? 0, 0, ',', '.') }}</span>
+                        <div class="flex justify-between items-center text-red-600 gap-2" id="checkout-shipping-voucher-row" style="{{ ($shippingVoucherDiscount ?? 0) > 0 ? '' : 'display: none;' }}">
+                            <span class="text-gray-600 flex items-center gap-1.5 min-w-0 truncate" id="checkout-shipping-voucher-label"><i class="fa-solid fa-truck-fast text-xs text-emerald-600 shrink-0"></i> <span class="truncate">Voucher Gratis Ongkir</span></span>
+                            <span class="font-bold shrink-0 whitespace-nowrap text-right" id="shipping-voucher-discount">- Rp {{ number_format($shippingVoucherDiscount ?? 0, 0, ',', '.') }}</span>
                         </div>
 
                         <div class="pt-4 border-t border-dashed border-gray-200">
-                            <div class="flex justify-between items-baseline">
-                                <div>
-                                    <span class="text-xs uppercase tracking-wider font-bold text-gray-500 block">Total Tagihan</span>
-                                    <span class="text-[11px] text-gray-400">Termasuk PPN & Biaya Kirim</span>
+                            <div class="flex justify-between items-baseline gap-2">
+                                <div class="min-w-0">
+                                    <span class="text-xs uppercase tracking-wider font-bold text-gray-500 block truncate">Total Tagihan</span>
+                                    <span class="text-[11px] text-gray-400 block truncate">Termasuk PPN & Biaya Kirim</span>
                                 </div>
-                                <span class="text-2xl font-black text-brand-dark font-serif" id="total-cost">
+                                <span class="text-xl sm:text-2xl font-black text-brand-dark font-serif shrink-0 whitespace-nowrap text-right" id="total-cost">
                                     Rp {{ number_format(max(0, $originalCartTotal - ($totalPercentDiscount ?? 0) - ($totalNominalDiscount ?? 0) - ($priceProductSettingDiscount ?? 0) - ($productVoucherDiscount ?? 0) + max(0, ($form['shipping_cost'] ?? 0) - ($shippingVoucherDiscount ?? 0))), 0, ',', '.') }}
                                 </span>
                             </div>
@@ -904,8 +911,8 @@
             // 1. Muat ulang data dari sessionStorage jika ada (kecuali jika ada error validasi dari server)
             const savedFormData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');
             formInputs.forEach(input => {
-                // Jika input kosong (artinya bukan kembalian error dari server) dan ada data tersimpan
-                if (!input.value && savedFormData[input.name]) {
+                // Jika input kosong atau field phone yang pernah diisi user, pulihkan dari sessionStorage
+                if (savedFormData[input.name] && (!input.value || input.name === 'phone')) {
                     input.value = savedFormData[input.name];
                     if (input.name === 'sub_district_id' || input.name === 'province_id' || input.name === 'city_id') {
                         input.dispatchEvent(new Event('change'));

@@ -4,7 +4,44 @@
 
 @php
     $orderId = $order?->order_number ?? 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
-    $paymentMethod = $order?->payment_method ?? '-';
+    $rawPmCode = $order?->payment_method ?? '-';
+    $pmModel = \App\Models\PaymentMethod::where('code', $rawPmCode)->first()
+        ?? \App\Models\PaymentMethod::find($rawPmCode);
+    $paymentMethod = $order?->payment_method_name 
+        ?? $pmModel?->name 
+        ?? ($order?->meta['payment_method_name'] ?? null);
+    if (empty($paymentMethod)) {
+        $lowerPm = strtolower((string)$rawPmCode);
+        if (in_array($lowerPm, ['transfer_manual', 'trf', 'manual'], true)) {
+            $paymentMethod = 'Transfer Bank Manual';
+        } elseif ($lowerPm === '014' || str_contains($lowerPm, 'bca')) {
+            $paymentMethod = 'BCA Virtual Account';
+        } elseif ($lowerPm === '008' || str_contains($lowerPm, 'mandiri')) {
+            $paymentMethod = 'Mandiri Virtual Account';
+        } elseif ($lowerPm === '002' || str_contains($lowerPm, 'bri')) {
+            $paymentMethod = 'BRI Virtual Account';
+        } elseif ($lowerPm === '009' || str_contains($lowerPm, 'bni')) {
+            $paymentMethod = 'BNI Virtual Account';
+        } elseif ($lowerPm === '022' || str_contains($lowerPm, 'cimb')) {
+            $paymentMethod = 'CIMB Niaga Virtual Account';
+        } elseif ($lowerPm === '011' || str_contains($lowerPm, 'danamon')) {
+            $paymentMethod = 'Danamon Virtual Account';
+        } elseif ($lowerPm === '016' || str_contains($lowerPm, 'maybank') || str_contains($lowerPm, 'bii')) {
+            $paymentMethod = 'Maybank Virtual Account';
+        } elseif ($lowerPm === '013' || str_contains($lowerPm, 'permata')) {
+            $paymentMethod = 'Permata Virtual Account';
+        } elseif (str_contains($lowerPm, 'gopay')) {
+            $paymentMethod = 'GoPay';
+        } elseif (str_contains($lowerPm, 'ovo')) {
+            $paymentMethod = 'OVO';
+        } elseif (str_contains($lowerPm, 'qris')) {
+            $paymentMethod = 'QRIS';
+        } elseif (str_contains($lowerPm, 'credit') || str_contains($lowerPm, 'card')) {
+            $paymentMethod = 'Kartu Kredit / Debit';
+        } else {
+            $paymentMethod = ucwords(str_replace(['_', '-'], ' ', (string)$rawPmCode));
+        }
+    }
     $total = $order?->total ?? 0;
     $status = $order?->status ?? 1;
     $statusLabel = \App\Models\Frontend\Order::statusLabels()[$status] ?? 'Menunggu Pembayaran';
@@ -329,7 +366,7 @@
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-brand-dark text-sm sm:text-base">Informasi Virtual Account</h4>
-                                        <p class="text-xs text-gray-500">Saluran: {{ ucwords(str_replace(['_', '-'], ' ', $paymentMethod)) }}</p>
+                                        {{-- <p class="text-xs text-gray-500">Saluran: {{ ucwords(str_replace(['_', '-'], ' ', $paymentMethod)) }}</p> --}}
                                     </div>
                                 </div>
                                 <span class="text-[11px] font-bold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">Otomatis / Instant</span>
@@ -568,6 +605,133 @@
                             </div>
                         @endforeach
                     </div>
+
+                    @php
+                        $orderMeta = is_array($order?->meta) ? $order->meta : (json_decode($order?->meta ?? '[]', true) ?: []);
+                        
+                        // Subtotal Produk Asli
+                        $originalCartTotal = (float) ($orderMeta['original_cart_total'] ?? 0);
+                        if ($originalCartTotal <= 0) {
+                            $originalCartTotal = (float) collect($items)->sum(function($it) {
+                                $meta = is_array($it->meta) ? $it->meta : (json_decode($it->meta ?? '[]', true) ?: []);
+                                $unitP = (float) ($it->unit_price ?? $meta['original_price'] ?? $it->sell_price ?? 0);
+                                return $unitP * (int) ($it->quantity ?? 1);
+                            });
+                        }
+                        if ($originalCartTotal <= 0) {
+                            $originalCartTotal = (float) ($order?->subtotal ?? 0);
+                        }
+
+                        // Diskon Promo & Volume
+                        $priceProductSettingDiscount = (float) ($orderMeta['price_product_setting_discount'] ?? 0);
+                        $staticPromoDiscount = (float) ($orderMeta['total_static_discount'] ?? 0);
+                        if ($staticPromoDiscount <= 0 && !empty($orderMeta['promo_discount'])) {
+                            $staticPromoDiscount = max(0, (float) $orderMeta['promo_discount'] - $priceProductSettingDiscount);
+                        }
+                        
+                        // Voucher Diskon Produk
+                        $productVoucherDiscount = (float) ($orderMeta['product_voucher_discount'] ?? 0);
+                        $shippingVoucherDiscount = (float) ($orderMeta['shipping_voucher_discount'] ?? ($order?->shipping_cost_subsidy ?? 0));
+                        $voucherNominal = (float) ($order?->voucher_nominal ?? ($orderMeta['voucher_discount'] ?? 0));
+                        
+                        if ($productVoucherDiscount <= 0 && $voucherNominal > 0) {
+                            $productVoucherDiscount = max(0, $voucherNominal - $shippingVoucherDiscount);
+                        }
+                        
+                        $productVoucherCode = null;
+                        if (!empty($orderMeta['applied_vouchers'])) {
+                            $appliedProductVouchers = collect($orderMeta['applied_vouchers'])->filter(fn($av) => empty($av['is_shipping']));
+                            $productVoucherCode = $appliedProductVouchers->pluck('code')->first();
+                        }
+                        if (empty($productVoucherCode) && !empty($orderMeta['voucher_codes'])) {
+                            $productVoucherCode = collect($orderMeta['voucher_codes'])->filter(fn($c) => !str_contains(strtoupper($c), 'ONGKIR'))->first();
+                        }
+                        if (empty($productVoucherCode) && !empty($orderMeta['voucher_code'])) {
+                            $productVoucherCode = $orderMeta['voucher_code'];
+                        }
+
+                        $shippingCost = (float) ($order?->shipping_cost ?? ($orderMeta['shipping_cost'] ?? 0));
+                        $shippingServiceName = $orderMeta['shipping_service_name'] ?? null;
+                        $courierDisplayName = strtoupper($orderMeta['courier'] ?? ($order?->courier?->name ?? 'Kurir'));
+                        if ($shippingServiceName) {
+                            $courierDisplayName .= ' (' . $shippingServiceName . ')';
+                        }
+
+                        $transactionFee = (float) ($order?->transaction_fee ?? 0);
+                        $orderFinalTotal = (float) ($order?->total ?? 0);
+                    @endphp
+
+                    <!-- Summary / Sinkronisasi Total Pesanan -->
+                    <div class="mt-6 pt-5 border-t border-dashed border-gray-200 space-y-2.5 text-xs sm:text-sm">
+                        {{-- 1. Subtotal Produk --}}
+                        <div class="flex justify-between items-center text-gray-600 gap-2">
+                            <span class="min-w-0">Subtotal Produk</span>
+                            <span class="font-semibold text-gray-800 shrink-0 whitespace-nowrap text-right">Rp {{ number_format($originalCartTotal, 0, ',', '.') }}</span>
+                        </div>
+
+                        {{-- 2. Diskon Promo Katalog --}}
+                        @if($staticPromoDiscount > 0)
+                            <div class="flex justify-between items-center text-red-600 gap-2">
+                                <span class="flex items-center gap-1.5 min-w-0 truncate"><i class="fa-solid fa-tag text-xs text-red-500 shrink-0"></i> <span class="truncate">Diskon Promo</span></span>
+                                <span class="font-semibold shrink-0 whitespace-nowrap text-right">- Rp {{ number_format($staticPromoDiscount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        {{-- 3. Diskon Volume Tier --}}
+                        @if($priceProductSettingDiscount > 0)
+                            <div class="flex justify-between items-center text-red-600 gap-2">
+                                <span class="flex items-center gap-1.5 min-w-0 truncate"><i class="fa-solid fa-boxes-stacked text-xs text-red-500 shrink-0"></i> <span class="truncate">Diskon Volume</span></span>
+                                <span class="font-semibold shrink-0 whitespace-nowrap text-right">- Rp {{ number_format($priceProductSettingDiscount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        {{-- 4. Voucher Diskon Produk --}}
+                        @if($productVoucherDiscount > 0)
+                            <div class="flex justify-between items-center text-emerald-700 bg-emerald-50/70 px-3 py-2 rounded-xl border border-emerald-200/60 gap-2">
+                                <span class="flex items-center gap-1.5 min-w-0 font-medium truncate">
+                                    <i class="fa-solid fa-ticket text-xs text-emerald-600 shrink-0"></i>
+                                    <span class="truncate">Voucher Diskon{{ $productVoucherCode ? ' (' . $productVoucherCode . ')' : '' }}</span>
+                                </span>
+                                <span class="font-bold shrink-0 whitespace-nowrap text-right">- Rp {{ number_format($productVoucherDiscount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        {{-- 5. Biaya Pengiriman --}}
+                        <div class="flex justify-between items-center text-gray-600 gap-2">
+                            <span class="min-w-0 truncate">Biaya Pengiriman <span class="text-xs text-gray-500 font-normal">({{ $courierDisplayName }})</span></span>
+                            <span class="font-semibold text-gray-800 shrink-0 whitespace-nowrap text-right">Rp {{ number_format($shippingCost, 0, ',', '.') }}</span>
+                        </div>
+
+                        {{-- 6. Voucher Gratis Ongkir --}}
+                        @if($shippingVoucherDiscount > 0)
+                            <div class="flex justify-between items-center text-emerald-700 bg-emerald-50/70 px-3 py-2 rounded-xl border border-emerald-200/60 gap-2">
+                                <span class="flex items-center gap-1.5 min-w-0 font-medium truncate">
+                                    <i class="fa-solid fa-truck-fast text-xs text-emerald-600 shrink-0"></i>
+                                    <span class="truncate">Voucher Gratis Ongkir</span>
+                                </span>
+                                <span class="font-bold shrink-0 whitespace-nowrap text-right">- Rp {{ number_format($shippingVoucherDiscount, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        {{-- 7. Biaya Layanan / Transaksi jika ada --}}
+                        @if($transactionFee > 0)
+                            <div class="flex justify-between items-center text-gray-600 gap-2">
+                                <span class="min-w-0">Biaya Layanan</span>
+                                <span class="font-semibold text-gray-800 shrink-0 whitespace-nowrap text-right">Rp {{ number_format($transactionFee, 0, ',', '.') }}</span>
+                            </div>
+                        @endif
+
+                        {{-- 8. Total Pesanan (Sinkron dengan Total Pembayaran di kartu kanan) --}}
+                        <div class="pt-3.5 mt-2 border-t-2 border-gray-100 flex justify-between items-baseline gap-2">
+                            <div class="min-w-0">
+                                <span class="font-bold text-brand-dark text-sm sm:text-base block truncate">Total Pesanan</span>
+                                <span class="block text-[11px] text-gray-400 font-normal truncate">Sudah termasuk diskon & ongkos kirim</span>
+                            </div>
+                            <span class="font-black text-xl sm:text-2xl text-brand-gold-dark font-serif shrink-0 whitespace-nowrap text-right">
+                                Rp {{ number_format($orderFinalTotal, 0, ',', '.') }}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Shipping & Destination Address Card -->
@@ -634,41 +798,15 @@
                         <h3 class="font-bold text-brand-dark text-base">Rincian Pembayaran</h3>
                     </div>
 
-                    <div class="space-y-3 text-sm">
-                        <div class="flex justify-between items-center text-gray-600">
-                            <span>Metode Pembayaran</span>
-                            <span class="font-bold text-brand-dark text-right">{{ ucwords(str_replace(['_', '-'], ' ', $paymentMethod)) }}</span>
+                    <div class="space-y-3.5 text-sm">
+                        <div class="flex justify-between items-center text-gray-600 gap-2">
+                            <span class="min-w-0">Metode Pembayaran</span>
+                            <span class="font-bold text-brand-dark text-right shrink-0">{{ $paymentMethod }}</span>
                         </div>
 
-                        <div class="flex justify-between items-center text-gray-600">
-                            <span>Subtotal Produk</span>
-                            <span class="font-semibold text-gray-800">Rp {{ number_format($order->subtotal ?? 0, 0, ',', '.') }}</span>
-                        </div>
-                        
-                        @if(($order->shipping_cost ?? 0) > 0)
-                            <div class="flex justify-between items-center text-gray-600">
-                                <span>Ongkos Kirim</span>
-                                <span class="font-semibold text-gray-800">Rp {{ number_format($order->shipping_cost, 0, ',', '.') }}</span>
-                            </div>
-                        @endif
-                        
-                        @if(($order->transaction_fee ?? 0) > 0)
-                            <div class="flex justify-between items-center text-gray-600">
-                                <span>Biaya Layanan</span>
-                                <span class="font-semibold text-gray-800">Rp {{ number_format($order->transaction_fee, 0, ',', '.') }}</span>
-                            </div>
-                        @endif
-                        
-                        @if(($order->discount ?? 0) > 0)
-                            <div class="flex justify-between items-center text-red-600">
-                                <span class="flex items-center gap-1"><i class="fa-solid fa-tag text-xs"></i> Diskon</span>
-                                <span class="font-bold">- Rp {{ number_format($order->discount, 0, ',', '.') }}</span>
-                            </div>
-                        @endif
-
-                        <div class="pt-4 border-t border-dashed border-gray-200 flex justify-between items-baseline">
-                            <span class="font-bold text-brand-dark text-base">Total Pembayaran</span>
-                            <span class="font-black text-2xl text-brand-gold-dark font-serif">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                        <div class="pt-3.5 border-t border-dashed border-gray-200 flex justify-between items-baseline gap-2">
+                            <span class="font-bold text-brand-dark text-base min-w-0">Total Pembayaran</span>
+                            <span class="font-black text-2xl text-brand-gold-dark font-serif shrink-0 whitespace-nowrap text-right">Rp {{ number_format($total, 0, ',', '.') }}</span>
                         </div>
                     </div>
 
