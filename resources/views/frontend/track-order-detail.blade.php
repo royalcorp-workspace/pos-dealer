@@ -4,7 +4,10 @@
 
 @php
     $orderId = $order?->order_number ?? '-';
-    $paymentMethod = $order?->payment_method ?? '-';
+    $rawPmCode = $order?->payment_method ?? '-';
+    $paymentMethod = $order?->payment_method_name 
+        ?? \App\Models\PaymentMethod::where('code', $rawPmCode)->value('name')
+        ?? ucwords(str_replace(['_', '-'], ' ', (string)$rawPmCode));
     $total = $order?->total ?? 0;
     $status = $order?->status ?? 1;
     $paymentStatus = $order?->payment_status ?? 1; // 1 = unpaid, 2 = paid

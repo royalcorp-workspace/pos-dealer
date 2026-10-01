@@ -238,6 +238,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        var inputShippingCost = document.getElementById('input-shipping-cost');
+        if (inputShippingCost) inputShippingCost.value = cost;
+        var inputServiceName = document.getElementById('input-shipping-service-name');
+        if (inputServiceName && details) inputServiceName.value = details.service_name || '';
+        var inputServiceCode = document.getElementById('input-shipping-service-code');
+        if (inputServiceCode && details) inputServiceCode.value = details.service_code || '';
+        var inputEtaLabel = document.getElementById('input-shipping-eta-label');
+        if (inputEtaLabel && details) inputEtaLabel.value = details.eta_label || '';
+        var inputEtaSource = document.getElementById('input-shipping-eta-source');
+        if (inputEtaSource && details) inputEtaSource.value = details.eta_source || '';
+
         updateSelectedCouponDisplay();
         updateTotal();
     }
@@ -548,7 +559,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 voucherRow.style.display = selectedProductVoucherDiscount > 0 ? 'flex' : 'none';
             }
             if (voucherLabel) {
-                voucherLabel.innerHTML = '<i class="fa-solid fa-ticket text-xs text-red-500 mr-1.5"></i> Voucher Diskon' + (firstProductCode ? ' (' + firstProductCode + ')' : '');
+                voucherLabel.innerHTML = '<i class="fa-solid fa-ticket text-xs text-red-500 shrink-0"></i> <span class="truncate">Voucher Diskon' + (firstProductCode ? ' (' + firstProductCode + ')' : '') + '</span>';
             }
 
             // Shipping Voucher row: strictly "Voucher Gratis Ongkir" without voucher code
@@ -557,7 +568,7 @@ document.addEventListener('DOMContentLoaded', function () {
             var shippingVoucherLabel = document.getElementById('checkout-shipping-voucher-label');
 
             if (shippingVoucherLabel) {
-                shippingVoucherLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-xs text-emerald-600 mr-1.5"></i> Voucher Gratis Ongkir';
+                shippingVoucherLabel.innerHTML = '<i class="fa-solid fa-truck-fast text-xs text-emerald-600 shrink-0"></i> <span class="truncate">Voucher Gratis Ongkir</span>';
             }
 
             var hasShippingCoupon = selectedCoupons.some(function(code) { return checkCouponIsShipping(code); });

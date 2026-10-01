@@ -114,7 +114,63 @@ class Order extends Model
 
     public function paymentMethodRelation(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method');
+        return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method', 'code');
+    }
+
+    public function getPaymentMethodNameAttribute(): string
+    {
+        $pm = \App\Models\PaymentMethod::where('code', $this->payment_method)->first()
+            ?? \App\Models\PaymentMethod::find($this->payment_method);
+        if ($pm && !empty($pm->name)) {
+            return $pm->name;
+        }
+
+        if (!empty($this->meta['payment_method_name'])) {
+            return $this->meta['payment_method_name'];
+        }
+
+        $code = strtolower((string)$this->payment_method);
+        if (in_array($code, ['transfer_manual', 'trf', 'manual'], true)) {
+            return 'Transfer Bank Manual';
+        }
+        if ($code === '014' || str_contains($code, 'bca')) {
+            return 'BCA Virtual Account';
+        }
+        if ($code === '008' || str_contains($code, 'mandiri')) {
+            return 'Mandiri Virtual Account';
+        }
+        if ($code === '002' || str_contains($code, 'bri')) {
+            return 'BRI Virtual Account';
+        }
+        if ($code === '009' || str_contains($code, 'bni')) {
+            return 'BNI Virtual Account';
+        }
+        if ($code === '022' || str_contains($code, 'cimb')) {
+            return 'CIMB Niaga Virtual Account';
+        }
+        if ($code === '011' || str_contains($code, 'danamon')) {
+            return 'Danamon Virtual Account';
+        }
+        if ($code === '016' || str_contains($code, 'maybank') || str_contains($code, 'bii')) {
+            return 'Maybank Virtual Account';
+        }
+        if ($code === '013' || str_contains($code, 'permata')) {
+            return 'Permata Virtual Account';
+        }
+        if (str_contains($code, 'gopay')) {
+            return 'GoPay';
+        }
+        if (str_contains($code, 'ovo')) {
+            return 'OVO';
+        }
+        if (str_contains($code, 'qris')) {
+            return 'QRIS';
+        }
+        if (str_contains($code, 'credit') || str_contains($code, 'card')) {
+            return 'Kartu Kredit / Debit';
+        }
+
+        return ucwords(str_replace(['_', '-'], ' ', (string)$this->payment_method));
     }
 
     public function items(): HasMany

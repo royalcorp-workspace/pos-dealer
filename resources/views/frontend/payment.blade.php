@@ -175,7 +175,10 @@
                         }
                     }
                     $priceSettingDiscount = (float) ($orderData['price_product_setting_discount'] ?? 0);
-                    $totalPromoDiscount = (float) ($orderData['promo_discount'] ?? ($totalPercentDiscount + $totalNominalDiscount + $priceSettingDiscount));
+                    $staticPromoDiscount = (float) ($orderData['total_static_discount'] ?? ($totalPercentDiscount + $totalNominalDiscount));
+                    if ($staticPromoDiscount <= 0 && !empty($orderData['promo_discount'])) {
+                        $staticPromoDiscount = max(0, (float) $orderData['promo_discount'] - $priceSettingDiscount);
+                    }
 
                     $productVoucherDiscount = (float) ($orderData['product_voucher_discount'] ?? 0);
                     $shippingVoucherDiscount = (float) ($orderData['shipping_voucher_discount'] ?? 0);
@@ -198,6 +201,12 @@
 
                     $shippingCost = (float) ($orderData['shipping_cost'] ?? 0);
                     $shippingVoucherDiscount = min($shippingVoucherDiscount, $shippingCost);
+
+                    $calculatedTotal = max(0, $originalSubtotal - $staticPromoDiscount - $priceSettingDiscount - $productVoucherDiscount) + max(0, $shippingCost - $shippingVoucherDiscount);
+                    $displayTotal = (float) ($orderData['total'] ?? $calculatedTotal);
+                    if ($displayTotal <= 0) {
+                        $displayTotal = $calculatedTotal;
+                    }
                 @endphp
                 <div class="space-y-3 text-sm">
                     {{-- 1. Sub Total Produk --}}
@@ -207,14 +216,22 @@
                     </div>
 
                     {{-- 2. Diskon Promo --}}
-                    @if($totalPromoDiscount > 0)
+                    @if($staticPromoDiscount > 0)
                         <div class="flex justify-between items-center text-red-600">
                             <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-tag text-xs text-red-500"></i> Diskon Promo</span>
-                            <span class="font-bold">- Rp {{ number_format($totalPromoDiscount, 0, ',', '.') }}</span>
+                            <span class="font-bold">- Rp {{ number_format($staticPromoDiscount, 0, ',', '.') }}</span>
                         </div>
                     @endif
 
-                    {{-- 3. Voucher Diskon (gabungan all voucher diskon) --}}
+                    {{-- 3. Diskon Volume --}}
+                    @if($priceSettingDiscount > 0)
+                        <div class="flex justify-between items-center text-red-600">
+                            <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-boxes-stacked text-xs text-red-500"></i> Diskon Volume</span>
+                            <span class="font-bold">- Rp {{ number_format($priceSettingDiscount, 0, ',', '.') }}</span>
+                        </div>
+                    @endif
+
+                    {{-- 4. Voucher Diskon (gabungan all voucher diskon) --}}
                     @if($productVoucherDiscount > 0)
                         @php
                             $appliedProductVouchers = collect($orderData['applied_vouchers'] ?? [])->filter(fn($av) => empty($av['is_shipping']));
@@ -227,7 +244,7 @@
                         </div>
                     @endif
 
-                    {{-- 4. Shipping --}}
+                    {{-- 5. Shipping --}}
                     <div class="flex justify-between items-center text-gray-600">
                         <span>Shipping ({{ strtoupper($orderData['courier'] ?? 'Kurir') }})</span>
                         <span class="font-bold text-brand-dark">Rp {{ number_format($shippingCost, 0, ',', '.') }}</span>
@@ -239,7 +256,7 @@
                         </div>
                     @endif
 
-                    {{-- 5. Voucher Gratis Ongkir (motong biaya kirim only, jangan sampai potong harga barang) --}}
+                    {{-- 6. Voucher Gratis Ongkir (motong biaya kirim only, jangan sampai potong harga barang) --}}
                     @if($shippingVoucherDiscount > 0)
                         <div class="flex justify-between items-center text-red-600">
                             <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-truck-fast text-xs text-emerald-600"></i> Voucher Gratis Ongkir</span>
@@ -256,7 +273,7 @@
                     {{-- Total Pembayaran (Total Akhir yang harus dibayar) --}}
                     <div class="flex justify-between items-baseline pt-4 border-t border-dashed border-gray-200">
                         <span class="font-bold text-base text-gray-800">Total Pembayaran</span>
-                        <span id="final-total" class="font-black text-2xl text-brand-dark font-serif" data-base-total="{{ $orderData['total'] ?? 0 }}">Rp {{ number_format($orderData['total'] ?? 0, 0, ',', '.') }}</span>
+                        <span id="final-total" class="font-black text-2xl text-brand-dark font-serif" data-base-total="{{ $displayTotal }}">Rp {{ number_format($displayTotal, 0, ',', '.') }}</span>
                     </div>
                 </div>
             </div>

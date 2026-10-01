@@ -134,7 +134,7 @@
     window.openAddressModal = function () {
         if (!modal) return;
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
 
         if (modalTitle) modalTitle.textContent = 'Tambah Alamat Baru';
         if (form) {
@@ -150,7 +150,7 @@
     window.editAddress = function (data) {
         if (!modal) return;
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        document.body.classList.add('overflow-hidden');
 
         if (modalTitle) modalTitle.textContent = 'Ubah Alamat';
 
@@ -202,7 +202,7 @@
     window.closeAddressModal = function () {
         if (!modal) return;
         modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        document.body.classList.remove('overflow-hidden');
     };
 
     // Real-time phone sanitizer: only digits and leading '+' allowed (no text, no symbols)
@@ -283,9 +283,16 @@
     // Close on backdrop click
     if (modal) {
         modal.addEventListener('click', function (e) {
-            if (e.target === modal) {
+            if (e.target === modal || (e.target && e.target.classList && e.target.classList.contains('min-h-full'))) {
                 window.closeAddressModal();
             }
         });
     }
+
+    // Close on ESC key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+            window.closeAddressModal();
+        }
+    });
 })();
