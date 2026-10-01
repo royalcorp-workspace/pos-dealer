@@ -99,6 +99,11 @@ class PaymentMethod extends Model
         return $this->type === 5;
     }
 
+    public function isTypeDebitCard(): bool
+    {
+        return $this->type === 6;
+    }
+
     public function calculateCharge(float $amount): float
     {
         if (!$this->has_charge || !$this->charge_value) {

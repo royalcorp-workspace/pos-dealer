@@ -37,7 +37,7 @@
                         <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
                             Nomor Telepon / WA <span class="text-red-500">*</span>
                         </label>
-                        <input type="tel" name="phone" id="address-phone" required placeholder="08xx xxxx xxxx" class="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white transition-all">
+                        <input type="tel" name="phone" id="address-phone" required maxlength="16" pattern="^(\+62|62|0)[0-9]{8,14}$" placeholder="08xx xxxx xxxx / +628xx" class="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white transition-all">
                     </div>
                 </div>
 
@@ -74,7 +74,7 @@
                     <label class="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
                         Alamat Lengkap <span class="text-red-500">*</span>
                     </label>
-                    <textarea name="address" id="address-detail" required rows="3" placeholder="Nama jalan, nomor rumah, RT/RW, patokan lokasi" class="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white transition-all"></textarea>
+                    <textarea name="address" id="address-detail" required minlength="5" maxlength="500" rows="3" placeholder="Nama jalan, nomor rumah, RT/RW, patokan lokasi" class="w-full px-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white transition-all"></textarea>
                 </div>
 
                 <div>

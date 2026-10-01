@@ -168,6 +168,24 @@
         if (totalEl) totalEl.textContent = formatRupiah(Math.max(0, currentCartTotal - regularDiscount));
         if (selectedCouponEl) selectedCouponEl.classList.remove('hidden');
         if (discountRow) discountRow.classList.remove('hidden');
+
+        syncCartCouponsWithServer(selectedCartCoupons);
+    }
+
+    function syncCartCouponsWithServer(coupons) {
+        var token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!token) return;
+        var codes = (coupons || []).map(function(c) { return c.code; });
+        fetch('/checkout/sync-vouchers', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token,
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ voucher_codes: codes })
+        }).catch(function(err) {});
     }
 
     window.deselectCartCoupon = function () {
@@ -175,6 +193,7 @@
         selectedCartCoupon = null;
         localStorage.removeItem('selectedCartCoupon');
         localStorage.removeItem('selectedCartCoupons');
+        syncCartCouponsWithServer([]);
 
         $$('.coupon-option').forEach(function (item) {
             item.classList.remove('border-brand-gold', 'bg-brand-light');

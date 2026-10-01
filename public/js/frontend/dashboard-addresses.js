@@ -205,6 +205,81 @@
         modal.classList.remove('flex');
     };
 
+    // Real-time phone sanitizer: only digits and leading '+' allowed (no text, no symbols)
+    function sanitizePhoneNumber(val) {
+        if (!val) return '';
+        var startsWithPlus = val.startsWith('+');
+        var digits = val.replace(/\D/g, '');
+        return startsWithPlus ? '+' + digits : digits;
+    }
+
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            var orig = this.value;
+            var clean = sanitizePhoneNumber(orig);
+            if (orig !== clean) {
+                this.value = clean;
+            }
+        });
+        phoneInput.addEventListener('paste', function() {
+            var self = this;
+            setTimeout(function() {
+                self.value = sanitizePhoneNumber(self.value);
+            }, 0);
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            var phone = phoneInput ? phoneInput.value.trim() : '';
+            var address = addressInput ? addressInput.value.trim() : '';
+
+            // Phone Validation: starts with 0, 62, or +62, min 9 digits, max 16 digits, no text/symbols
+            var phoneRegex = /^(\+62|62|0)[0-9]{8,14}$/;
+            if (!phone || !phoneRegex.test(phone)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Nomor Telepon Tidak Valid',
+                        text: 'Nomor telepon harus diawali 0 atau +62 (minimal 9 digit angka tanpa teks atau simbol).',
+                        confirmButtonColor: '#B8860B'
+                    });
+                } else {
+                    alert('Nomor telepon harus diawali 0 atau +62 (minimal 9 digit angka tanpa teks atau simbol).');
+                }
+                if (phoneInput) {
+                    phoneInput.focus();
+                    phoneInput.classList.add('border-red-500');
+                }
+                return false;
+            }
+
+            // Address Validation: at least 5 chars, at least 4 alphanumeric chars (rejecting '-' or symbols)
+            var alphanumericChars = address.match(/[a-zA-Z0-9]/g);
+            if (!address || address.length < 5 || !alphanumericChars || alphanumericChars.length < 4) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Alamat Tidak Lengkap',
+                        text: 'Mohon masukkan alamat lengkap yang jelas (bukan hanya tanda strip atau simbol).',
+                        confirmButtonColor: '#B8860B'
+                    });
+                } else {
+                    alert('Mohon masukkan alamat lengkap yang jelas (bukan hanya tanda strip atau simbol).');
+                }
+                if (addressInput) {
+                    addressInput.focus();
+                    addressInput.classList.add('border-red-500');
+                }
+                return false;
+            }
+        });
+    }
+
     // Close on backdrop click
     if (modal) {
         modal.addEventListener('click', function (e) {

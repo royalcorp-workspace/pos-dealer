@@ -1,74 +1,8 @@
 @php
-    $buffer = \App\Models\Frontend\Buffer\Buffer::resolveActiveCart();
-
-    $cart = [];
-    if ($buffer) {
-        $cart = $buffer->items()
-            ->with(['product.brand', 'variant'])
-            ->get()
-            ->map(function ($item) {
-                $isBundle = str_starts_with($item->name ?? '', 'BUNDLE_');
-                $bundleNotes = [];
-                $userNote = '';
-                if ($item->item_notes) {
-                    $decodedNotes = is_string($item->item_notes) ? json_decode($item->item_notes, true) : (is_array($item->item_notes) ? $item->item_notes : null);
-                    if (is_array($decodedNotes) && (isset($decodedNotes['bundle_id']) || isset($decodedNotes['bundle_name']) || isset($decodedNotes['items']))) {
-                        $isBundle = true;
-                        $bundleNotes = $decodedNotes;
-                        $userNote = $decodedNotes['user_note'] ?? '';
-                    } else {
-                        $userNote = is_string($item->item_notes) ? $item->item_notes : '';
-                    }
-                }
-                $displayName = $item->name;
-                if ($isBundle && !empty($bundleNotes['bundle_name'])) {
-                    $displayName = $bundleNotes['bundle_name'];
-                }
-                return [
-                    'id' => $item->id,
-                    'product_id' => $item->product_id,
-                    'variant_id' => $item->product_variant_id,
-                    'name' => $displayName,
-                    'brand' => $item->product->brand->name ?? '',
-                    'image' => $item->product->thumbnail_url ?? '',
-                    'sell_price' => (float) $item->unit_price,
-                    'quantity' => (int) $item->quantity,
-                    'item_note' => $userNote,
-                    'type' => $isBundle ? 'bundle' : 'product',
-                    'bundle_data' => $bundleNotes,
-                ];
-            })
-            ->toArray();
-    }
-    $cartItemCount = collect($cart)->sum('quantity');
-    $cartTotal = 0.0;
-    foreach ($cart as $item) {
-        $isBundle = ($item['type'] ?? null) === 'bundle' || str_starts_with($item['name'] ?? '', 'BUNDLE_');
-        $bundleData = $item['bundle_data'] ?? null;
-        if ($isBundle && $bundleData) {
-            $originalPrice = (float) ($bundleData['bundle_price'] ?? ($bundleData['bundle_total_original'] ?? ($item['sell_price'] ?? 0)));
-        } else {
-            $variantId = $item['variant_id'] ?? ($item['id'] !== ($item['product_id'] ?? null) ? $item['id'] : null);
-            $originalPrice = 0.0;
-            if ($variantId) {
-                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                if ($variantModel) {
-                    $originalPrice = (float) $variantModel->sell_price;
-                }
-            }
-            if ($originalPrice <= 0.0 && !empty($item['product_id'])) {
-                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                if ($productModel) {
-                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
-                }
-            }
-            if ($originalPrice <= 0.0) {
-                $originalPrice = (float) ($item['sell_price'] ?? 0);
-            }
-        }
-        $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) ($item['quantity'] ?? 1), $originalPrice);
-        $cartTotal += (float)$res['promotional_price'] * (int) ($item['quantity'] ?? 1);
-    }
+    $cartSummary = \App\Models\Frontend\Buffer\Buffer::getActiveCartSummary();
+    $cart = $cartSummary['cart'];
+    $cartItemCount = $cartSummary['cartItemCount'];
+    $cartTotal = $cartSummary['cartTotal'];
     $isLoggedIn = session()->get('is_logged_in', false);
     $user = session()->get('user');
              $wishlist = session()->get('wishlist', []);
@@ -433,13 +367,11 @@
             <!-- Cart Drawer Trigger (Dynamic State: Clean Icon when Empty, Expanding Pill with Item Count when Loaded) -->
             <button 
                 x-data="{ 
-                    count: {{ $cartItemCount }} > 0 ? {{ $cartItemCount }} : (parseInt(localStorage.getItem('cart_count')) || 0), 
-                    total: {{ $cartTotal }} > 0 ? {{ $cartTotal }} : (parseFloat(localStorage.getItem('cart_total')) || 0),
+                    count: {{ $cartItemCount }}, 
+                    total: {{ $cartTotal }},
                     init() {
-                        if ({{ $cartItemCount }} > 0) {
-                            localStorage.setItem('cart_count', {{ $cartItemCount }});
-                            localStorage.setItem('cart_total', {{ $cartTotal }});
-                        }
+                        localStorage.setItem('cart_count', {{ $cartItemCount }});
+                        localStorage.setItem('cart_total', {{ $cartTotal }});
                         this.$watch('count', val => localStorage.setItem('cart_count', val));
                         this.$watch('total', val => localStorage.setItem('cart_total', val));
                     }

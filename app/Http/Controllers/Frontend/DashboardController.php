@@ -89,9 +89,17 @@ class DashboardController extends Controller
             $userModel = \App\Models\User::whereRaw('LOWER(email) = ?', [strtolower(trim($email))])->first();
         }
 
+        if ($request->filled('phone')) {
+            $rawPhone = trim((string) $request->phone);
+            $cleanPhone = preg_replace('/[\s\-]/', '', $rawPhone);
+            if (!preg_match('/[^\d\+\s\-]/', $rawPhone) && !empty($cleanPhone)) {
+                $request->merge(['phone' => $cleanPhone]);
+            }
+        }
+
         $rules = [
             'name' => 'required|string|max:100',
-            'phone' => 'nullable|string|max:25',
+            'phone' => ['nullable', 'string', 'min:9', 'max:20', 'regex:/^(\+62|62|0)[0-9]{8,14}$/'],
             'avatar' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ];
 
@@ -110,6 +118,8 @@ class DashboardController extends Controller
         }
 
         $messages = [
+            'phone.min' => 'Nomor telepon minimal 9 digit angka.',
+            'phone.regex' => 'Nomor telepon tidak valid. Gunakan format 08... atau +628... tanpa simbol/huruf.',
             'new_password.min' => 'Password baru minimal harus 8 karakter.',
             'new_password.regex' => 'Password baru harus mengandung setidaknya 1 huruf besar, 1 huruf kecil, 1 angka, dan 1 simbol khusus.',
             'new_password_confirmation.same' => 'Konfirmasi password baru tidak cocok.',
@@ -189,13 +199,26 @@ class DashboardController extends Controller
             return redirect()->route('home')->with('show_login', true);
         }
 
+        $rawPhone = trim((string) $request->phone);
+        $cleanPhone = preg_replace('/[\s\-]/', '', $rawPhone);
+        if (!preg_match('/[^\d\+\s\-]/', $rawPhone) && !empty($cleanPhone)) {
+            $request->merge(['phone' => $cleanPhone]);
+        }
+
         $request->validate([
             'label' => 'required|string|max:50',
             'recipient_name' => 'required|string|max:100',
-            'phone' => 'required|string|max:25',
+            'phone' => ['required', 'string', 'min:9', 'max:20', 'regex:/^(\+62|62|0)[0-9]{8,14}$/'],
             'sub_district_id' => 'required|string|exists:sub_districts,id',
-            'address' => 'required|string|max:500',
+            'address' => ['required', 'string', 'min:5', 'max:500', 'regex:/[a-zA-Z0-9]{4,}/'],
             'postal_code' => 'nullable|string|max:10',
+        ], [
+            'phone.required' => 'Nomor telepon penerima wajib diisi.',
+            'phone.min' => 'Nomor telepon minimal 9 digit angka.',
+            'phone.regex' => 'Nomor telepon tidak valid. Gunakan format 08... atau +628... tanpa simbol/huruf.',
+            'address.required' => 'Alamat lengkap wajib diisi.',
+            'address.min' => 'Alamat pengiriman terlalu pendek. Mohon isi alamat dengan detail.',
+            'address.regex' => 'Alamat pengiriman tidak valid. Mohon masukkan alamat lengkap (bukan tanda strip/simbol).',
         ]);
 
         $user = session()->get('user', []);
@@ -309,13 +332,26 @@ class DashboardController extends Controller
             abort(403);
         }
 
+        $rawPhone = trim((string) $request->phone);
+        $cleanPhone = preg_replace('/[\s\-]/', '', $rawPhone);
+        if (!preg_match('/[^\d\+\s\-]/', $rawPhone) && !empty($cleanPhone)) {
+            $request->merge(['phone' => $cleanPhone]);
+        }
+
         $request->validate([
             'label' => 'required|string|max:50',
             'recipient_name' => 'required|string|max:100',
-            'phone' => 'required|string|max:25',
+            'phone' => ['required', 'string', 'min:9', 'max:20', 'regex:/^(\+62|62|0)[0-9]{8,14}$/'],
             'sub_district_id' => 'nullable|string|exists:sub_districts,id',
-            'address' => 'required|string|max:500',
+            'address' => ['required', 'string', 'min:5', 'max:500', 'regex:/[a-zA-Z0-9]{4,}/'],
             'postal_code' => 'nullable|string|max:10',
+        ], [
+            'phone.required' => 'Nomor telepon penerima wajib diisi.',
+            'phone.min' => 'Nomor telepon minimal 9 digit angka.',
+            'phone.regex' => 'Nomor telepon tidak valid. Gunakan format 08... atau +628... tanpa simbol/huruf.',
+            'address.required' => 'Alamat lengkap wajib diisi.',
+            'address.min' => 'Alamat pengiriman terlalu pendek. Mohon isi alamat dengan detail.',
+            'address.regex' => 'Alamat pengiriman tidak valid. Mohon masukkan alamat lengkap (bukan tanda strip/simbol).',
         ]);
 
         $updateData = [
