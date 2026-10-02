@@ -105,15 +105,57 @@ class Voucher extends Model
         return true;
     }
 
+    public function resolveUserIdentifiers(?string $userId): array
+    {
+        if (!$userId) return [[], []];
+
+        $userIds = [$userId];
+        $customerIds = [];
+
+        $customer = \App\Models\Frontend\Customer\Customer::where(function ($q) use ($userId) {
+            $q->where('user_id', $userId)->orWhere('id', $userId);
+        })->first();
+
+        if ($customer) {
+            $customerIds[] = $customer->id;
+            if ($customer->user_id) {
+                $userIds[] = $customer->user_id;
+            }
+        }
+
+        return [
+            array_values(array_unique(array_filter($userIds))),
+            array_values(array_unique(array_filter($customerIds))),
+        ];
+    }
+
     public function canBeUsedBy(?string $userId): bool
     {
         if (!$this->isValid()) return false;
         if ($this->valid_for_new_customer && $userId) return false;
 
+        [$userIds, $customerIds] = $this->resolveUserIdentifiers($userId);
+        $allIdentities = array_values(array_unique(array_merge($userIds, $customerIds)));
+
         // Usage limit per user check
-        if ($this->usage_limit_per_user && $userId) {
+        if ($this->usage_limit_per_user && !empty($allIdentities)) {
             $userUsages = $this->usages()
-                ->where('user_id', $userId)
+                ->where(function ($uq) use ($userIds, $customerIds) {
+                    if (!empty($userIds)) {
+                        $uq->whereIn('voucher_usages.user_id', $userIds);
+                    }
+                    if (!empty($customerIds)) {
+                        $uq->orWhereExists(function ($oq) use ($customerIds) {
+                            $oq->select(DB::raw(1))
+                                ->from('orders')
+                                ->where(function ($q) {
+                                    $q->whereRaw('CAST(orders.id AS VARCHAR) = voucher_usages.order_id')
+                                      ->orWhereRaw('orders.order_number = voucher_usages.order_id');
+                                })
+                                ->whereIn('orders.customer_id', $customerIds);
+                        });
+                    }
+                })
                 ->whereExists(function ($query) {
                     $query->select(DB::raw(1))
                         ->from('orders')
@@ -121,19 +163,21 @@ class Voucher extends Model
                             $q->whereRaw('CAST(orders.id AS VARCHAR) = voucher_usages.order_id')
                               ->orWhereRaw('orders.order_number = voucher_usages.order_id');
                         })
-                        ->whereIn('orders.status', [2, 3, 4, 5]);
+                        ->where('orders.status', '!=', 6) // Exclude cancelled orders
+                        ->where('orders.deleted', false);
                 })
                 ->count();
+
             if ($userUsages >= $this->usage_limit_per_user) return false;
         }
 
         // Scope 2: Customer tertentu
         if ((int) $this->scope === 2) {
-            if (!$userId) return false;
+            if (empty($allIdentities)) return false;
             $hasAccess = $this->customers()
-                ->where(function ($q) use ($userId) {
-                    $q->where('customers.id', $userId)
-                      ->orWhere('customers.user_id', $userId);
+                ->where(function ($q) use ($allIdentities) {
+                    $q->whereIn('customers.id', $allIdentities)
+                      ->orWhereIn('customers.user_id', $allIdentities);
                 })
                 ->exists();
             if (!$hasAccess) return false;
@@ -141,11 +185,11 @@ class Voucher extends Model
 
         // Scope 7: Group customer (Karyawan / Reseller)
         if ((int) $this->scope === 7) {
-            if (!$userId) return false;
+            if (empty($allIdentities)) return false;
             $hasAccess = $this->customerGroups()
-                ->whereHas('members', function ($q) use ($userId) {
-                    $q->where('customers.id', $userId)
-                      ->orWhere('customers.user_id', $userId);
+                ->whereHas('members', function ($q) use ($allIdentities) {
+                    $q->whereIn('customers.id', $allIdentities)
+                      ->orWhereIn('customers.user_id', $allIdentities);
                 })
                 ->exists();
             if (!$hasAccess) return false;
@@ -153,15 +197,15 @@ class Voucher extends Model
 
         // Claimable voucher check: Must be claimed first if visibility is claimable
         if (($this->visibility ?? 'public') === 'claimable') {
-            if (!$userId) return false;
+            if (empty($allIdentities)) return false;
             $hasClaimed = $this->claims()
-                ->where(function ($q) use ($userId) {
-                    $q->where('customer_id', $userId)
-                      ->orWhereExists(function ($cq) use ($userId) {
+                ->where(function ($q) use ($allIdentities) {
+                    $q->whereIn('customer_id', $allIdentities)
+                      ->orWhereExists(function ($cq) use ($allIdentities) {
                           $cq->select(DB::raw(1))
                              ->from('customers')
                              ->whereRaw('customers.id = voucher_claims.customer_id')
-                             ->where('customers.user_id', $userId);
+                             ->whereIn('customers.user_id', $allIdentities);
                       });
                 })
                 ->exists();
@@ -170,16 +214,16 @@ class Voucher extends Model
 
         // Store follow check
         if ($this->require_follow && $this->store_id) {
-            if (!$userId) return false;
+            if (empty($allIdentities)) return false;
             $isFollowing = DB::table('store_followers')
                 ->where('store_id', $this->store_id)
-                ->where(function ($q) use ($userId) {
-                    $q->where('customer_id', $userId)
-                      ->orWhereExists(function ($sq) use ($userId) {
+                ->where(function ($q) use ($allIdentities) {
+                    $q->whereIn('customer_id', $allIdentities)
+                      ->orWhereExists(function ($sq) use ($allIdentities) {
                           $sq->select(DB::raw(1))
                              ->from('customers')
                              ->whereRaw('customers.id = store_followers.customer_id')
-                             ->where('customers.user_id', $userId);
+                             ->whereIn('customers.user_id', $allIdentities);
                       });
                 })
                 ->exists();
@@ -187,6 +231,123 @@ class Voucher extends Model
         }
 
         return true;
+    }
+
+    public function getEligibleProductIds(array $cart): array
+    {
+        $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
+        if (empty($cartProductIds)) return [];
+
+        // Scope 1, 2, 7: all products in cart are eligible
+        if (in_array((int) $this->scope, [1, 2, 7], true)) {
+            return $cartProductIds;
+        }
+
+        // Scope 3: Kategori tertentu
+        if ((int) $this->scope === 3) {
+            if ($this->relationLoaded('categories')) {
+                $catProductIds = $this->categories->where('deleted', false)
+                    ->flatMap(fn($cat) => $cat->products ? $cat->products->where('deleted', false)->pluck('id') : [])
+                    ->unique()
+                    ->toArray();
+            } else {
+                $catProductIds = $this->categories()
+                    ->where('product_category.deleted', false)
+                    ->with('products')
+                    ->get()
+                    ->flatMap(fn($cat) => $cat->products->where('deleted', false)->pluck('id'))
+                    ->unique()
+                    ->toArray();
+            }
+            return array_values(array_intersect($cartProductIds, $catProductIds));
+        }
+
+        // Scope 4: Produk Tertentu (per Artikel)
+        if ((int) $this->scope === 4) {
+            $eligibleProductIds = $this->relationLoaded('products')
+                ? $this->products->where('deleted', false)->pluck('id')->toArray()
+                : $this->products()->where('products.deleted', false)->pluck('products.id')->toArray();
+            return array_values(array_intersect($cartProductIds, $eligibleProductIds));
+        }
+
+        // Scope 5: Brand Tertentu
+        if ((int) $this->scope === 5) {
+            $brandIds = $this->relationLoaded('brands')
+                ? $this->brands->where('deleted', false)->pluck('id')->toArray()
+                : $this->brands()->where('brands.deleted', false)->pluck('brands.id')->toArray();
+            $brandProductIds = \App\Models\Frontend\ProductsCatalog\Product::whereIn('brand_id', $brandIds)
+                ->where('deleted', false)
+                ->pluck('id')
+                ->toArray();
+            return array_values(array_intersect($cartProductIds, $brandProductIds));
+        }
+
+        // Scope 6: Brand & Artikel Tertentu
+        if ((int) $this->scope === 6) {
+            $directProductIds = $this->relationLoaded('products')
+                ? $this->products->where('deleted', false)->pluck('id')->toArray()
+                : $this->products()->where('products.deleted', false)->pluck('products.id')->toArray();
+            $brandIds = $this->relationLoaded('brands')
+                ? $this->brands->where('deleted', false)->pluck('id')->toArray()
+                : $this->brands()->where('brands.deleted', false)->pluck('brands.id')->toArray();
+            $brandProductIds = \App\Models\Frontend\ProductsCatalog\Product::whereIn('brand_id', $brandIds)
+                ->where('deleted', false)
+                ->pluck('id')
+                ->toArray();
+            $allEligible = array_values(array_unique(array_merge($directProductIds, $brandProductIds)));
+            return array_values(array_intersect($cartProductIds, $allEligible));
+        }
+
+        return $cartProductIds;
+    }
+
+    public function getEligibleSubtotal(array $cart): float
+    {
+        if (empty($cart)) return 0.0;
+
+        $eligibleProductIds = $this->getEligibleProductIds($cart);
+
+        if (in_array((int) $this->scope, [3, 4, 5, 6], true) && empty($eligibleProductIds)) {
+            return 0.0;
+        }
+
+        return (float) collect($cart)
+            ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
+            ->sum(fn($item) => ((float)($item['sell_price'] ?? $item['price'] ?? 0)) * ((int)($item['quantity'] ?? 0)));
+    }
+
+    public function appliesToCart(array $cart, ?string $userId = null): bool
+    {
+        if (empty($cart)) return false;
+        if (!$this->canBeUsedBy($userId)) return false;
+
+        if (in_array((int) $this->scope, [3, 4, 5, 6], true)) {
+            $eligibleIds = $this->getEligibleProductIds($cart);
+            if (empty($eligibleIds)) return false;
+            if ($this->getEligibleSubtotal($cart) <= 0) return false;
+        }
+
+        return true;
+    }
+
+    public function calculateDiscountValue(float $eligibleSubtotal, float $shippingCost = 0.0): float
+    {
+        $voucherValue = (float) $this->value;
+
+        if ((int) $this->type === 1) {
+            $maxDiscount = ($this->max_discount !== null && (float) $this->max_discount > 0) ? (float) $this->max_discount : PHP_FLOAT_MAX;
+            return (float) min(($eligibleSubtotal * $voucherValue / 100), $maxDiscount);
+        }
+
+        if ((int) $this->type === 2) {
+            return (float) min($voucherValue, $eligibleSubtotal);
+        }
+
+        if ((int) $this->type === 3) {
+            return (float) min($voucherValue, $shippingCost);
+        }
+
+        return 0.0;
     }
 
     public function isStackable(): bool
