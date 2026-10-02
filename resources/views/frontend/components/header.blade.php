@@ -103,17 +103,76 @@
             </a>
         </div>
 
-        <!-- Search Bar -->
+        <!-- Search Bar with Popular Searches & Keyboard Accessibility -->
         <div class="hidden md:flex flex-1 max-w-xl mx-2 lg:mx-4 relative" x-data="{
             query: '{{ request('value', '') }}',
             suggestions: [],
             showSuggestions: false,
             loading: false,
             debounce: null,
-            fetchSuggestions() {
-                if (this.query.length < 2) {
-                    this.suggestions = [];
+            selectedIndex: -1,
+            popularSearches: [
+                'Elite Orthopedic',
+                'Serenity Supreme',
+                'Kasur 160x200',
+                'Kasur 180x200',
+                'Royal Foam',
+                'Bantal Guling',
+                'Bed Set'
+            ],
+            selectPopular(term) {
+                this.query = term;
+                this.fetchSuggestions();
+                this.$nextTick(() => {
+                    if (this.$refs.desktopSearchInput) {
+                        this.$refs.desktopSearchInput.focus();
+                    }
+                });
+            },
+            onKeydown(e) {
+                if (!this.showSuggestions) {
+                    if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                        this.showSuggestions = true;
+                    }
+                    return;
+                }
+
+                if (e.key === 'Escape') {
                     this.showSuggestions = false;
+                    this.selectedIndex = -1;
+                    return;
+                }
+
+                const isSearching = this.query.trim().length >= 2;
+                const totalItems = isSearching ? this.suggestions.length : this.popularSearches.length;
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (totalItems > 0) {
+                        this.selectedIndex = (this.selectedIndex + 1) % totalItems;
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (totalItems > 0) {
+                        this.selectedIndex = (this.selectedIndex - 1 + totalItems) % totalItems;
+                    }
+                } else if (e.key === 'Enter') {
+                    if (this.selectedIndex >= 0) {
+                        e.preventDefault();
+                        if (isSearching && this.suggestions[this.selectedIndex]) {
+                            const item = this.suggestions[this.selectedIndex];
+                            window.location.href = '/products/' + item.slug;
+                        } else if (!isSearching && this.popularSearches[this.selectedIndex]) {
+                            const term = this.popularSearches[this.selectedIndex];
+                            window.location.href = '/products?type=search&value=' + encodeURIComponent(term);
+                        }
+                    }
+                }
+            },
+            fetchSuggestions() {
+                this.selectedIndex = -1;
+                if (this.query.trim().length < 2) {
+                    this.suggestions = [];
                     return;
                 }
                 this.loading = true;
@@ -123,23 +182,24 @@
                     try {
                         const res = await fetch('/products/search-suggestions?q=' + encodeURIComponent(this.query));
                         const data = await res.json();
-                        this.suggestions = data;
+                        this.suggestions = Array.isArray(data) ? data : [];
                     } catch (e) {
                         console.error(e);
                     } finally {
                         this.loading = false;
                     }
-                }, 300);
+                }, 250);
             }
-        }" @click.outside="showSuggestions = false">
-            <form action="{{ route('products.index') }}" method="GET" class="relative w-full z-50">
+        }" @click.outside="showSuggestions = false; selectedIndex = -1">
+            <form action="{{ route('products.index') }}" method="GET" class="relative w-full z-50" @keydown="onKeydown($event)">
                 <input type="hidden" name="type" value="search">
                 <input 
                     type="text" 
                     name="value"
+                    x-ref="desktopSearchInput"
                     x-model="query"
                     @input="fetchSuggestions()"
-                    @focus="if(query.length >= 2) showSuggestions = true"
+                    @focus="showSuggestions = true; if(query.trim().length >= 2 && suggestions.length === 0) fetchSuggestions()"
                     placeholder="{{ __('Cari kasur, spring bed, aksesoris tidur...') }}" 
                     class="w-full {{ $searchBg }} border focus:border-brand-gold text-gray-800 text-sm rounded-full pl-5 pr-20 py-2.5 focus:outline-none focus:ring-3 focus:ring-brand-gold/15 transition-all placeholder:text-gray-400 shadow-2xs"
                     autocomplete="off"
@@ -148,7 +208,7 @@
                 <button 
                     type="button" 
                     x-show="query.length > 0" 
-                    @click="query = ''; suggestions = []; showSuggestions = false; $el.closest('form').querySelector('input[name=value]').focus()" 
+                    @click="query = ''; suggestions = []; selectedIndex = -1; $el.closest('form').querySelector('input[name=value]').focus()" 
                     class="absolute right-10 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-brand-dark transition-colors cursor-pointer"
                     aria-label="Hapus pencarian"
                     style="display: none;"
@@ -161,40 +221,97 @@
                 </button>
             </form>
 
-            <!-- Search Suggestions Dropdown -->
+            <!-- Search Suggestions & Popular Searches Dropdown -->
             <div 
                 x-show="showSuggestions" 
-                x-transition
+                x-cloak
+                x-transition:enter="transition ease-out duration-150 transform"
+                x-transition:enter-start="opacity-0 translate-y-1 scale-98"
+                x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                x-transition:leave="transition ease-in duration-100 transform"
+                x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                x-transition:leave-end="opacity-0 translate-y-1 scale-98"
                 style="display: none;"
                 class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[100]"
             >
-                <div x-show="suggestions.length > 0" class="flex flex-col">
+                <!-- CASE 1: Query < 2 chars -> SHOW PENCARIAN POPULER -->
+                <div x-show="query.trim().length < 2" class="p-4 sm:p-5">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-100">
+                        <span class="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <i class="fa-solid fa-fire text-amber-500 text-xs"></i>
+                            {{ __('Pencarian Populer') }}
+                        </span>
+                        <span class="text-[10px] text-gray-400 font-medium">{{ __('Klik untuk mencari') }}</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="(term, idx) in popularSearches" :key="term">
+                            <button
+                                type="button"
+                                @click="selectPopular(term)"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-150 cursor-pointer border"
+                                :class="selectedIndex === idx ? 'bg-brand-dark text-white border-brand-dark shadow-xs' : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-brand-gold hover:bg-brand-light/50 hover:text-brand-dark'"
+                            >
+                                <i class="fa-solid fa-magnifying-glass text-[10px] opacity-50"></i>
+                                <span x-text="term"></span>
+                            </button>
+                        </template>
+                    </div>
+                    <div class="mt-3.5 pt-2.5 border-t border-gray-100/70 flex items-center justify-between text-[11px] text-gray-400">
+                        <span>{{ __('Gunakan tombol panah ↑ ↓ dan Enter untuk memilih') }}</span>
+                        <span class="font-mono text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">ESC tutup</span>
+                    </div>
+                </div>
+
+                <!-- CASE 2: Query >= 2 chars & Results exist -> SHOW RESULTS -->
+                <div x-show="query.trim().length >= 2 && suggestions.length > 0" class="flex flex-col">
                     <div class="px-4 py-2.5 bg-gray-50/80 border-b border-gray-100 flex items-center justify-between">
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{{ __('Produk Terkait') }}</span>
                         <span class="text-[10px] text-brand-gold-dark font-medium" x-text="suggestions.length + ' Ditemukan'"></span>
                     </div>
-                    <template x-for="item in suggestions" :key="item.id">
-                        <a :href="'/products/' + item.slug" class="flex items-center gap-3 p-3 hover:bg-brand-light/40 transition-colors border-b border-gray-50 last:border-0 group">
-                            <div class="w-11 h-11 rounded-lg bg-[#FAF8F5] border border-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5">
-                                <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="max-w-full max-h-full object-contain">
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h4 class="text-xs sm:text-sm font-bold text-brand-dark truncate group-hover:text-brand-gold-dark transition-colors" x-text="item.name"></h4>
-                                <div class="flex items-center gap-2 mt-0.5 text-xs">
-                                    <span class="text-gray-400 font-medium truncate max-w-[120px]" x-text="item.category"></span>
-                                    <span class="text-gray-300">•</span>
-                                    <span class="font-extrabold text-brand-dark truncate" x-text="'Rp ' + Number(item.sell_price ?? item.price ?? 0).toLocaleString('id-ID')"></span>
+                    <div class="max-h-80 overflow-y-auto">
+                        <template x-for="(item, idx) in suggestions" :key="item.id">
+                            <a 
+                                :href="'/products/' + item.slug" 
+                                class="flex items-center gap-3 p-3 transition-colors border-b border-gray-50 last:border-0 group cursor-pointer"
+                                :class="selectedIndex === idx ? 'bg-brand-light/70 ring-1 ring-inset ring-brand-gold/30' : 'hover:bg-brand-light/40'"
+                            >
+                                <div class="w-11 h-11 rounded-lg bg-[#FAF8F5] border border-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center p-0.5">
+                                    <img :src="item.thumbnail_url || '{{ asset('images/dummy/header.jpg') }}'" :alt="item.name" class="max-w-full max-h-full object-contain">
                                 </div>
-                            </div>
-                        </a>
-                    </template>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="text-xs sm:text-sm font-bold text-brand-dark truncate group-hover:text-brand-gold-dark transition-colors" x-text="item.name"></h4>
+                                    <div class="flex items-center gap-2 mt-0.5 text-xs">
+                                        <span class="text-gray-400 font-medium truncate max-w-[120px]" x-text="item.category"></span>
+                                        <span class="text-gray-300">•</span>
+                                        <span class="font-extrabold text-brand-dark truncate" x-text="'Rp ' + Number(item.sell_price ?? item.price ?? 0).toLocaleString('id-ID')"></span>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-xs text-gray-300 group-hover:text-brand-gold-dark group-hover:translate-x-0.5 transition-all"></i>
+                            </a>
+                        </template>
+                    </div>
                     <a :href="'/products?type=search&value=' + encodeURIComponent(query)" class="block text-center py-2.5 text-xs font-bold text-brand-dark hover:text-brand-gold-dark hover:bg-brand-light/50 transition-colors border-t border-gray-100">
                         {{ __('Lihat Semua Hasil Pencarian') }} <i class="fa-solid fa-arrow-right ml-1"></i>
                     </a>
                 </div>
-                <div x-show="suggestions.length === 0 && !loading" class="p-6 text-center text-gray-500">
+
+                <!-- CASE 3: Query >= 2 chars & Results Empty -->
+                <div x-show="query.trim().length >= 2 && suggestions.length === 0 && !loading" class="p-6 text-center text-gray-500">
                     <i class="fa-solid fa-box-open mb-2 text-2xl text-gray-200"></i>
                     <p class="text-xs font-medium">{{ __('Tidak menemukan produk untuk pencarian ini.') }}</p>
+                    <div class="mt-3">
+                        <span class="text-[11px] text-gray-400 block mb-2">{{ __('Coba kata kunci populer berikut:') }}</span>
+                        <div class="flex flex-wrap justify-center gap-1.5">
+                            <template x-for="term in popularSearches.slice(0, 4)" :key="term">
+                                <button
+                                    type="button"
+                                    @click="selectPopular(term)"
+                                    class="text-[11px] font-semibold text-brand-gold-dark bg-brand-gold/10 hover:bg-brand-gold/20 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                                    x-text="term"
+                                ></button>
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -378,36 +495,51 @@
                 x-data="{ 
                     count: {{ $cartItemCount }}, 
                     total: {{ $cartTotal }},
+                    isBumping: false,
+                    triggerBump() {
+                        this.isBumping = true;
+                        setTimeout(() => { this.isBumping = false; }, 400);
+                    },
                     init() {
                         localStorage.setItem('cart_count', {{ $cartItemCount }});
                         localStorage.setItem('cart_total', {{ $cartTotal }});
-                        this.$watch('count', val => localStorage.setItem('cart_count', val));
+                        this.$watch('count', (val, oldVal) => {
+                            localStorage.setItem('cart_count', val);
+                            if (val !== oldVal) this.triggerBump();
+                        });
                         this.$watch('total', val => localStorage.setItem('cart_total', val));
                     }
                 }"
-                @cart-added.window="if($event.detail.cart_count !== undefined) { count = $event.detail.cart_count; total = $event.detail.cart_total || 0; }"
-                @cart-updated.window="if($event.detail.count !== undefined) { count = $event.detail.count; total = $event.detail.total || 0; }"
+                @cart-added.window="if($event.detail.cart_count !== undefined) { count = $event.detail.cart_count; total = $event.detail.cart_total || 0; triggerBump(); }"
+                @cart-updated.window="if($event.detail.count !== undefined) { count = $event.detail.count; total = $event.detail.total || 0; triggerBump(); }"
                 @cart-drawer-updated.window="
                     setTimeout(() => {
                         let badge = document.getElementById('cart-count-badge');
                         if (badge) count = parseInt(badge.textContent) || 0;
                         let totalEl = document.getElementById('header-cart-total');
                         if (totalEl) total = parseFloat(totalEl.textContent.replace(/[^0-9]/g, '')) || 0;
+                        triggerBump();
                     }, 100);
                 "
                 @click="isCartOpen = true"
                 class="flex items-center transition-all duration-300 focus:outline-none cursor-pointer group relative"
-                :class="count > 0 ? 'bg-amber-50/90 hover:bg-brand-gold/20 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full border-2 border-brand-gold/70 hover:border-brand-gold shadow-xs gap-2 sm:gap-2.5' : 'justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80'"
+                :class="[
+                    count > 0 ? 'bg-amber-50/90 hover:bg-brand-gold/20 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full border-2 border-brand-gold/70 hover:border-brand-gold shadow-xs gap-2 sm:gap-2.5' : 'justify-center w-10 h-10 rounded-full bg-gray-50 hover:bg-brand-gold/15 border border-gray-200/80',
+                    isBumping ? 'scale-105' : 'scale-100'
+                ]"
                 title="Buka Keranjang"
                 aria-label="Keranjang Belanja"
             >
                 <div class="relative">
-                    <i class="fa-solid fa-bag-shopping text-base text-gray-700 group-hover:text-brand-dark transition-colors"></i>
+                    <i class="fa-solid fa-bag-shopping text-base text-gray-700 group-hover:text-brand-dark transition-transform" :class="isBumping ? 'text-brand-gold-dark scale-110' : ''"></i>
                     <span 
                         id="cart-count-badge" 
                         x-text="count"
-                        class="absolute -top-2.5 -right-2.5 text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-xs ring-2 ring-white tabular-nums transition-colors"
-                        :class="count > 0 ? 'bg-red-600 text-white' : 'bg-stone-300 text-stone-600'"
+                        class="absolute -top-2.5 -right-2.5 text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-xs ring-2 ring-white tabular-nums transition-all duration-300"
+                        :class="[
+                            count > 0 ? 'bg-red-600 text-white' : 'bg-stone-300 text-stone-600',
+                            isBumping ? 'scale-125 animate-bounce ring-4 ring-brand-gold/50 shadow-md' : 'scale-100'
+                        ]"
                     >
                         {{ $cartItemCount }}
                     </span>
@@ -466,10 +598,25 @@
                     </a>
                 </li>
 
-                <!-- Kasur & Kategori Dropdown Trigger -->
+                <!-- Kasur & Kategori Dropdown Trigger with Auto-Positioning -->
                 <li 
                     class="h-full flex items-center cursor-pointer relative"
-                    @mouseenter="activeMegaMenu = 'categories'"
+                    x-data="{
+                        dropdownAlign: 'left',
+                        checkBoundary() {
+                            this.$nextTick(() => {
+                                const el = this.$refs.categoriesDropdown;
+                                if (!el) return;
+                                const rect = el.getBoundingClientRect();
+                                if (rect.right > (window.innerWidth - 16)) {
+                                    this.dropdownAlign = 'right';
+                                } else if (rect.left < 16) {
+                                    this.dropdownAlign = 'left';
+                                }
+                            });
+                        }
+                    }"
+                    @mouseenter="activeMegaMenu = 'categories'; checkBoundary()"
                     @mouseleave="activeMegaMenu = null"
                 >
                     <a href="{{ route('categories') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1.5 focus:outline-hidden py-2 {{ request()->routeIs('categories*') || request()->routeIs('category.*') ? 'text-brand-gold-dark font-bold' : '' }}">
@@ -477,8 +624,9 @@
                         <svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-200" :class="activeMegaMenu === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
 
-                    <!-- Clean Dropdown Content -->
+                    <!-- Clean Dropdown Content with Auto-Positioning -->
                     <div 
+                        x-ref="categoriesDropdown"
                         x-show="activeMegaMenu === 'categories'"
                         x-cloak
                         x-transition:enter="transition ease-out duration-200"
@@ -487,7 +635,8 @@
                         x-transition:leave="transition ease-in duration-150"
                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                         x-transition:leave-end="opacity-0 translate-y-2 scale-98"
-                        class="absolute top-full left-0 w-[840px] lg:w-[960px] bg-white shadow-2xl border border-stone-200/90 rounded-2xl p-6 z-50 overflow-hidden font-sans"
+                        class="absolute top-full w-[840px] lg:w-[960px] max-w-[calc(100vw-2.5rem)] bg-white shadow-2xl border border-stone-200/90 rounded-2xl p-6 z-50 overflow-hidden font-sans"
+                        :class="dropdownAlign === 'right' ? 'right-0 left-auto' : 'left-0 right-auto'"
                     >
                         <div class="mb-4 pb-3 border-b border-gray-100 flex items-center justify-between">
                             <span class="font-bold text-sm tracking-tight text-brand-dark inline-block border-b-2 border-brand-dark pb-0.5">{{ __('Product Categories') }}</span>
@@ -527,10 +676,25 @@
                     </div>
                 </li>
 
-                <!-- Brand Dropdown Trigger -->
+                <!-- Brand Dropdown Trigger with Auto-Positioning -->
                 <li 
                     class="h-full flex items-center cursor-pointer relative"
-                    @mouseenter="activeMegaMenu = 'brands'"
+                    x-data="{
+                        dropdownAlign: 'left',
+                        checkBoundary() {
+                            this.$nextTick(() => {
+                                const el = this.$refs.brandDropdown;
+                                if (!el) return;
+                                const rect = el.getBoundingClientRect();
+                                if (rect.right > (window.innerWidth - 16)) {
+                                    this.dropdownAlign = 'right';
+                                } else if (rect.left < 16) {
+                                    this.dropdownAlign = 'left';
+                                }
+                            });
+                        }
+                    }"
+                    @mouseenter="activeMegaMenu = 'brands'; checkBoundary()"
                     @mouseleave="activeMegaMenu = null"
                 >
                     <a href="{{ route('brands') }}" class="nav-link text-sm font-semibold text-brand-dark hover:text-brand-gold-dark transition-colors flex items-center gap-1.5 focus:outline-hidden py-2 {{ request()->routeIs('brands*') ? 'text-brand-gold-dark font-bold' : '' }}">
@@ -538,8 +702,9 @@
                         <svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-200" :class="activeMegaMenu === 'brands' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     
-                    <!-- Clean Brands Dropdown Content (Matching header-brand.jpeg) -->
+                    <!-- Clean Brands Dropdown Content with Auto-Positioning (Text-only 2-column Card Layout) -->
                     <div 
+                        x-ref="brandDropdown"
                         x-show="activeMegaMenu === 'brands'"
                         x-cloak
                         x-transition:enter="transition ease-out duration-200"
@@ -548,44 +713,26 @@
                         x-transition:leave="transition ease-in duration-150"
                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                         x-transition:leave-end="opacity-0 translate-y-2 scale-98"
-                        class="absolute top-full left-0 mt-1 w-[320px] sm:w-[350px] bg-white shadow-2xl border border-gray-100 rounded-2xl p-5 z-50 overflow-hidden"
+                        class="absolute top-full mt-1 w-[300px] sm:w-[330px] max-w-[calc(100vw-2rem)] bg-white shadow-2xl border border-gray-100 rounded-2xl p-4 sm:p-5 z-50 overflow-hidden"
+                        :class="dropdownAlign === 'right' ? 'right-0 left-auto' : 'left-0 right-auto'"
                     >
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-6">
+                        <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
                             @foreach($brands as $brand)
                                 @php
-                                    $isDarkLogo = in_array(strtolower($brand->slug), ['elite', 'royal']);
                                     $displayName = Str::title(strtolower(html_entity_decode($brand->name)));
                                 @endphp
                                 <a 
                                     href="{{ route('brands.show', $brand->slug) }}" 
-                                    class="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-gray-50/80 transition-all duration-200 group text-center"
+                                    class="flex items-center justify-center p-3 sm:py-3.5 sm:px-4 rounded-xl border border-gray-100 bg-[#FAF8F5]/50 hover:bg-white hover:border-brand-gold/60 hover:shadow-2xs transition-all duration-200 group text-center"
                                 >
-                                    <div class="w-full max-w-[120px] h-12 rounded-lg flex items-center justify-center p-1.5 mb-2 transition-all duration-200 {{ $isDarkLogo ? 'bg-[#ECEEF2]' : 'bg-transparent' }}">
-                                        @if($brand->logo)
-                                            <img 
-                                                src="{{ cms_asset($brand->logo) }}" 
-                                                alt="{{ $brand->name }}" 
-                                                class="{{ $isDarkLogo ? 'max-h-7 max-w-[88px]' : 'max-h-9 max-w-[95px]' }} w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
-                                                loading="lazy" 
-                                                decoding="async"
-                                            />
-                                        @else
-                                            <div class="w-9 h-9 rounded-full bg-brand-light flex items-center justify-center text-brand-gold font-bold text-xs">
-                                                {{ substr($brand->name, 0, 1) }}
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <h4 class="font-medium text-brand-dark text-base tracking-tight group-hover:text-brand-gold-dark transition-colors leading-tight">
+                                    <h4 class="font-bold text-brand-dark text-sm sm:text-base tracking-tight group-hover:text-brand-gold-dark transition-colors leading-tight">
                                         {{ $displayName }}
                                     </h4>
-                                    <span class="text-xs text-gray-400 group-hover:text-brand-gold-dark transition-colors font-normal mt-0.5">
-                                        View {{ $brand->products_count }} products
-                                    </span>
                                 </a>
                             @endforeach
                         </div>
-                        <div class="pt-3 border-t border-gray-100 mt-4">
-                            <a href="{{ route('brands') }}" class="flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
+                        <div class="pt-3 border-t border-gray-100 mt-3.5">
+                            <a href="{{ route('brands') }}" class="flex items-center justify-center gap-1.5 py-1 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
                                 <span>{{ __('Lihat Semua Brand') }}</span>
                                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             </a>
@@ -616,22 +763,6 @@
                 </li>
             </ul>
         </div>
-    </div>
-
-    <!-- Mobile Search Bar -->
-    <div class="md:hidden px-4 pb-3">
-        <form action="{{ route('products.index') }}" method="GET" class="relative w-full">
-            <input type="hidden" name="type" value="search">
-            <input 
-                type="text" 
-                name="value"
-                placeholder="Cari produk..." 
-                class="w-full bg-brand-light border border-brand-muted text-gray-800 text-sm rounded-full pl-4 pr-12 py-2 focus:outline-none focus:ring-2 focus:ring-brand-gold/50"
-            />
-            <button type="submit" class="absolute right-1 top-1 p-1 bg-brand-dark text-white rounded-full" aria-label="Cari">
-                <i class="fa-solid fa-magnifying-glass w-4 h-4"></i>
-            </button>
-        </form>
     </div>
 
     
@@ -738,35 +869,16 @@
                     <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
                         @foreach($brands as $brand)
                             @php
-                                $isDarkLogo = in_array(strtolower($brand->slug), ['elite', 'royal']);
                                 $displayName = Str::title(strtolower(html_entity_decode($brand->name)));
                             @endphp
                             <a 
                                 href="{{ route('brands.show', $brand->slug) }}" 
-                                class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-gray-100 hover:border-brand-gold/40 hover:bg-brand-light/20 transition-all text-center"
+                                class="flex items-center justify-center p-3 rounded-xl border border-gray-100 bg-[#FAF8F5]/50 hover:bg-white hover:border-brand-gold/60 hover:shadow-2xs transition-all text-center"
                                 @click="isMobileMenuOpen = false"
                             >
-                                <div class="w-full max-w-[100px] h-11 rounded-lg flex items-center justify-center p-1 mb-1.5 {{ $isDarkLogo ? 'bg-[#ECEEF2]' : 'bg-transparent' }}">
-                                    @if($brand->logo)
-                                        <img 
-                                            src="{{ cms_asset($brand->logo) }}" 
-                                            alt="{{ $brand->name }}" 
-                                            class="{{ $isDarkLogo ? 'max-h-6 max-w-[75px]' : 'max-h-8 max-w-[85px]' }} w-auto object-contain" 
-                                            loading="lazy" 
-                                            decoding="async"
-                                        />
-                                    @else
-                                        <div class="w-8 h-8 rounded-full bg-brand-light flex items-center justify-center text-brand-gold font-bold text-xs">
-                                            {{ substr($brand->name, 0, 1) }}
-                                        </div>
-                                    @endif
-                                </div>
-                                <h4 class="font-medium text-brand-dark text-sm tracking-tight leading-tight">
+                                <h4 class="font-bold text-brand-dark text-sm tracking-tight leading-tight">
                                     {{ $displayName }}
                                 </h4>
-                                <span class="text-[11px] text-gray-400 font-normal mt-0.5">
-                                    View {{ $brand->products_count }} products
-                                </span>
                             </a>
                         @endforeach
                     </div>

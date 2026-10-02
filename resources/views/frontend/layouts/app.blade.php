@@ -618,6 +618,9 @@
     </div>
 
     <!-- Mobile Bottom Navigation -->
+    @php
+        $navCartCount = collect($cart ?? session()->get('cart', []))->sum('quantity');
+    @endphp
     <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-[90] flex items-center justify-around h-[70px] shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-[env(safe-area-inset-bottom)]">
         <a href="{{ route('home') }}" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors {{ request()->routeIs('home') ? 'text-brand-gold' : '' }}">
             <i class="fa-solid fa-house text-[22px] mb-1"></i>
@@ -627,17 +630,37 @@
             <i class="fa-solid fa-store text-[22px] mb-1"></i>
             <span class="text-[10px] font-medium">Shop</span>
         </a>
-        <button @click="isCartOpen = true" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors relative focus:outline-none">
+        <button 
+            @click="isCartOpen = true" 
+            x-data="{ 
+                mCount: {{ $navCartCount }},
+                isBumping: false,
+                triggerBump() {
+                    this.isBumping = true;
+                    setTimeout(() => { this.isBumping = false; }, 400);
+                }
+            }"
+            @cart-added.window="if($event.detail.cart_count !== undefined) { mCount = $event.detail.cart_count; triggerBump(); }"
+            @cart-updated.window="if($event.detail.count !== undefined) { mCount = $event.detail.count; triggerBump(); }"
+            @cart-drawer-updated.window="
+                setTimeout(() => {
+                    let badge = document.getElementById('cart-count-badge');
+                    if (badge) mCount = parseInt(badge.textContent) || 0;
+                    triggerBump();
+                }, 100);
+            "
+            class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-gold transition-colors relative focus:outline-none cursor-pointer"
+        >
             <div class="relative">
-                <i class="fa-solid fa-cart-shopping text-[22px] mb-1"></i>
-                @php
-                    $navCartCount = collect($cart ?? [])->sum('quantity');
-                @endphp
-                @if($navCartCount > 0)
-                    <span class="absolute -top-1.5 -right-2 bg-brand-gold text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
-                        {{ $navCartCount }}
-                    </span>
-                @endif
+                <i class="fa-solid fa-cart-shopping text-[22px] mb-1 transition-transform" :class="isBumping ? 'scale-110 text-brand-gold' : ''"></i>
+                <span 
+                    x-show="mCount > 0"
+                    x-text="mCount"
+                    class="absolute -top-1.5 -right-2 bg-brand-gold text-white text-[9px] font-bold min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center shadow-sm transition-all duration-300"
+                    :class="isBumping ? 'scale-125 animate-bounce ring-2 ring-brand-gold/60' : 'scale-100'"
+                >
+                    {{ $navCartCount }}
+                </span>
             </div>
             <span class="text-[10px] font-medium">Cart</span>
         </button>
