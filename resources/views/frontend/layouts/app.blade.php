@@ -510,6 +510,12 @@
         @if(session('status') && is_string(session('status')) && trim(session('status')) !== '')
             addToast('success', '{{ addslashes(session('status')) }}');
         @endif
+        @if(session('warning') && is_string(session('warning')) && trim(session('warning')) !== '')
+            addToast('warning', '{{ addslashes(session('warning')) }}');
+        @endif
+        @if(session('info') && is_string(session('info')) && trim(session('info')) !== '')
+            addToast('info', '{{ addslashes(session('info')) }}');
+        @endif
         @if(session('error') && is_string(session('error')) && trim(session('error')) !== '')
             addToast('error', '{{ addslashes(session('error')) }}');
         @endif

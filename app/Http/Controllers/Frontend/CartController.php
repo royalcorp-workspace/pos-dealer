@@ -530,46 +530,63 @@ class CartController extends Controller
         $addedQuantity = 0;
         $skippedCount = 0;
 
-        foreach ($items as $item) {
-            $cartItem = $this->buildReorderCartItem($item);
-            if (!$cartItem) {
-                $skippedCount++;
-                continue;
+        try {
+            foreach ($items as $item) {
+                $cartItem = $this->buildReorderCartItem($item);
+                if (!$cartItem) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                $existingItemQuery = BufferItem::where('buffer_id', $buffer->id)
+                    ->where('product_id', $cartItem['product_id']);
+
+                if (!empty($cartItem['variant_id'])) {
+                    $existingItemQuery->where('product_variant_id', $cartItem['variant_id']);
+                } else {
+                    $existingItemQuery->whereNull('product_variant_id');
+                }
+
+                $existingItem = $existingItemQuery->first();
+
+                if ($existingItem) {
+                    $existingItem->update([
+                        'quantity' => $existingItem->quantity + $cartItem['quantity'],
+                    ]);
+                } else {
+                    BufferItem::create([
+                        'id' => Str::uuid()->toString(),
+                        'buffer_id' => $buffer->id,
+                        'product_id' => $cartItem['product_id'],
+                        'product_variant_id' => $cartItem['variant_id'] ?? null,
+                        'name' => $cartItem['name'],
+                        'quantity' => $cartItem['quantity'],
+                        'unit_price' => (float) $cartItem['sell_price'],
+                        'total' => (float) $cartItem['sell_price'] * $cartItem['quantity'],
+                        'discount_nominal' => 0,
+                        'discount_percent' => 0,
+                        'item_notes' => $cartItem['item_note'] ?? '',
+                    ]);
+                }
+
+                $addedQuantity += $cartItem['quantity'];
             }
 
-            $cartItemId = $cartItem['id'];
-            $existingItem = BufferItem::where('buffer_id', $buffer->id)->where('id', $cartItemId)->first();
+            $this->recalculateBuffer($buffer);
 
-            if ($existingItem) {
-                $existingItem->update([
-                    'quantity' => $existingItem->quantity + $cartItem['quantity'],
-                ]);
-            } else {
-                BufferItem::create([
-                    'id' => Str::uuid()->toString(),
-                    'buffer_id' => $buffer->id,
-                    'product_id' => $cartItem['product_id'],
-                    'product_variant_id' => $cartItem['variant_id'] ?? null,
-                    'name' => $cartItem['name'],
-                    'quantity' => $cartItem['quantity'],
-                    'unit_price' => (float) $cartItem['sell_price'],
-                    'total' => (float) $cartItem['sell_price'] * $cartItem['quantity'],
-                    'discount_nominal' => 0,
-                    'discount_percent' => 0,
-                    'item_notes' => $cartItem['item_note'] ?? '',
-                ]);
+            if ($addedQuantity === 0) {
+                return redirect()->back()->with('warning', 'Produk dari pesanan ini sudah tidak tersedia untuk di-order ulang.');
             }
 
-            $addedQuantity += $cartItem['quantity'];
+            $message = $skippedCount > 0
+                ? "Berhasil menambahkan {$addedQuantity} item ke keranjang. {$skippedCount} item tidak tersedia untuk di-order ulang."
+                : "Berhasil menambahkan {$addedQuantity} item ke keranjang.";
+
+            return redirect()->route('checkout')->with('success', $message);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("CartController reorder failed for order {$orderId}: " . $e->getMessage());
+            return redirect()->back()->with('error', 'Terjadi kendala saat memproses order ulang. Silakan coba kembali.');
         }
-
-        $this->recalculateBuffer($buffer);
-
-        $message = $skippedCount > 0
-            ? "Berhasil menambahkan {$addedQuantity} item ke keranjang. {$skippedCount} item tidak tersedia untuk di-order ulang."
-            : "Berhasil menambahkan {$addedQuantity} item ke keranjang.";
-
-        return redirect()->route('checkout')->with('success', $message);
     }
 
     private function ensureOrderBelongsToCurrentUser(\App\Models\Frontend\Order $order): void

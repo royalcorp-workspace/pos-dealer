@@ -29,6 +29,20 @@
             </div>
         @endif
 
+        @if(session('warning'))
+            <div class="mb-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-amber-500 text-base"></i>
+                <span>{{ session('warning') }}</span>
+            </div>
+        @endif
+
+        @if(session('info'))
+            <div class="mb-6 p-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-2xl text-sm font-medium flex items-center gap-2">
+                <i class="fa-solid fa-circle-info text-blue-500 text-base"></i>
+                <span>{{ session('info') }}</span>
+            </div>
+        @endif
+
         @if(session('error'))
             <div class="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-sm font-medium flex items-center gap-2">
                 <i class="fa-solid fa-circle-xmark text-red-500 text-base"></i>
@@ -488,23 +502,22 @@
                                                     <i class="fa-solid fa-credit-card text-xs"></i>
                                                     Bayar Sekarang
                                                 </a>
-                                                <form action="{{ route('order.cancel', $order->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin membatalkan pesanan ini agar dapat memesan kembali?');" class="inline">
-                                                    @csrf
-                                                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer" title="Batalkan pesanan yang belum dibayar">
-                                                        <i class="fa-solid fa-ban text-xs"></i>
-                                                        Batalkan
-                                                    </button>
-                                                </form>
+                                                <button type="button" 
+                                                        onclick="openCancelOrderModal('{{ $order->id }}', '{{ $order->order_number }}', '{{ route('order.cancel', $order->id) }}')" 
+                                                        class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs" 
+                                                        title="Batalkan pesanan yang belum dibayar">
+                                                    <i class="fa-solid fa-ban text-xs"></i>
+                                                    Batalkan
+                                                </button>
                                             @endif
 
-                                            @if((int)$order->status === 6 || (int)$order->status === 7 || (int)$order->status === 8)
-                                                <form action="{{ route('order.reorder', $order->id) }}" method="POST" onsubmit="return confirm('Order ulang produk dari pesanan ini?');" class="inline">
-                                                    @csrf
-                                                    <button type="submit" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
-                                                        <i class="fa-solid fa-rotate-right text-xs"></i>
-                                                        Order Ulang
-                                                    </button>
-                                                </form>
+                                            @if((int)$order->status === 5 || (int)$order->status === 6 || (int)$order->status === 7 || (int)$order->status === 8)
+                                                <button type="button" 
+                                                        onclick="openReorderModal('{{ $order->id }}', '{{ $order->order_number }}', '{{ route('order.reorder', $order->id) }}')" 
+                                                        class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-brand-dark text-white hover:bg-brand-gold hover:text-brand-dark font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs">
+                                                    <i class="fa-solid fa-rotate-right text-xs"></i>
+                                                    Order Ulang
+                                                </button>
                                             @endif
                                         </div>
                                     </div>
@@ -568,4 +581,167 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal Konfirmasi Batalkan Pesanan -->
+    <div id="cancel-order-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs hidden z-50 overflow-y-auto p-4 transition-all duration-200" aria-modal="true" role="dialog">
+        <div class="min-h-full flex items-center justify-center py-4" onclick="if(event.target === this) closeCancelOrderModal()">
+            <div class="bg-white rounded-3xl w-full max-w-md mx-auto shadow-2xl border border-gray-100 overflow-hidden transition-all animate-in fade-in zoom-in-95 duration-200">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between p-5 sm:p-6 border-b border-gray-100 bg-white">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-red-50 border border-red-100 text-red-600 flex items-center justify-center text-base font-bold shrink-0">
+                            <i class="fa-solid fa-ban"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-extrabold text-base sm:text-lg text-brand-dark">Batalkan Pesanan</h3>
+                            <p class="text-xs text-gray-500">Konfirmasi pembatalan pesanan</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeCancelOrderModal()" class="w-8 h-8 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer shrink-0" aria-label="Tutup modal">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <form id="cancel-order-form" method="POST" action="">
+                    @csrf
+                    <div class="p-5 sm:p-6 space-y-3.5">
+                        <p class="text-sm text-gray-600 leading-relaxed">
+                            Apakah Anda yakin ingin membatalkan pesanan <span class="font-extrabold text-brand-dark" id="cancel-modal-order-number">#ORD</span>?
+                        </p>
+                        <div class="bg-amber-50/80 border border-amber-200/70 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-amber-800 leading-relaxed">
+                            <i class="fa-solid fa-circle-info text-amber-600 mt-0.5 shrink-0"></i>
+                            <span>Pesanan yang dibatalkan tidak dapat diproses lagi. Anda dapat membuat pesanan baru kapan saja setelah pembatalan.</span>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="flex items-center justify-end gap-2.5 p-5 sm:p-6 border-t border-gray-100 bg-gray-50/50">
+                        <button type="button" onclick="closeCancelOrderModal()" class="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm transition-colors cursor-pointer shadow-2xs">
+                            Kembali
+                        </button>
+                        <button type="submit" id="btn-confirm-cancel-order" class="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm transition-all shadow-sm hover:shadow flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-ban text-xs"></i>
+                            <span>Batalkan Pesanan</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Order Ulang -->
+    <div id="reorder-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs hidden z-50 overflow-y-auto p-4 transition-all duration-200" aria-modal="true" role="dialog">
+        <div class="min-h-full flex items-center justify-center py-4" onclick="if(event.target === this) closeReorderModal()">
+            <div class="bg-white rounded-3xl w-full max-w-md mx-auto shadow-2xl border border-gray-100 overflow-hidden transition-all animate-in fade-in zoom-in-95 duration-200">
+                <!-- Modal Header -->
+                <div class="flex items-center justify-between p-5 sm:p-6 border-b border-gray-100 bg-white">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-brand-gold/15 border border-brand-gold/20 text-brand-gold-dark flex items-center justify-center text-base font-bold shrink-0">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-extrabold text-base sm:text-lg text-brand-dark">Order Ulang Pesanan</h3>
+                            <p class="text-xs text-gray-500">Pesan kembali produk dari riwayat ini</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeReorderModal()" class="w-8 h-8 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center transition-colors cursor-pointer shrink-0" aria-label="Tutup modal">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+
+                <!-- Modal Body -->
+                <form id="reorder-form" method="POST" action="">
+                    @csrf
+                    <div class="p-5 sm:p-6 space-y-3.5">
+                        <p class="text-sm text-gray-600 leading-relaxed">
+                            Order ulang produk dari pesanan <span class="font-extrabold text-brand-dark" id="reorder-modal-order-number">#ORD</span>?
+                        </p>
+                        <div class="bg-brand-gold/10 border border-brand-gold/20 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-brand-dark leading-relaxed">
+                            <i class="fa-solid fa-cart-plus text-brand-gold-dark mt-0.5 shrink-0"></i>
+                            <span>Produk yang masih tersedia akan otomatis dimasukkan kembali ke keranjang belanja Anda agar Anda dapat langsung melakukan checkout.</span>
+                        </div>
+                    </div>
+
+                    <!-- Modal Footer -->
+                    <div class="flex items-center justify-end gap-2.5 p-5 sm:p-6 border-t border-gray-100 bg-gray-50/50">
+                        <button type="button" onclick="closeReorderModal()" class="px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-bold text-xs sm:text-sm transition-colors cursor-pointer shadow-2xs">
+                            Kembali
+                        </button>
+                        <button type="submit" id="btn-confirm-reorder" class="px-5 py-2.5 rounded-xl bg-brand-dark hover:bg-brand-gold hover:text-brand-dark text-white font-extrabold text-xs sm:text-sm transition-all shadow-sm hover:shadow flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-rotate-right text-xs"></i>
+                            <span>Order Ulang</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openCancelOrderModal(orderId, orderNumber, actionUrl) {
+            const modal = document.getElementById('cancel-order-modal');
+            const form = document.getElementById('cancel-order-form');
+            const numSpan = document.getElementById('cancel-modal-order-number');
+            if (form) form.action = actionUrl;
+            if (numSpan) numSpan.textContent = '#' + orderNumber;
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            }
+        }
+
+        function closeCancelOrderModal() {
+            const modal = document.getElementById('cancel-order-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        function openReorderModal(orderId, orderNumber, actionUrl) {
+            const modal = document.getElementById('reorder-modal');
+            const form = document.getElementById('reorder-form');
+            const numSpan = document.getElementById('reorder-modal-order-number');
+            if (form) form.action = actionUrl;
+            if (numSpan) numSpan.textContent = '#' + orderNumber;
+            if (modal) {
+                modal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            }
+        }
+
+        function closeReorderModal() {
+            const modal = document.getElementById('reorder-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeCancelOrderModal();
+                closeReorderModal();
+            }
+        });
+
+        document.getElementById('cancel-order-form')?.addEventListener('submit', function() {
+            const btn = document.getElementById('btn-confirm-cancel-order');
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> Membatalkan...';
+            }
+        });
+
+        document.getElementById('reorder-form')?.addEventListener('submit', function() {
+            const btn = document.getElementById('btn-confirm-reorder');
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> Memproses...';
+            }
+        });
+    </script>
 @endsection

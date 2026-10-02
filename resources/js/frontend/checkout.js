@@ -383,11 +383,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (selectedCoupons.includes(code)) {
             selectedCoupons = selectedCoupons.filter(function (selectedCode) { return selectedCode !== code; });
         } else {
-            // Check minimum purchase against subtotal
+            // Check minimum purchase against eligible subtotal
             var currentBase = Math.max(0, subtotal - promoDiscount - productDiscount);
-            if (minPurchase > 0 && currentBase < minPurchase) {
-                var shortfall = minPurchase - currentBase;
-                var warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini (Kurang ' + formatRupiah(shortfall) + ').';
+            var upperCode = code.toUpperCase();
+            var couponMeta = availableVouchers[upperCode] || manualCouponsData[upperCode] || {};
+            var eligibleSubtotal = (button.dataset.eligibleSubtotal !== undefined && button.dataset.eligibleSubtotal !== null)
+                ? parseFloat(button.dataset.eligibleSubtotal)
+                : (couponMeta.eligibleSubtotal !== undefined && couponMeta.eligibleSubtotal !== null ? Number(couponMeta.eligibleSubtotal) : currentBase);
+            var checkBase = Math.min(currentBase, eligibleSubtotal);
+
+            if (minPurchase > 0 && checkBase < minPurchase) {
+                var shortfall = minPurchase - checkBase;
+                var warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk produk promo ini (Kurang ' + formatRupiah(shortfall) + ').';
                 
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
@@ -395,18 +402,18 @@ document.addEventListener('DOMContentLoaded', function () {
                         title: 'Minimum Belanja Belum Terpenuhi',
                         html: `
                             <div class="text-left text-sm text-gray-700 py-1 space-y-2">
-                                <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong>.</p>
+                                <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong> untuk produk terkait.</p>
                                 <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
                                     <div class="flex justify-between">
-                                        <span>Total Belanja:</span>
-                                        <span class="font-bold">${formatRupiah(currentBase)}</span>
+                                        <span>Total Produk Terkait:</span>
+                                        <span class="font-bold">${formatRupiah(checkBase)}</span>
                                     </div>
                                     <div class="flex justify-between text-red-600 font-bold">
                                         <span>Kurang Belanja:</span>
                                         <span>${formatRupiah(shortfall)}</span>
                                     </div>
                                 </div>
-                                <p class="text-xs text-gray-500">Tambahkan barang lagi senilai <strong>${formatRupiah(shortfall)}</strong> untuk dapat menggunakan voucher diskon ini.</p>
+                                <p class="text-xs text-gray-500">Tambahkan barang promo senilai <strong>${formatRupiah(shortfall)}</strong> lagi untuk dapat menggunakan voucher diskon ini.</p>
                             </div>
                         `,
                         confirmButtonColor: '#1e3a8a',
@@ -498,13 +505,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 var maxDiscount = couponData.maxDiscount;
                 var discount = 0;
                 var discountableBase = Math.max(0, subtotal - promoDiscount - productDiscount);
+                var voucherEligibleBase = (couponData.eligibleSubtotal !== undefined && couponData.eligibleSubtotal !== null && Number(couponData.eligibleSubtotal) > 0)
+                    ? Math.min(Number(couponData.eligibleSubtotal), discountableBase)
+                    : discountableBase;
                 if (discountType === 1) { 
-                    discount = Math.min((discountableBase * discountValue) / 100, maxDiscount || Infinity); 
-                    totalProductDiscount += Math.min(discount, discountableBase);
+                    discount = Math.min((voucherEligibleBase * discountValue) / 100, maxDiscount || Infinity); 
+                    totalProductDiscount += Math.min(discount, voucherEligibleBase);
                 }
                 else if (discountType === 2) { 
-                    discount = Math.min(discountValue, discountableBase); 
-                    totalProductDiscount += Math.min(discount, discountableBase);
+                    discount = Math.min(discountValue, voucherEligibleBase); 
+                    totalProductDiscount += Math.min(discount, voucherEligibleBase);
                 }
                 else if (discountType === 3) { 
                     discount = currentShippingCost > 0 ? Math.min(discountValue, currentShippingCost) : discountValue; 
@@ -669,6 +679,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     discountType: discountType,
                     discountValue: discountVal,
                     maxDiscount: maxDiscount,
+                    minPurchase: data.voucher.min_purchase || 0,
+                    eligibleSubtotal: data.voucher.eligible_subtotal !== undefined ? Number(data.voucher.eligible_subtotal) : null,
                     allowStacking: allowStacking,
                     products: data.voucher.products || []
                 };

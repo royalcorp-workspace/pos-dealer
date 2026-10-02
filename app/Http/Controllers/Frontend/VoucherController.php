@@ -72,109 +72,48 @@ class VoucherController extends Controller
         $productIds = (array) $request->input('product_ids', []);
         $categoryIds = (array) $request->input('category_ids', []);
 
-        // Scope 3: Kategori tertentu
-        if ((int) $voucher->scope === 3) {
-            $matchedCategories = $voucher->categories()
-                ->where('product_category.deleted', false)
-                ->pluck('product_category.id')
-                ->intersect($categoryIds);
+        $cartSummary = \App\Models\Frontend\Buffer\Buffer::getActiveCartSummary();
+        $cart = $cartSummary['cart'] ?? session()->get('cart', []);
 
-            if ($matchedCategories->isEmpty()) {
+        // Verify cart applicability
+        if (!empty($cart)) {
+            if (!$voucher->appliesToCart($cart, $userId)) {
                 return response()->json([
                     'valid' => false,
-                    'message' => 'Voucher ini hanya berlaku untuk kategori produk tertentu.',
+                    'message' => 'Voucher ini tidak berlaku untuk produk di keranjang belanja Anda.',
                 ]);
             }
+            $eligibleSubtotal = $voucher->getEligibleSubtotal($cart);
+            $eligibleProductIds = $voucher->getEligibleProductIds($cart);
+        } else {
+            // Fallback for direct API validation without cart buffer
+            $eligibleSubtotal = (float) $request->cart_total;
+            $eligibleProductIds = $productIds;
         }
 
-        // Scope 4: Produk Tertentu (per Artikel)
-        if ((int) $voucher->scope === 4) {
-            $hasProduct = $voucher->products()
-                ->where('products.deleted', false)
-                ->whereIn('products.id', $productIds)
-                ->exists();
-
-            if (!$hasProduct) {
-                return response()->json([
-                    'valid' => false,
-                    'message' => 'Voucher ini hanya berlaku untuk artikel produk tertentu.',
-                ]);
-            }
+        if (in_array((int) $voucher->scope, [3, 4, 5, 6], true) && $eligibleSubtotal <= 0) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Produk di keranjang belanja tidak memenuhi syarat untuk voucher ini.',
+            ]);
         }
 
-        // Scope 5: Brand Tertentu
-        if ((int) $voucher->scope === 5) {
-            $voucherBrandIds = $voucher->brands()
-                ->where('brands.deleted', false)
-                ->pluck('brands.id')
-                ->toArray();
-
-            $cartBrandIds = Product::whereIn('id', $productIds)
-                ->where('deleted', false)
-                ->pluck('brand_id')
-                ->unique()
-                ->toArray();
-
-            if (empty(array_intersect($cartBrandIds, $voucherBrandIds))) {
-                return response()->json([
-                    'valid' => false,
-                    'message' => 'Voucher ini hanya berlaku untuk brand tertentu.',
-                ]);
-            }
-        }
-
-        // Scope 6: Brand & Artikel Tertentu
-        if ((int) $voucher->scope === 6) {
-            $voucherProductIds = $voucher->products()
-                ->where('products.deleted', false)
-                ->pluck('products.id')
-                ->toArray();
-
-            $voucherBrandIds = $voucher->brands()
-                ->where('brands.deleted', false)
-                ->pluck('brands.id')
-                ->toArray();
-
-            $cartBrandIds = Product::whereIn('id', $productIds)
-                ->where('deleted', false)
-                ->pluck('brand_id')
-                ->unique()
-                ->toArray();
-
-            $hasProduct = !empty(array_intersect($productIds, $voucherProductIds));
-            $hasBrand = !empty(array_intersect($cartBrandIds, $voucherBrandIds));
-
-            if (!$hasProduct && !$hasBrand) {
-                return response()->json([
-                    'valid' => false,
-                    'message' => 'Voucher ini hanya berlaku untuk brand atau artikel tertentu.',
-                ]);
-            }
-        }
-
-        // Minimum purchase check
-        if ($request->cart_total < $voucher->min_purchase) {
-            $kurang = (float) $voucher->min_purchase - (float) $request->cart_total;
+        // Minimum purchase check against eligible subtotal
+        if ($eligibleSubtotal < $voucher->min_purchase) {
+            $kurang = (float) $voucher->min_purchase - $eligibleSubtotal;
             return response()->json([
                 'valid' => false,
                 'is_min_purchase' => true,
                 'min_purchase' => (float) $voucher->min_purchase,
+                'eligible_subtotal' => $eligibleSubtotal,
                 'cart_total' => (float) $request->cart_total,
                 'shortfall' => $kurang,
-                'message' => 'Minimum pembelian Rp ' . number_format((float) $voucher->min_purchase, 0, ',', '.') . ' untuk voucher ini (Kurang Rp ' . number_format($kurang, 0, ',', '.') . ').',
+                'message' => 'Minimum pembelian Rp ' . number_format((float) $voucher->min_purchase, 0, ',', '.') . ' untuk produk promo ini (Kurang Rp ' . number_format($kurang, 0, ',', '.') . ').',
             ]);
         }
 
-        // Calculate discount
-        $discount = 0;
-        if ((int) $voucher->type === 1) {
-            $maxDiscount = ($voucher->max_discount !== null && (float) $voucher->max_discount > 0) ? (float) $voucher->max_discount : PHP_FLOAT_MAX;
-            $discount = min(($request->cart_total * $voucher->value / 100), $maxDiscount);
-        } elseif ((int) $voucher->type === 2) {
-            $discount = min($voucher->value, $request->cart_total);
-        } elseif ((int) $voucher->type === 3) {
-            $discount = $voucher->value;
-        }
+        // Calculate discount strictly against eligible subtotal
+        $discount = $voucher->calculateDiscountValue($eligibleSubtotal, 0.0);
 
         $typeLabel = match((int) $voucher->type) {
             1 => 'Persentase',
@@ -197,7 +136,9 @@ class VoucherController extends Controller
                 'scopeLabel' => $voucher->scopeLabel(),
                 'allow_stacking' => $voucher->isStackable(),
                 'allowStacking' => $voucher->isStackable(),
-                'products' => [],
+                'eligible_subtotal' => $eligibleSubtotal,
+                'eligible_products' => $eligibleProductIds,
+                'products' => $voucher->products ? $voucher->products->pluck('name')->toArray() : [],
             ],
         ]);
     }

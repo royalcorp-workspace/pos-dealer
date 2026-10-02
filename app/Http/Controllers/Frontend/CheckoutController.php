@@ -19,6 +19,7 @@ use App\Models\Frontend\ProductsCatalog\ProductCategory;
 use App\Models\Frontend\Order;
 use App\Models\Frontend\Order\OrderItem;
 use App\Models\Frontend\Buffer\Buffer;
+use App\Models\Frontend\Buffer\BufferItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
@@ -1127,13 +1128,14 @@ class CheckoutController extends Controller
         \Illuminate\Support\Facades\DB::beginTransaction();
 
         try {
+            $userId = session()->get('is_logged_in') 
+                ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) 
+                : ($customerData['user_id'] ?? null);
+
             $order = $existingOrder;
 
             if (!$order) {
                 // 1. Create or update Customer and Address
-                $userId = session()->get('is_logged_in') 
-                    ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) 
-                    : ($customerData['user_id'] ?? null);
 
                 $inputEmail = strtolower(trim($customerData['email'] ?? ($buffer?->customer_email ?? '')));
                 $inputPhone = trim($customerData['phone'] ?? ($buffer?->customer_phone ?? ''));
@@ -1466,13 +1468,15 @@ class CheckoutController extends Controller
                     $voucherIdToUse = $appliedVoucher['voucher']['id'] ?? ($appliedVoucher['voucher']->id ?? null);
                     $appliedVoucherModel = $voucherIdToUse ? \App\Models\Frontend\Promo\Voucher::find($voucherIdToUse) : null;
                     if ($appliedVoucherModel) {
+                        $resolvedUsageUserId = $userId ?: ($customer?->user_id ?: ($customer?->id ?: null));
                         VoucherUsage::create([
                             'id' => Str::uuid(),
                             'voucher_id' => $appliedVoucherModel->id,
-                            'user_id' => $userId,
+                            'user_id' => $resolvedUsageUserId,
                             'order_id' => $order->id,
                             'discount_amount' => $appliedVoucher['discount'],
                         ]);
+                        $appliedVoucherModel->increment('used_count');
 
                         if ((int)$appliedVoucherModel->type === 4) {
                             foreach ($appliedVoucherModel->products as $bp) {
@@ -1754,92 +1758,211 @@ class CheckoutController extends Controller
 
     public function cancelOrder(Request $request, string $orderId)
     {
-        $order = null;
-        if (\Illuminate\Support\Str::isUuid($orderId)) {
-            $order = \App\Models\Frontend\Order::where('id', $orderId)->first();
-        }
-        if (!$order) {
-            $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
-        }
+        try {
+            $order = null;
+            if (\Illuminate\Support\Str::isUuid($orderId)) {
+                $order = \App\Models\Frontend\Order::where('id', $orderId)->first();
+            }
+            if (!$order) {
+                $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
+            }
 
-        if (!$order) {
-            return redirect()->back()->with('error', 'Pesanan tidak ditemukan.');
+            if (!$order) {
+                return redirect()->back()->with('error', 'Pesanan tidak ditemukan.');
+            }
+
+            // Authorization check
+            $user = session()->get('user', []);
+            $userId = $user['id'] ?? $user['sub'] ?? null;
+            $userEmail = $user['email'] ?? null;
+            if ($userId || $userEmail) {
+                $customerUserId = $order->customer?->user_id;
+                $customerEmail = $order->customer?->email ?? ($order->meta['customer']['email'] ?? null);
+                if (($customerUserId && $userId && $customerUserId !== $userId) && ($customerEmail && $userEmail && strtolower($customerEmail) !== strtolower($userEmail))) {
+                    return redirect()->back()->with('error', 'Anda tidak memiliki akses untuk membatalkan pesanan ini.');
+                }
+            }
+
+            if ($order->status === \App\Models\Frontend\Order::STATUS_CANCELLED) {
+                return redirect()->back()->with('info', 'Pesanan ini sudah dibatalkan sebelumnya.');
+            }
+
+            // Only allow cancel if unpaid (payment_status == 1) and not shipped
+            if ((int)$order->payment_status !== 1 && (int)$order->status >= \App\Models\Frontend\Order::STATUS_SHIPPED) {
+                return redirect()->back()->with('error', 'Pesanan yang sudah dibayar atau sedang dikirim tidak dapat dibatalkan secara otomatis.');
+            }
+
+            $order->status = \App\Models\Frontend\Order::STATUS_CANCELLED;
+            $orderMeta = is_array($order->meta) ? $order->meta : [];
+            $orderMeta['cancelled_at'] = now()->toIso8601String();
+            $orderMeta['cancelled_by'] = 'customer';
+            $order->meta = $orderMeta;
+            $order->save();
+
+            // Release voucher usages and decrement used_count
+            try {
+                $usages = \App\Models\Frontend\Promo\VoucherUsage::where('order_id', $order->id)->get();
+                foreach ($usages as $usage) {
+                    if ($usage->voucher_id) {
+                        $v = \App\Models\Frontend\Promo\Voucher::withoutGlobalScopes()->find($usage->voucher_id);
+                        if ($v && $v->used_count > 0) {
+                            $v->decrement('used_count');
+                        }
+                    }
+                    $usage->delete();
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("Gagal melepaskan voucher usage saat pembatalan order #{$order->order_number}: " . $e->getMessage());
+            }
+
+            return redirect()->back()->with('success', "Pesanan #{$order->order_number} berhasil dibatalkan. Anda dapat memesan kembali produk kapan saja.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Gagal membatalkan pesanan {$orderId}: " . $e->getMessage());
+            return redirect()->back()->with('error', 'Terjadi kendala saat membatalkan pesanan. Silakan coba lagi.');
         }
-
-        if ($order->status === \App\Models\Frontend\Order::STATUS_CANCELLED) {
-            return redirect()->back()->with('info', 'Pesanan ini sudah dibatalkan sebelumnya.');
-        }
-
-        // Only allow cancel if unpaid (payment_status == 1) and not shipped
-        if ((int)$order->payment_status !== 1 && (int)$order->status >= \App\Models\Frontend\Order::STATUS_SHIPPED) {
-            return redirect()->back()->with('error', 'Pesanan yang sudah dibayar atau sedang dikirim tidak dapat dibatalkan secara otomatis.');
-        }
-
-        $order->status = \App\Models\Frontend\Order::STATUS_CANCELLED;
-        $orderMeta = is_array($order->meta) ? $order->meta : [];
-        $orderMeta['cancelled_at'] = now()->toIso8601String();
-        $orderMeta['cancelled_by'] = 'customer';
-        $order->meta = $orderMeta;
-        $order->save();
-
-        return redirect()->back()->with('success', 'Pesanan berhasil dibatalkan. Anda dapat memesan kembali produk kapan saja.');
     }
 
     public function reorder(string $orderId)
     {
-        $order = null;
-        if (\Illuminate\Support\Str::isUuid($orderId)) {
-            $order = \App\Models\Frontend\Order::where('id', $orderId)->first();
-        }
-        if (!$order) {
-            $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
-        }
-
-        if (!$order || $order->status !== \App\Models\Frontend\Order::STATUS_CANCELLED) {
-            return redirect()->back()->with('error', 'Order tidak valid untuk di-reorder.');
-        }
-
-        // Restore cart items
-        $userId = session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null;
-        $buffer = $this->findOrCreateBuffer();
-
-        foreach ($order->items as $item) {
-            $existingItem = BufferItem::where('buffer_id', $buffer->id)
-                ->where('product_id', $item->product_id)
-                ->where(function ($q) use ($item) {
-                    if ($item->product_variant_id) {
-                        $q->where('product_variant_id', $item->product_variant_id);
-                    } else {
-                        $q->whereNull('product_variant_id');
-                    }
-                })
-                ->first();
-
-            if ($existingItem) {
-                $existingItem->update([
-                    'quantity' => $existingItem->quantity + $item->quantity,
-                ]);
-            } else {
-                BufferItem::create([
-                    'id' => Str::uuid()->toString(),
-                    'buffer_id' => $buffer->id,
-                    'product_id' => $item->product_id,
-                    'product_variant_id' => $item->product_variant_id,
-                    'name' => $item->name,
-                    'quantity' => $item->quantity,
-                    'unit_price' => (float) $item->unit_price,
-                    'total' => (float) $item->unit_price * $item->quantity,
-                    'discount_nominal' => (float) $item->discount_nominal,
-                    'discount_percent' => (float) $item->discount_percent,
-                    'item_notes' => $item->item_notes ?? '',
-                ]);
+        try {
+            $order = null;
+            $query = \App\Models\Frontend\Order::with(['items.product.variants', 'items.variant', 'customer']);
+            if (\Illuminate\Support\Str::isUuid($orderId)) {
+                $order = $query->where('id', $orderId)->first();
             }
+            if (!$order) {
+                $order = $query->where('order_number', $orderId)->first();
+            }
+
+            if (!$order) {
+                return redirect()->back()->with('error', 'Pesanan tidak ditemukan.');
+            }
+
+            // Authorization check
+            $user = session()->get('user', []);
+            $userId = $user['id'] ?? $user['sub'] ?? null;
+            $userEmail = $user['email'] ?? null;
+            if ($userId || $userEmail) {
+                $customerUserId = $order->customer?->user_id;
+                $customerEmail = $order->customer?->email ?? ($order->meta['customer']['email'] ?? null);
+                if (($customerUserId && $userId && $customerUserId !== $userId) && ($customerEmail && $userEmail && strtolower($customerEmail) !== strtolower($userEmail))) {
+                    return redirect()->back()->with('error', 'Anda tidak memiliki akses ke pesanan ini.');
+                }
+            }
+
+            if ($order->items->isEmpty()) {
+                return redirect()->back()->with('warning', 'Pesanan ini tidak memiliki produk untuk di-order ulang.');
+            }
+
+            $buffer = $this->findOrCreateBuffer();
+            $addedQuantity = 0;
+            $skippedItems = [];
+
+            foreach ($order->items as $item) {
+                $product = $item->product ?? \App\Models\Frontend\ProductsCatalog\Product::with('variants')->find($item->product_id);
+                if (!$product || ($product->deleted ?? false) || !(int)$product->status) {
+                    $skippedItems[] = $item->name . ' (Produk tidak aktif/dihapus)';
+                    continue;
+                }
+
+                $variant = null;
+                if ($item->product_variant_id) {
+                    $variant = $item->variant ?? ($product->variants ? $product->variants->firstWhere('id', $item->product_variant_id) : null);
+                    if (!$variant || !(int)$variant->status) {
+                        $skippedItems[] = $item->name . ' (Varian sudah tidak tersedia)';
+                        continue;
+                    }
+                }
+
+                $availableStock = $variant ? $variant->stock : $product->stock;
+                if ($availableStock !== null && (int)$availableStock <= 0) {
+                    $skippedItems[] = $item->name . ' (Stok habis)';
+                    continue;
+                }
+
+                $sellPrice = $variant ? (float)$variant->sell_price : (float)($product->sell_price ?? $product->price ?? $item->unit_price);
+                $basePrice = $variant ? (float)($variant->base_price ?? $variant->sell_price) : (float)($product->base_price ?? $product->price ?? $item->unit_price);
+                $qty = max(1, (int)$item->quantity);
+                if ($availableStock !== null && $qty > (int)$availableStock) {
+                    $qty = (int)$availableStock;
+                }
+
+                $itemName = $product->name;
+                if ($variant && !empty($variant->variant_name)) {
+                    $itemName .= ' - ' . $variant->variant_name;
+                }
+
+                $existingItemQuery = BufferItem::where('buffer_id', $buffer->id)
+                    ->where('product_id', $product->id);
+
+                if ($variant) {
+                    $existingItemQuery->where('product_variant_id', $variant->id);
+                } else {
+                    $existingItemQuery->whereNull('product_variant_id');
+                }
+
+                $existingItem = $existingItemQuery->first();
+
+                $meta = [
+                    'base_price' => $basePrice,
+                    'after_disc_price' => $sellPrice,
+                    'original_price' => $basePrice,
+                    'image' => $product->thumbnail_url ?? media_url($product->image),
+                    'reorder_from_order_number' => $order->order_number,
+                ];
+
+                if ($existingItem) {
+                    $newQty = $existingItem->quantity + $qty;
+                    $discNom = max(0.0, ($basePrice - $sellPrice) * $newQty);
+                    $existingItem->update([
+                        'quantity' => $newQty,
+                        'unit_price' => $basePrice,
+                        'total' => $sellPrice * $newQty,
+                        'discount_nominal' => $discNom,
+                        'meta' => array_merge(is_array($existingItem->meta) ? $existingItem->meta : [], $meta),
+                    ]);
+                } else {
+                    $discNom = max(0.0, ($basePrice - $sellPrice) * $qty);
+                    $discPct = $basePrice > 0 ? round((($basePrice - $sellPrice) / $basePrice) * 100, 2) : 0;
+                    BufferItem::create([
+                        'id' => Str::uuid()->toString(),
+                        'buffer_id' => $buffer->id,
+                        'product_id' => $product->id,
+                        'product_variant_id' => $variant?->id,
+                        'name' => $itemName,
+                        'quantity' => $qty,
+                        'unit_price' => $basePrice,
+                        'total' => $sellPrice * $qty,
+                        'discount_nominal' => $discNom,
+                        'discount_percent' => $discPct,
+                        'item_notes' => $item->item_notes ?? '',
+                        'meta' => $meta,
+                    ]);
+                }
+
+                $addedQuantity += $qty;
+            }
+
+            $this->recalculateBuffer($buffer);
+            session()->put('reorder_for', $order->order_number);
+
+            if ($addedQuantity === 0) {
+                $msg = !empty($skippedItems)
+                    ? 'Produk dari pesanan ini tidak dapat di-order ulang: ' . implode(', ', $skippedItems)
+                    : 'Produk dari pesanan ini sudah tidak tersedia atau stok habis.';
+                return redirect()->back()->with('warning', $msg);
+            }
+
+            if (!empty($skippedItems)) {
+                $msg = "Berhasil menambahkan {$addedQuantity} produk ke keranjang belanja. Beberapa produk tidak tersedia: " . implode(', ', $skippedItems);
+                return redirect()->route('checkout')->with('warning', $msg);
+            }
+
+            return redirect()->route('checkout')->with('success', "Berhasil menambahkan {$addedQuantity} produk dari pesanan #{$order->order_number} ke keranjang belanja.");
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Gagal melakukan order ulang untuk pesanan {$orderId}: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return redirect()->back()->with('error', 'Terjadi kendala saat memproses order ulang. Silakan coba kembali.');
         }
-
-        $this->recalculateBuffer($buffer);
-        session()->put('reorder_for', $orderId);
-
-        return redirect()->route('checkout')->with('success', 'Silakan cek keranjang untuk order ulang.');
     }
 
     public function thankYou(Request $request)
@@ -1901,20 +2024,18 @@ class CheckoutController extends Controller
             return collect();
         }
 
-        $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
-        $cartCategoryIds = Product::whereIn('id', $cartProductIds)->pluck('category_id')->unique()->values()->all();
-
         $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
 
         return Voucher::active()
             ->where('show_on_web', true)
             ->with(['categories', 'products', 'brands', 'customerGroups'])
             ->get()
-            ->filter(function ($voucher) use ($cartProductIds, $cartCategoryIds, $userId) {
-                return $this->voucherAppliesToCart($voucher, $cartProductIds, $cartCategoryIds, $userId);
+            ->filter(function ($voucher) use ($cart, $userId) {
+                return $voucher->appliesToCart($cart, $userId);
             })
-            ->map(function ($voucher) use ($userId) {
+            ->map(function ($voucher) use ($cart, $userId) {
                 $voucher->is_usable = $voucher->canBeUsedBy($userId);
+                $voucher->eligible_subtotal = $voucher->getEligibleSubtotal($cart);
                 return $voucher;
             })
             ->values();
@@ -2005,12 +2126,20 @@ class CheckoutController extends Controller
                 continue;
             }
 
-            $eligibleSubtotal = $this->getVoucherEligibleSubtotal($voucher, $cart);
+            if (!$voucher->appliesToCart($cart, $userId)) {
+                continue;
+            }
+
+            $eligibleSubtotal = $voucher->getEligibleSubtotal($cart);
+            if (in_array((int)$voucher->scope, [3, 4, 5, 6], true) && $eligibleSubtotal <= 0) {
+                continue;
+            }
+
             if ($eligibleSubtotal < $voucher->min_purchase) {
                 continue;
             }
 
-            $voucherDiscount = $this->calculateVoucherDiscountValue($voucher, $eligibleSubtotal, $shippingCost ?? 0);
+            $voucherDiscount = $voucher->calculateDiscountValue($eligibleSubtotal, $shippingCost ?? 0);
 
             if ((int) $voucher->type === 3) {
                 // Voucher Gratis Ongkir: motong biaya kirim only, jangan sampai potong harga barang!
@@ -2022,7 +2151,7 @@ class CheckoutController extends Controller
                     'is_shipping' => true,
                 ];
             } else {
-                $actualDiscount = min((float) $voucherDiscount, (float) $cartTotal);
+                $actualDiscount = min((float) $voucherDiscount, (float) $eligibleSubtotal);
                 $productVoucherDiscount += $actualDiscount;
                 $appliedVouchers[] = [
                     'voucher' => $voucher,

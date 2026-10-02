@@ -36,18 +36,21 @@
     function calculateDiscount(coupon, total = window.currentCartTotal || currentCartTotal) {
         const value = Number(coupon.discountValue || 0);
         const maxDiscount = typeof coupon.maxDiscount === 'number' && !isNaN(coupon.maxDiscount) ? coupon.maxDiscount : Infinity;
+        const eligibleBase = (coupon.eligibleSubtotal !== undefined && coupon.eligibleSubtotal !== null && Number(coupon.eligibleSubtotal) > 0)
+            ? Math.min(Number(coupon.eligibleSubtotal), total)
+            : total;
         let discount = 0;
 
         if (coupon.discountType == 1 || coupon.discountType === '1' || coupon.discountType === 'percentage') {
-            discount = (total * value) / 100;
+            discount = (eligibleBase * value) / 100;
             if (maxDiscount !== Infinity) discount = Math.min(discount, maxDiscount);
         } else if (coupon.discountType == 2 || coupon.discountType === '2' || coupon.discountType === 'fixed') {
-            discount = Math.min(value, total);
+            discount = Math.min(value, eligibleBase);
         } else if (coupon.discountType == 3 || coupon.discountType === '3' || coupon.discountType === 'shipping') {
             discount = Math.min(value, defaultShipping);
         }
 
-        return discount;
+        return Math.min(discount, eligibleBase);
     }
 
     function isShippingCouponType(dt) {
@@ -75,10 +78,11 @@
         // Auto-drop vouchers that no longer meet min_purchase
         let droppedAny = false;
         selectedCartCoupons = selectedCartCoupons.filter(function (c) {
-            if (c.minPurchase && c.minPurchase > 0 && currentCartTotal < c.minPurchase) {
+            const checkBase = (c.eligibleSubtotal !== undefined && c.eligibleSubtotal !== null) ? Number(c.eligibleSubtotal) : currentCartTotal;
+            if (c.minPurchase && c.minPurchase > 0 && checkBase < c.minPurchase) {
                 droppedAny = true;
                 if (typeof addToast === 'function') {
-                    addToast('warning', 'Voucher ' + c.code + ' dilepas karena total belanja kurang dari ' + formatRupiah(c.minPurchase));
+                    addToast('warning', 'Voucher ' + c.code + ' dilepas karena total belanja produk promo kurang dari ' + formatRupiah(c.minPurchase));
                 }
                 return false;
             }
@@ -247,9 +251,13 @@
             }
         }
 
-        if (minPurchase > 0 && currentCartTotal < minPurchase) {
-            const shortfall = minPurchase - currentCartTotal;
-            const warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk menggunakan voucher ini (Kurang ' + formatRupiah(shortfall) + ').';
+        const eligibleSubtotal = (button.dataset.eligibleSubtotal !== undefined && button.dataset.eligibleSubtotal !== null)
+            ? parseFloat(button.dataset.eligibleSubtotal)
+            : currentCartTotal;
+
+        if (minPurchase > 0 && eligibleSubtotal < minPurchase) {
+            const shortfall = minPurchase - eligibleSubtotal;
+            const warningMsg = 'Minimum belanja ' + formatRupiah(minPurchase) + ' untuk produk promo ini (Kurang ' + formatRupiah(shortfall) + ').';
             
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
@@ -257,11 +265,11 @@
                     title: 'Minimum Belanja Belum Terpenuhi',
                     html: `
                         <div class="text-left text-sm text-gray-700 py-1 space-y-2">
-                            <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong>.</p>
+                            <p>Voucher <strong>${code}</strong> membutuhkan minimum belanja <strong>${formatRupiah(minPurchase)}</strong> untuk produk terkait.</p>
                             <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
                                 <div class="flex justify-between">
-                                    <span>Total Keranjang:</span>
-                                    <span class="font-bold">${formatRupiah(currentCartTotal)}</span>
+                                    <span>Total Produk Terkait:</span>
+                                    <span class="font-bold">${formatRupiah(eligibleSubtotal)}</span>
                                 </div>
                                 <div class="flex justify-between text-red-600 font-bold">
                                     <span>Kurang Belanja:</span>
@@ -299,6 +307,7 @@
             discountValue: parseFloat(button.dataset.discountValue) || 0,
             maxDiscount: button.dataset.maxDiscount && Number(button.dataset.maxDiscount) > 0 ? Number(button.dataset.maxDiscount) : undefined,
             minPurchase: minPurchase,
+            eligibleSubtotal: eligibleSubtotal,
             allow_stacking: button.dataset.allowStacking === '1' ? 1 : 0
         };
 
@@ -456,6 +465,8 @@
                         discountType: discountType,
                         discountValue: parseFloat(data.voucher ? data.voucher.value : 0) || 0,
                         maxDiscount: (data.voucher && data.voucher.max_discount && Number(data.voucher.max_discount) > 0) ? Number(data.voucher.max_discount) : Infinity,
+                        minPurchase: (data.voucher && data.voucher.min_purchase) ? Number(data.voucher.min_purchase) : 0,
+                        eligibleSubtotal: (data.voucher && data.voucher.eligible_subtotal !== undefined) ? Number(data.voucher.eligible_subtotal) : cartTotal,
                         allow_stacking: allowStacking
                     };
 

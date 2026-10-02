@@ -31,9 +31,18 @@
     }
 
     try {
+        $brandOrder = ['serenity' => 1, 'lady' => 2, 'elite' => 3, 'royal' => 4, 'moro' => 5, 'tote' => 6];
         $brands = \App\Models\Frontend\ProductsCatalog\Brand::where('deleted', false)
-            ->orderBy('sort_order')
-            ->get();
+            ->where('status', true)
+            ->withCount(['products' => function ($q) {
+                $q->where('deleted', false)->where('status', true);
+            }])
+            ->get()
+            ->sortBy(function ($brand) use ($brandOrder) {
+                $slug = strtolower($brand->slug);
+                return [$brandOrder[$slug] ?? 50, $brand->name];
+            })
+            ->values();
         $categories = \App\Models\Frontend\ProductsCatalog\ProductCategory::where('deleted', false)
             ->whereNull('parent_id')
             ->with('children.children')
@@ -529,7 +538,7 @@
                         <svg class="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-200" :class="activeMegaMenu === 'brands' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </a>
                     
-                    <!-- Clean Brands Dropdown Content -->
+                    <!-- Clean Brands Dropdown Content (Matching header-brand.jpeg) -->
                     <div 
                         x-show="activeMegaMenu === 'brands'"
                         x-cloak
@@ -539,25 +548,47 @@
                         x-transition:leave="transition ease-in duration-150"
                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
                         x-transition:leave-end="opacity-0 translate-y-2 scale-98"
-                        class="absolute top-full left-0 w-max min-w-48 pr-6 bg-white shadow-xl border border-brand-muted/80 rounded-2xl p-4 z-50 overflow-hidden"
+                        class="absolute top-full left-0 mt-1 w-[320px] sm:w-[350px] bg-white shadow-2xl border border-gray-100 rounded-2xl p-5 z-50 overflow-hidden"
                     >
-                        <div class="flex flex-col gap-y-1">
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-6">
                             @foreach($brands as $brand)
+                                @php
+                                    $isDarkLogo = in_array(strtolower($brand->slug), ['elite', 'royal']);
+                                    $displayName = Str::title(strtolower(html_entity_decode($brand->name)));
+                                @endphp
                                 <a 
                                     href="{{ route('brands.show', $brand->slug) }}" 
-                                    class="flex items-center p-2.5 rounded-xl hover:bg-brand-light transition-colors group text-left"
+                                    class="flex flex-col items-center justify-center p-2 rounded-xl hover:bg-gray-50/80 transition-all duration-200 group text-center"
                                 >
-                                    <span class="font-bold text-brand-dark text-sm group-hover:text-brand-gold-dark transition-colors">
-                                        {{ html_entity_decode($brand->name) }}
+                                    <div class="w-full max-w-[120px] h-12 rounded-lg flex items-center justify-center p-1.5 mb-2 transition-all duration-200 {{ $isDarkLogo ? 'bg-[#ECEEF2]' : 'bg-transparent' }}">
+                                        @if($brand->logo)
+                                            <img 
+                                                src="{{ cms_asset($brand->logo) }}" 
+                                                alt="{{ $brand->name }}" 
+                                                class="{{ $isDarkLogo ? 'max-h-7 max-w-[88px]' : 'max-h-9 max-w-[95px]' }} w-auto object-contain transition-transform duration-300 group-hover:scale-105" 
+                                                loading="lazy" 
+                                                decoding="async"
+                                            />
+                                        @else
+                                            <div class="w-9 h-9 rounded-full bg-brand-light flex items-center justify-center text-brand-gold font-bold text-xs">
+                                                {{ substr($brand->name, 0, 1) }}
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <h4 class="font-medium text-brand-dark text-base tracking-tight group-hover:text-brand-gold-dark transition-colors leading-tight">
+                                        {{ $displayName }}
+                                    </h4>
+                                    <span class="text-xs text-gray-400 group-hover:text-brand-gold-dark transition-colors font-normal mt-0.5">
+                                        View {{ $brand->products_count }} products
                                     </span>
                                 </a>
                             @endforeach
-                            <div class="pt-2 border-t border-brand-muted/50 mt-2">
-                                <a href="{{ route('brands') }}" class="flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
-                                    <span>{{ __('Lihat Semua Brand') }}</span>
-                                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                </a>
-                            </div>
+                        </div>
+                        <div class="pt-3 border-t border-gray-100 mt-4">
+                            <a href="{{ route('brands') }}" class="flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold text-brand-gold-dark hover:text-brand-dark transition-colors">
+                                <span>{{ __('Lihat Semua Brand') }}</span>
+                                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </a>
                         </div>
                     </div>
                 </li>
@@ -703,19 +734,48 @@
                     </span>
                     <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'brands' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <div x-show="openSection === 'brands'"  class="bg-brand-light/50 border-t border-brand-muted/40 p-2 space-y-1">
-                    @foreach($brands as $brand)
-                        <a 
-                            href="{{ route('brands.show', $brand->slug) }}" 
-                            class="block p-2.5 rounded-lg text-sm text-gray-700 font-medium hover:bg-white hover:text-brand-gold-dark transition-colors text-left"
-                            @click="isMobileMenuOpen = false"
-                        >
-                            {{ html_entity_decode($brand->name) }}
+                <div x-show="openSection === 'brands'" class="bg-white border-t border-brand-muted/40 p-3 sm:p-4">
+                    <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
+                        @foreach($brands as $brand)
+                            @php
+                                $isDarkLogo = in_array(strtolower($brand->slug), ['elite', 'royal']);
+                                $displayName = Str::title(strtolower(html_entity_decode($brand->name)));
+                            @endphp
+                            <a 
+                                href="{{ route('brands.show', $brand->slug) }}" 
+                                class="flex flex-col items-center justify-center p-2.5 rounded-xl border border-gray-100 hover:border-brand-gold/40 hover:bg-brand-light/20 transition-all text-center"
+                                @click="isMobileMenuOpen = false"
+                            >
+                                <div class="w-full max-w-[100px] h-11 rounded-lg flex items-center justify-center p-1 mb-1.5 {{ $isDarkLogo ? 'bg-[#ECEEF2]' : 'bg-transparent' }}">
+                                    @if($brand->logo)
+                                        <img 
+                                            src="{{ cms_asset($brand->logo) }}" 
+                                            alt="{{ $brand->name }}" 
+                                            class="{{ $isDarkLogo ? 'max-h-6 max-w-[75px]' : 'max-h-8 max-w-[85px]' }} w-auto object-contain" 
+                                            loading="lazy" 
+                                            decoding="async"
+                                        />
+                                    @else
+                                        <div class="w-8 h-8 rounded-full bg-brand-light flex items-center justify-center text-brand-gold font-bold text-xs">
+                                            {{ substr($brand->name, 0, 1) }}
+                                        </div>
+                                    @endif
+                                </div>
+                                <h4 class="font-medium text-brand-dark text-sm tracking-tight leading-tight">
+                                    {{ $displayName }}
+                                </h4>
+                                <span class="text-[11px] text-gray-400 font-normal mt-0.5">
+                                    View {{ $brand->products_count }} products
+                                </span>
+                            </a>
+                        @endforeach
+                    </div>
+                    <div class="pt-3 border-t border-gray-100 mt-3 text-center">
+                        <a href="{{ route('brands') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-gold-dark hover:text-brand-dark" @click="isMobileMenuOpen = false">
+                            <span>{{ __('Lihat Semua Brand') }}</span>
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
                         </a>
-                    @endforeach
-                    <a href="{{ route('brands') }}" class="block p-2.5 text-xs font-bold text-brand-gold-dark text-left" @click="isMobileMenuOpen = false">
-                        {{ __('Lihat Semua Brand &rarr;') }}
-                    </a>
+                    </div>
                 </div>
             </div>
 

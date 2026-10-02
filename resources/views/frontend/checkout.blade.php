@@ -604,7 +604,7 @@
                             @json($courierPrices)
                         </script>
                         @php
-                            $allVouchersForClient = collect($vouchers ?? [])->merge($selectedVouchers ?? [])->unique('code')->mapWithKeys(function($v) {
+                            $allVouchersForClient = collect($vouchers ?? [])->merge($selectedVouchers ?? [])->unique('code')->mapWithKeys(function($v) use ($cart) {
                                 return [strtoupper($v->code) => [
                                     'code' => strtoupper($v->code),
                                     'title' => $v->title,
@@ -612,6 +612,8 @@
                                     'discountValue' => (float) $v->value,
                                     'maxDiscount' => $v->max_discount ? (float) $v->max_discount : null,
                                     'minPurchase' => (float) ($v->min_purchase ?? 0),
+                                    'eligibleSubtotal' => (float) $v->getEligibleSubtotal($cart),
+                                    'scope' => (int) $v->scope,
                                     'allowStacking' => $v->allow_stacking ? 1 : 0,
                                     'isShipping' => ((int) $v->type === 3),
                                     'products' => $v->products ? $v->products->pluck('name')->toArray() : [],

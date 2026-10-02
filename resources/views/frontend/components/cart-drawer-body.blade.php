@@ -37,23 +37,20 @@
         $cartTotal += $res['promotional_price'] * (int) $item['quantity'];
     }
 
-    $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
-    $cartCategoryIds = \App\Models\Frontend\ProductsCatalog\Product::whereIn('id', $cartProductIds)->pluck('category_id')->unique()->values()->all();
     $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
-    $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()->where('show_on_web', true)->with(['categories'])->get()->filter(function($coupon) use ($cartProductIds, $cartCategoryIds, $userId) {
-        if ((int) $coupon->scope === 2) {
-            return $coupon->canBeUsedBy($userId);
-        }
-
-        if ((int) $coupon->scope === 3) {
-            return $coupon->categories()->where('product_category.deleted', false)->whereIn('product_category.id', $cartCategoryIds)->exists();
-        }
-
-        return true;
-    })->map(function ($coupon) use ($userId) {
-        $coupon->is_usable = $coupon->canBeUsedBy($userId);
-        return $coupon;
-    })->values();
+    $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()
+        ->where('show_on_web', true)
+        ->with(['categories', 'products', 'brands', 'customerGroups'])
+        ->get()
+        ->filter(function($coupon) use ($cart, $userId) {
+            return $coupon->appliesToCart($cart, $userId);
+        })
+        ->map(function ($coupon) use ($cart, $userId) {
+            $coupon->is_usable = $coupon->canBeUsedBy($userId);
+            $coupon->eligible_subtotal = $coupon->getEligibleSubtotal($cart);
+            return $coupon;
+        })
+        ->values();
 @endphp
 
 @if(count($cart) === 0)
@@ -306,6 +303,10 @@
                     @endphp
                     @php
                         $isUsable = $coupon->is_usable ?? true;
+                        $eligibleSub = (float) ($coupon->eligible_subtotal ?? $cartTotal);
+                        $minPurchase = (float) ($coupon->min_purchase ?? 0);
+                        $hasMinPurchase = $minPurchase > 0;
+                        $meetsMinPurchase = !$hasMinPurchase || ($eligibleSub >= $minPurchase);
                     @endphp
                     <button
                          type="button"
@@ -321,7 +322,8 @@
                          data-discount-type="{{ $coupon->type == 1 ? 'percentage' : ($coupon->type == 2 ? 'fixed' : 'shipping') }}"
                          data-discount-value="{{ floatval($coupon->value) }}"
                          data-max-discount="{{ $coupon->max_discount ?? '' }}"
-                         data-min-purchase="{{ (float)($coupon->min_purchase ?? 0) }}"
+                         data-min-purchase="{{ $minPurchase }}"
+                         data-eligible-subtotal="{{ $eligibleSub }}"
                          data-allow-stacking="{{ $coupon->allow_stacking ? 1 : 0 }}">
                         <div class="flex items-start justify-between gap-2.5">
                             <div class="min-w-0">
@@ -333,17 +335,17 @@
                         <div class="mt-2 flex flex-wrap gap-1">
                             <span class="inline-flex items-center rounded-full bg-brand-light px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-brand-gold-dark">{{ $coupon->scopeLabel() }}</span>
                             <span class="inline-flex items-center rounded-full {{ $coupon->allow_stacking ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500' }} px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider">{{ $coupon->allow_stacking ? 'Bisa Digabung' : 'Single' }}</span>
-                            @if((float)($coupon->min_purchase ?? 0) > 0)
-                                <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider">Min. Rp {{ number_format($coupon->min_purchase, 0, ',', '.') }}</span>
-                                @if($cartTotal < (float)$coupon->min_purchase)
-                                    <span class="inline-flex items-center rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[9px] font-extrabold tracking-wider">Kurang Rp {{ number_format((float)$coupon->min_purchase - $cartTotal, 0, ',', '.') }}</span>
+                            @if($hasMinPurchase)
+                                <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider">Min. Rp {{ number_format($minPurchase, 0, ',', '.') }}</span>
+                                @if(!$meetsMinPurchase)
+                                    <span class="inline-flex items-center rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[9px] font-extrabold tracking-wider">Kurang Rp {{ number_format($minPurchase - $eligibleSub, 0, ',', '.') }}</span>
                                 @endif
                             @endif
                         </div>
                         <div class="mt-2.5 flex items-center justify-between">
                             <span class="font-mono text-xs font-bold text-brand-gold-dark">{{ $coupon->code }}</span>
                             @if($isUsable)
-                                @if((float)($coupon->min_purchase ?? 0) > 0 && $cartTotal < (float)$coupon->min_purchase)
+                                @if(!$meetsMinPurchase)
                                     <span class="coupon-option-label text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
                                         <i class="fa-solid fa-circle-exclamation text-[9px]"></i> Belum Cukup
                                     </span>
