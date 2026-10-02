@@ -1,10 +1,11 @@
 @php
     if (!isset($cart)) {
         $cartSummary = \App\Models\Frontend\Buffer\Buffer::getActiveCartSummary();
-        $cart = $cartSummary['cart'];
-        $cartItemCount = $cartSummary['cartItemCount'];
-        $cartTotal = $cartSummary['cartTotal'];
+        $cart = $cartSummary['cart'] ?? [];
+        $cartItemCount = $cartSummary['cartItemCount'] ?? 0;
+        $cartTotal = $cartSummary['cartTotal'] ?? 0.0;
     }
+    $cart = $cart ?? [];
     $cartItemCount = collect($cart)->sum('quantity');
     
     $cartTotal = 0.0;
@@ -15,42 +16,57 @@
         if ($isBundle && $bundleData) {
             $originalPrice = (float) ($bundleData['bundle_price'] ?? ($bundleData['bundle_total_original'] ?? 0));
         } else {
-            $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+            $variantId = $item['variant_id'] ?? (($item['id'] ?? null) !== ($item['product_id'] ?? null) ? ($item['id'] ?? null) : null);
             $originalPrice = 0.0;
-            if ($variantId) {
-                $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                if ($variantModel) {
-                    $originalPrice = (float) $variantModel->sell_price;
-                }
+            if ($variantId && \Illuminate\Support\Str::isUuid((string)$variantId)) {
+                try {
+                    $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                    if ($variantModel) {
+                        $originalPrice = (float) $variantModel->sell_price;
+                    }
+                } catch (\Throwable $e) {}
+            }
+            if ($originalPrice <= 0.0 && !empty($item['product_id']) && \Illuminate\Support\Str::isUuid((string)$item['product_id'])) {
+                try {
+                    $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                    if ($productModel) {
+                        $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
+                    }
+                } catch (\Throwable $e) {}
             }
             if ($originalPrice <= 0.0) {
-                $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                if ($productModel) {
-                    $originalPrice = (float) ($productModel->variants->where('status', true)->min('sell_price') ?? 0);
-                }
-            }
-            if ($originalPrice <= 0.0) {
-                $originalPrice = (float) $item['sell_price'];
+                $originalPrice = (float) ($item['sell_price'] ?? $item['price'] ?? 0);
             }
         }
-        $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) $item['quantity'], $originalPrice);
-        $cartTotal += $res['promotional_price'] * (int) $item['quantity'];
+        $res = \App\Services\StaticPromoService::calculateItemDiscounts($item, (int) ($item['quantity'] ?? 1), $originalPrice);
+        $cartTotal += $res['promotional_price'] * (int) ($item['quantity'] ?? 1);
+    }
+
+    $cartProductIds = $cartProductIds ?? collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
+    try {
+        $cartCategoryIds = $cartCategoryIds ?? (!empty($cartProductIds) ? \App\Models\Frontend\ProductsCatalog\Product::whereIn('id', $cartProductIds)->pluck('category_id')->filter()->unique()->values()->all() : []);
+    } catch (\Throwable $e) {
+        $cartCategoryIds = [];
     }
 
     $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
-    $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()
-        ->where('show_on_web', true)
-        ->with(['categories', 'products', 'brands', 'customerGroups'])
-        ->get()
-        ->filter(function($coupon) use ($cart, $userId) {
-            return $coupon->appliesToCart($cart, $userId);
-        })
-        ->map(function ($coupon) use ($cart, $userId) {
-            $coupon->is_usable = $coupon->canBeUsedBy($userId);
-            $coupon->eligible_subtotal = $coupon->getEligibleSubtotal($cart);
-            return $coupon;
-        })
-        ->values();
+    try {
+        $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()
+            ->where('show_on_web', true)
+            ->with(['categories', 'products', 'brands', 'customerGroups'])
+            ->get()
+            ->filter(function($coupon) use ($cart, $userId) {
+                return $coupon->appliesToCart($cart, $userId);
+            })
+            ->map(function ($coupon) use ($cart, $userId) {
+                $coupon->is_usable = $coupon->canBeUsedBy($userId);
+                $coupon->eligible_subtotal = $coupon->getEligibleSubtotal($cart);
+                return $coupon;
+            })
+            ->values();
+    } catch (\Throwable $e) {
+        $cartCoupons = collect();
+    }
 @endphp
 
 @if(count($cart) === 0)
@@ -80,28 +96,32 @@
                     $originalPrice = (float) ($bundleData['bundle_price'] ?? 0);
                     $basePrice = $originalPrice; // For bundle, base_price is same as bundle_price (or bundle_total_original if we prefer)
                 } else {
-                    $variantId = $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null);
+                    $variantId = $item['variant_id'] ?? (($item['id'] ?? null) !== ($item['product_id'] ?? null) ? ($item['id'] ?? null) : null);
                     $originalPrice = 0.0;
                     $basePrice = 0.0;
-                    if ($variantId) {
-                        $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
-                        if ($variantModel) {
-                            $originalPrice = (float) $variantModel->sell_price;
-                            $basePrice = (float) $variantModel->base_price;
-                        }
-                    }
-                    if ($originalPrice <= 0.0) {
-                        $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
-                        if ($productModel) {
-                            $minVariant = $productModel->variants->where('status', true)->sortBy('sell_price')->first();
-                            if ($minVariant) {
-                                $originalPrice = (float) $minVariant->sell_price;
-                                $basePrice = (float) $minVariant->base_price;
+                    if ($variantId && \Illuminate\Support\Str::isUuid((string)$variantId)) {
+                        try {
+                            $variantModel = \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId);
+                            if ($variantModel) {
+                                $originalPrice = (float) $variantModel->sell_price;
+                                $basePrice = (float) $variantModel->base_price;
                             }
-                        }
+                        } catch (\Throwable $e) {}
+                    }
+                    if ($originalPrice <= 0.0 && !empty($item['product_id']) && \Illuminate\Support\Str::isUuid((string)$item['product_id'])) {
+                        try {
+                            $productModel = \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']);
+                            if ($productModel) {
+                                $minVariant = $productModel->variants->where('status', true)->sortBy('sell_price')->first();
+                                if ($minVariant) {
+                                    $originalPrice = (float) $minVariant->sell_price;
+                                    $basePrice = (float) $minVariant->base_price;
+                                }
+                            }
+                        } catch (\Throwable $e) {}
                     }
                     if ($originalPrice <= 0.0) {
-                        $originalPrice = (float) $item['sell_price'];
+                        $originalPrice = (float) ($item['sell_price'] ?? $item['price'] ?? 0);
                         $basePrice = $originalPrice;
                     }
                 }
@@ -171,23 +191,23 @@
                     }
                 }
             @endphp
-            <div data-cart-item-id="{{ $item['id'] }}" class="flex gap-4 p-4 border border-gray-100 rounded-2xl bg-white shadow-sm">
+            <div data-cart-item-id="{{ $item['id'] ?? '' }}" class="flex gap-4 p-4 border border-gray-100 rounded-2xl bg-white shadow-sm">
                 <div class="w-24 h-24 bg-[#FAF8F5] rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center p-1.5 border border-gray-100">
-                    <img src="{{ $item['image'] }}" alt="{{ $isBundle ? ($bundleData['bundle_name'] ?? 'Bundle') : $item['name'] }}" loading="lazy" decoding="async" class="max-w-full max-h-full object-contain" />
+                    <img src="{{ $item['image'] ?? asset('images/dummy/header.jpg') }}" alt="{{ $isBundle ? ($bundleData['bundle_name'] ?? 'Bundle') : ($item['name'] ?? 'Produk') }}" loading="lazy" decoding="async" class="max-w-full max-h-full object-contain" />
                 </div>
                 <div class="flex flex-col flex-1">
                     <div class="flex justify-between items-start">
                         <div>
                             @if($isBundle)
                                 <span class="text-[10px] uppercase font-bold tracking-wider text-purple-600 bg-purple-100 px-2 py-0.5 rounded">Bundling Hemat</span>
-                            @else
-                                <span class="text-[10px] uppercase font-bold tracking-wider text-gray-400">{{ $item['brand'] }}</span>
+                            @elseif(!empty($item['brand']) || !empty($item['brand_name']))
+                                <span class="text-[10px] uppercase font-bold tracking-wider text-gray-400">{{ $item['brand'] ?? ($item['brand_name'] ?? '') }}</span>
                             @endif
                             <h4 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 mt-0.5">
                                 @if($isBundle)
                                     {{ $bundleData['bundle_name'] ?? 'Bundle Product' }}
                                 @else
-                                    {{ $item['name'] }}
+                                    {{ $item['name'] ?? 'Produk' }}
                                 @endif
                             </h4>
                             @if($isBundle && $bundleData)
@@ -265,7 +285,7 @@
         @endforeach
     </div>
 
-    <div id="cart-footer" class="shrink-0 p-4 sm:p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-3.5" data-product-ids='@json($cartProductIds)' data-category-ids='@json($cartCategoryIds)' data-cart-total="{{ $cartTotal }}">
+    <div id="cart-footer" class="shrink-0 p-4 sm:p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-3.5" data-product-ids='@json($cartProductIds ?? [])' data-category-ids='@json($cartCategoryIds ?? [])' data-cart-total="{{ $cartTotal ?? 0 }}">
         <button
             type="button"
             onclick="toggleCartCouponPanel()"

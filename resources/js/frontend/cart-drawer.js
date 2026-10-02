@@ -352,7 +352,7 @@
         fetch(routeCartUpdate.replace('__ID__', cartId), {
             method: 'POST',
             headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') || {}).content || '',
                 'Accept': 'application/json'
             },
             body: formData
@@ -404,7 +404,11 @@
         })
         .catch(function (err) {
             console.error('Failed to update cart quantity:', err);
-            window.location.reload();
+            if (typeof addToast === 'function') {
+                addToast('error', 'Maaf, terjadi kendala saat memperbarui keranjang. Silakan coba beberapa saat lagi.');
+            } else {
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: 'Maaf, terjadi kendala saat memperbarui keranjang. Silakan coba beberapa saat lagi.' } }));
+            }
         });
     };
 
@@ -431,7 +435,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').content,
+                'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') || {}).content || '',
                 'Accept': 'application/json'
             },
             body: JSON.stringify({

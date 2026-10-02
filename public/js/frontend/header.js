@@ -59,7 +59,13 @@
         var total = (e.detail && e.detail.total) || 0;
 
         var countBadge = document.getElementById('cart-count-badge');
-        if (countBadge) countBadge.textContent = count;
+        if (countBadge) {
+            countBadge.textContent = count;
+            countBadge.classList.add('scale-125', 'animate-bounce', 'ring-4', 'ring-brand-gold/50');
+            setTimeout(function () {
+                countBadge.classList.remove('scale-125', 'animate-bounce', 'ring-4', 'ring-brand-gold/50');
+            }, 400);
+        }
 
         var headerTotal = document.getElementById('header-cart-total');
         if (headerTotal) {
