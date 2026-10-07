@@ -14,7 +14,7 @@
                 'name' => $faq['question'],
                 'acceptedAnswer' => [
                     '@type' => 'Answer',
-                    'text' => $faq['answer'],
+                    'text' => strip_tags($faq['answer']),
                 ],
             ];
         })->values()->toArray();
@@ -140,7 +140,7 @@
                             <div class="flex-1">
                                 <span class="font-semibold text-gray-700 group-hover:text-brand-dark block">{{ $faq['question'] }}</span>
                                 <div class="help-faq-answer hidden mt-3 pt-3 border-t border-gray-100">
-                                    <p class="text-sm text-gray-500 leading-relaxed">{{ $faq['answer'] }}</p>
+                                    <div class="text-sm text-gray-500 leading-relaxed prose prose-sm max-w-none">{!! $faq['answer'] !!}</div>
                                 </div>
                             </div>
                             <span class="help-faq-toggle w-8 h-8 rounded-full bg-brand-light text-brand-gold-dark flex items-center justify-center group-hover:bg-brand-gold group-hover:text-white transition-colors shrink-0 ml-4 font-bold text-lg">+</span>

@@ -65,4 +65,14 @@ class Customer extends Model
     {
         return $this->hasMany(Order::class, 'customer_id', 'id');
     }
+
+    public function setPhoneAttribute($value): void
+    {
+        if ($value !== null) {
+            $cleaned = preg_replace('/[\s\-\.]/', '', (string) $value);
+            $this->attributes['phone'] = ltrim($cleaned, '+');
+        } else {
+            $this->attributes['phone'] = null;
+        }
+    }
 }

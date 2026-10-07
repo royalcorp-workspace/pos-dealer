@@ -86,7 +86,7 @@
         </button>
     </div>
 @else
-    <div class="flex-1 min-h-[220px] sm:min-h-[260px] p-4 sm:p-5 md:p-6 flex flex-col gap-4 overflow-y-auto">
+    <div class="flex-1 min-h-[220px] sm:min-h-[260px] p-4 sm:p-5 md:p-6 flex flex-col gap-4 overflow-y-auto overscroll-contain">
         @foreach($cart as $item)
             @php
                 $isBundle = ($item['type'] ?? null) === 'bundle';
@@ -311,7 +311,7 @@
             </div>
             <div id="manual-cart-voucher-feedback" class="text-xs"></div>
 
-            <div class="space-y-2 max-h-44 sm:max-h-52 overflow-y-auto pr-1">
+            <div class="space-y-2 max-h-44 sm:max-h-52 overflow-y-auto overscroll-contain touch-pan-y pr-1">
                 @foreach($cartCoupons as $coupon)
                     @php
                         $typeLabel = match($coupon->type) {

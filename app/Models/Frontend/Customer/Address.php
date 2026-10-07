@@ -62,4 +62,14 @@ class Address extends Model
     {
         return $this->belongsTo(SubDistrict::class, 'sub_district_id', 'id');
     }
+
+    public function setPhoneAttribute($value): void
+    {
+        if ($value !== null) {
+            $cleaned = preg_replace('/[\s\-\.]/', '', (string) $value);
+            $this->attributes['phone'] = ltrim($cleaned, '+');
+        } else {
+            $this->attributes['phone'] = null;
+        }
+    }
 }

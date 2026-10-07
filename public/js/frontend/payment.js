@@ -38,6 +38,7 @@ window.processPayment = function () {
     if (accordionsWrapper) accordionsWrapper.classList.remove('p-2.5', 'border-2', 'border-red-400', 'bg-red-50/20');
 
     var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
+    var categoryType = selectedMethod.getAttribute('data-category-type') || '';
 
     var container = document.getElementById('payment-container');
     var processUrl = container ? container.dataset.routePaymentProcess : '/payment/process';
@@ -53,6 +54,7 @@ window.processPayment = function () {
         body = new FormData();
         body.append('payment_method', selectedMethod.value);
         body.append('order_id', orderId);
+        body.append('category_type', categoryType);
         if (fileInput && fileInput.files && fileInput.files.length > 0) {
             body.append('payment_proof', fileInput.files[0]);
         }
@@ -66,7 +68,8 @@ window.processPayment = function () {
         window.showLoading();
         body = JSON.stringify({
             payment_method: selectedMethod.value,
-            order_id: orderId
+            order_id: orderId,
+            category_type: categoryType
         });
         headers = {
             'Content-Type': 'application/json',
@@ -97,6 +100,8 @@ window.processPayment = function () {
         if (res.ok && data && data.success) {
             localStorage.removeItem('selectedCartCoupon');
             localStorage.removeItem('selectedCartCoupons');
+            sessionStorage.removeItem('checkout_form_data');
+            localStorage.removeItem('checkout_form_data');
             window.location.href = data.redirect_url || thankYouUrl;
         } else {
             var errorMsg = (data && data.message) ? data.message : 'Terjadi kendala saat memproses pembayaran.';

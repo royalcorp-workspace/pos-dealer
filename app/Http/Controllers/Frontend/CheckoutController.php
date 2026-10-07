@@ -354,9 +354,8 @@ class CheckoutController extends Controller
         $formFields = $request->only(['name', 'email', 'phone', 'address', 'postal_code', 'courier', 'voucher_code', 'selected_address_id', 'sub_district_id']);
 
         $rawPhone = trim((string) $request->phone);
-        $hasInvalidChars = preg_match('/[^\d\+\s\-]/', $rawPhone);
-        $cleanPhone = preg_replace('/[\s\-]/', '', $rawPhone);
-        if (!$hasInvalidChars && !empty($cleanPhone)) {
+        $cleanPhone = ltrim(preg_replace('/[\s\-]/', '', $rawPhone), '+');
+        if (!preg_match('/[^\d\+\s\-]/', $rawPhone) && !empty($cleanPhone)) {
             $request->merge(['phone' => $cleanPhone]);
         }
 
@@ -368,7 +367,7 @@ class CheckoutController extends Controller
                 'string',
                 'min:9',
                 'max:20',
-                'regex:/^(\+62|62|0)[0-9]{8,14}$/',
+                'regex:/^(62|0)[0-9]{8,14}$/',
             ],
             'sub_district_id' => 'required|uuid',
             'address' => [
@@ -387,7 +386,7 @@ class CheckoutController extends Controller
         ], [
             'phone.required' => 'Nomor handphone wajib diisi.',
             'phone.min' => 'Nomor handphone minimal 9 digit angka.',
-            'phone.regex' => 'Nomor handphone tidak valid. Gunakan format 08... atau +628... tanpa simbol/huruf.',
+            'phone.regex' => 'Nomor handphone tidak valid. Gunakan format 08... atau 62... tanpa simbol/huruf.',
             'address.required' => 'Alamat lengkap pengiriman wajib diisi.',
             'address.min' => 'Alamat pengiriman terlalu pendek. Mohon isi alamat dengan detail.',
             'address.regex' => 'Alamat pengiriman tidak valid. Mohon masukkan alamat lengkap (bukan tanda strip/simbol).',
@@ -659,7 +658,7 @@ class CheckoutController extends Controller
         if ($finalSubDistrictId) {
             $subDistrictModel = \App\Models\Frontend\Location\SubDistrict::with('city.province')->find($finalSubDistrictId);
             if ($subDistrictModel) {
-                $cleanPhone = preg_replace('/[\s\-]/', '', trim((string) $request->phone));
+                $cleanPhone = ltrim(preg_replace('/[\s\-]/', '', trim((string) $request->phone)), '+');
                 $phone = !empty($cleanPhone) ? $cleanPhone : trim((string) $request->phone);
                 $recipientName = trim((string) $request->name);
                 $addressText = trim((string) $request->address);
@@ -1094,8 +1093,8 @@ class CheckoutController extends Controller
                 'message' => 'Keranjang belanja Anda telah kosong.'
             ], 400);
         }
-
-        $paymentMethodModel = \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
+        $categoryType = $request->input('category_type') ? (int)$request->input('category_type') : null;
+        $paymentMethodModel = \App\Models\PaymentMethod::findByCodeOrBank($paymentMethod, $categoryType);
 
         // Tentukan apakah metode pembayaran adalah Bank Transfer / Manual
         $isBankTransfer = ($paymentMethodModel && (
@@ -1138,7 +1137,7 @@ class CheckoutController extends Controller
                 // 1. Create or update Customer and Address
 
                 $inputEmail = strtolower(trim($customerData['email'] ?? ($buffer?->customer_email ?? '')));
-                $inputPhone = trim($customerData['phone'] ?? ($buffer?->customer_phone ?? ''));
+                $inputPhone = ltrim(preg_replace('/[\s\-]/', '', trim((string) ($customerData['phone'] ?? ($buffer?->customer_phone ?? '')))), '+');
                 $inputName = trim($customerData['name'] ?? ($buffer?->customer_name ?? 'Pelanggan'));
 
                 // Customer unique by email (case-insensitive)
@@ -1289,7 +1288,7 @@ class CheckoutController extends Controller
                         ->value('id');
                 }
 
-                $orderNumber = 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
+                $orderNumber = Order::generateOrderNumber();
                 $orderSubtotal = $buffer?->subtotal ?? ($sessionOrderData['subtotal'] ?? 0);
                 $orderDiscount = $buffer?->discount ?? ($sessionOrderData['total_discount'] ?? 0);
                 $orderShippingCost = $buffer?->shipping_cost ?? ($sessionOrderData['shipping_cost'] ?? 0);
@@ -1299,6 +1298,9 @@ class CheckoutController extends Controller
                 $order = Order::create([
                     'id' => Str::uuid()->toString(),
                     'order_number' => $orderNumber,
+                    'order_date' => now()->format('Y-m-d'),
+                    'jde_push_status' => 0,
+                    'jde_push_date' => null,
                     'customer_id' => $customer->id,
                     'courier_id' => $buffer?->courier_id ?? ($sessionOrderData['courier_id'] ?? null),
                     'status' => Order::STATUS_PENDING_APPROVAL,
@@ -1316,8 +1318,8 @@ class CheckoutController extends Controller
                     'shipping_addresses_id' => $actualShippingAddressesId,
                     'transaction_fee' => $charge,
                     'meta' => $orderMeta,
-                    'creator' => $customer ? $customer->name : 'Customer Web',
-                    'editor' => $customer ? $customer->name : 'Customer Web',
+                    'creator' => session()->get('user.username') ?? session()->get('user.name') ?? ($customer ? $customer->name : 'Customer Web'),
+                    'editor' => session()->get('user.username') ?? session()->get('user.name') ?? ($customer ? $customer->name : 'Customer Web'),
                 ]);
 
                 // 3b. Create initial Delivery record in deliveries table
@@ -1601,10 +1603,13 @@ class CheckoutController extends Controller
             $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
             $signature = hash('sha256', strtoupper($dataToHash));
 
-            $espayBankCode = $paymentMethod;
-            if ($paymentMethodModel && is_array($paymentMethodModel->bank_info) && !empty($paymentMethodModel->bank_info['bank_code'])) {
-                $espayBankCode = $paymentMethodModel->bank_info['bank_code'];
-            }
+            // Espay SendInvoice expects product_code in 'bank_code' (e.g. BCAATM, CREDITCARD)
+            // Resolve product_code with escalation so bank clearing codes like '014' don't collide between BCA ATM & Credit Card
+            $espayBankCode = \App\Models\PaymentMethod::resolveEspayProductCode(
+                codeOrBank: $paymentMethod,
+                type: $paymentMethodModel?->type,
+                paymentMethod: $paymentMethodModel
+            );
 
             $payload = [
                 'rq_uuid' => $rqUuid,
@@ -1703,7 +1708,7 @@ class CheckoutController extends Controller
             $buffer->delete();
         }
 
-        session()->forget(['order_data', 'checkout_data', 'selected_voucher_codes', 'cart']);
+        session()->forget(['order_data', 'checkout_data', 'selected_voucher_codes', 'selected_voucher', 'cart', 'checkout_form_data', 'order_preview']);
         session()->put('thankyou_order_id', $order->id);
         session()->put('last_created_order_id', $order->id);
 
@@ -1995,6 +2000,17 @@ class CheckoutController extends Controller
         if (!$order) {
             return redirect()->route('home')->with('error', 'Pesanan tidak ditemukan.');
         }
+
+        // Pastikan seluruh session checkout dan form data dibersihkan setelah transaksi selesai
+        session()->forget([
+            'checkout_form_data',
+            'order_data',
+            'checkout_data',
+            'selected_voucher_codes',
+            'selected_voucher',
+            'cart',
+            'order_preview',
+        ]);
 
         return view('frontend.thankyou', compact('order'));
     }
@@ -2405,40 +2421,19 @@ class CheckoutController extends Controller
                         $v = $bItem->variant;
                         $p = $bItem->product;
 
-                        $cat = $p?->category;
-                        $isFixed = false;
-                        if ($cat && $cat->courier_setting_type === 'global' && !empty($cat->shipping_scheme)) {
-                            $isFixed = ($cat->shipping_scheme === 'fixed');
-                        } else {
-                            $isFixed = ($p && $p->shipping_scheme === 'fixed');
+                        $hasDimensionItems = true;
+                        $bLen = (float) ($v?->package_length ?: ($v?->length ?? $p?->length ?? ($v?->attributes['length'] ?? 0)));
+                        $bWid = (float) ($v?->package_width ?: ($v?->width ?? $p?->width ?? ($v?->attributes['width'] ?? 0)));
+                        $bHei = (float) ($v?->package_height ?: ($v?->height ?? $p?->height ?? ($v?->attributes['height'] ?? 0)));
+                        $bWei = (float) ($v?->package_weight ?: ($v?->weight ?? $p?->weight ?? ($v?->attributes['weight'] ?? 0)));
+
+                        if ($bWei > 0 || ($bLen > 0 && $bWid > 0 && $bHei > 0)) {
+                            $hasAnyDimensionOrWeight = true;
                         }
 
-                        if ($isFixed) {
-                            $hasFixedShippingItems = true;
-                            $vShip = 0.0;
-                            if ($v && $v->shipping_cost !== null && (float) $v->shipping_cost > 0) {
-                                $vShip = (float) $v->shipping_cost;
-                            } elseif ($p && $p->shipping_cost !== null && (float) $p->shipping_cost > 0) {
-                                $vShip = (float) $p->shipping_cost;
-                            } elseif ($cat && $cat->shipping_cost !== null && (float) $cat->shipping_cost > 0) {
-                                $vShip = (float) $cat->shipping_cost;
-                            }
-                            $totalFixedShippingCost += ($vShip * $bQty);
-                        } else {
-                            $hasDimensionItems = true;
-                            $bLen = (float) ($v->package_length ?: ($v->length ?? $p->length ?? ($v->attributes['length'] ?? 0)));
-                            $bWid = (float) ($v->package_width ?: ($v->width ?? $p->width ?? ($v->attributes['width'] ?? 0)));
-                            $bHei = (float) ($v->package_height ?: ($v->height ?? $p->height ?? ($v->attributes['height'] ?? 0)));
-                            $bWei = (float) ($v->package_weight ?: ($v->weight ?? $p->weight ?? ($v->attributes['weight'] ?? 0)));
-
-                            if ($bWei > 0 || ($bLen > 0 && $bWid > 0 && $bHei > 0)) {
-                                $hasAnyDimensionOrWeight = true;
-                            }
-
-                            $totalActualWeight += ($bWei * $bQty);
-                            if ($bLen > 0 && $bWid > 0 && $bHei > 0) {
-                                $totalVolumetricWeight += (($bLen * $bWid * $bHei) / 6000) * $bQty;
-                            }
+                        $totalActualWeight += ($bWei * $bQty);
+                        if ($bLen > 0 && $bWid > 0 && $bHei > 0) {
+                            $totalVolumetricWeight += (($bLen * $bWid * $bHei) / 6000) * $bQty;
                         }
                     }
                     continue;
@@ -2455,28 +2450,8 @@ class CheckoutController extends Controller
                 }
             }
 
-            $cat = $productModel?->category;
-            $isFixed = false;
-            if ($cat && $cat->courier_setting_type === 'global' && !empty($cat->shipping_scheme)) {
-                $isFixed = ($cat->shipping_scheme === 'fixed');
-            } else {
-                $isFixed = ($productModel && $productModel->shipping_scheme === 'fixed');
-            }
-
-            if ($isFixed) {
-                $hasFixedShippingItems = true;
-                $vShip = 0.0;
-                if ($variantModel && $variantModel->shipping_cost !== null && (float) $variantModel->shipping_cost > 0) {
-                    $vShip = (float) $variantModel->shipping_cost;
-                } elseif ($productModel && $productModel->shipping_cost !== null && (float) $productModel->shipping_cost > 0) {
-                    $vShip = (float) $productModel->shipping_cost;
-                } elseif ($cat && $cat->shipping_cost !== null && (float) $cat->shipping_cost > 0) {
-                    $vShip = (float) $cat->shipping_cost;
-                }
-                $totalFixedShippingCost += ($vShip * $quantity);
-            } else {
-                $hasDimensionItems = true;
-                $length = 0.0;
+            $hasDimensionItems = true;
+            $length = 0.0;
                 $width = 0.0;
                 $height = 0.0;
                 $weight = 0.0;
@@ -2513,7 +2488,6 @@ class CheckoutController extends Controller
                 if ($length > 0 && $width > 0 && $height > 0) {
                     $totalVolumetricWeight += (($length * $width * $height) / 6000) * $quantity;
                 }
-            }
         }
 
         $chargeableWeight = max($totalActualWeight, $totalVolumetricWeight);
@@ -2562,13 +2536,25 @@ class CheckoutController extends Controller
 
         $destCityId = null;
         $destPostalCode = null;
+        $destProvinceName = null;
+        $destCityName = null;
         if (!empty($subDistrictId)) {
-            $destSubDistrict = SubDistrict::withoutGlobalScopes()->find($subDistrictId);
+            $destSubDistrict = SubDistrict::withoutGlobalScopes()->with('city.province')->find($subDistrictId)
+                ?? SubDistrict::with('city.province')->find($subDistrictId);
             if ($destSubDistrict) {
                 $destCityId = $destSubDistrict->city_id;
                 $destPostalCode = $destSubDistrict->postal_code;
+                $destProvinceName = $destSubDistrict->city->province->name ?? ($destSubDistrict->city->province ?? ($destSubDistrict->province ?? null));
+                $destCityName = $destSubDistrict->city->name ?? null;
             }
         }
+
+        $estimatedDuration = \App\Services\EtaService::estimateDuration(
+            $courierModel->courier_type,
+            $courierModel->code,
+            $destProvinceName,
+            $destCityName
+        );
 
         // Logic for Kurir Toko (Scope Wilayah Kota & Hybrid Ongkir Model A+B)
         if ($courierModel->courier_type === 'toko') {
@@ -2654,7 +2640,7 @@ class CheckoutController extends Controller
             }
 
             $totalShippingCost = $fixedShippingCost + $dimensionCost;
-            $etaToko = \App\Services\EtaService::calculateEta('1-2 hari');
+            $etaToko = \App\Services\EtaService::calculateEta($estimatedDuration);
 
             return [
                 'shipping_cost' => $totalShippingCost,
@@ -2692,10 +2678,55 @@ class CheckoutController extends Controller
                 })
                 ->orderByRaw('sub_district_id IS NOT NULL DESC')
                 ->first();
-        }
 
-        if (!$shipping) {
+            // Jika alamat kelurahan/kecamatan tidak ditemukan di shipping_addresses
+            if (!$shipping) {
+                return [
+                    'shipping_cost' => 0,
+                    'base_price' => 0,
+                    'fixed_shipping_cost' => $fixedShippingCost,
+                    'expedition_cost' => 0,
+                    'is_available' => false,
+                    'is_calculated' => false,
+                    'billable_weight' => 0,
+                    'chargeable_weight' => $totalChargeableWeight,
+                    'actual_weight' => $weightDetails['actual_weight'],
+                    'volumetric_weight' => $weightDetails['volumetric_weight'],
+                    'has_fixed_items' => $hasFixedItems,
+                    'has_dimension_items' => $hasDimensionItems,
+                    'service_name' => $courierModel->name,
+                    'service_code' => 'reg',
+                    'duration' => null,
+                    'source' => 'internal',
+                    'courier_type' => 'expedisi',
+                    'message' => 'Ekspedisi ' . $courierModel->name . ' belum melayani pengiriman ke kelurahan / wilayah tujuan ini.',
+                ];
+            }
+        } else {
+            // Ketika belum memilih kelurahan/kecamatan (tampilan awal checkout)
             $shipping = ShippingAddress::where('courier_id', $courierModel->id)->first();
+            if (!$shipping) {
+                return [
+                    'shipping_cost' => 0,
+                    'base_price' => 0,
+                    'fixed_shipping_cost' => $fixedShippingCost,
+                    'expedition_cost' => 0,
+                    'is_available' => false,
+                    'is_calculated' => false,
+                    'billable_weight' => 0,
+                    'chargeable_weight' => $totalChargeableWeight,
+                    'actual_weight' => $weightDetails['actual_weight'],
+                    'volumetric_weight' => $weightDetails['volumetric_weight'],
+                    'has_fixed_items' => $hasFixedItems,
+                    'has_dimension_items' => $hasDimensionItems,
+                    'service_name' => $courierModel->name,
+                    'service_code' => 'reg',
+                    'duration' => null,
+                    'source' => 'internal',
+                    'courier_type' => 'expedisi',
+                    'message' => 'Tarif ekspedisi ' . $courierModel->name . ' belum dikonfigurasi.',
+                ];
+            }
         }
 
         $basePrice = $shipping ? (int) $shipping->price : 25000;
@@ -2731,7 +2762,7 @@ class CheckoutController extends Controller
         }
 
         $totalShippingCost = $fixedShippingCost + $expeditionCost;
-        $etaExpedisi = \App\Services\EtaService::calculateEta($shippingEtd ?: '1-2 hari');
+        $etaExpedisi = \App\Services\EtaService::calculateEta($shippingEtd ?: $estimatedDuration);
 
         return [
             'shipping_cost' => $totalShippingCost,
@@ -3092,16 +3123,22 @@ class CheckoutController extends Controller
 
     public function searchUser(Request $request)
     {
-        $term = $request->input('term');
+        $term = trim((string)$request->input('term'));
         if (strlen($term) < 4) {
             return response()->json([]);
         }
 
-        $customers = Customer::where('email', 'ilike', '%' . $term . '%')
-            ->orWhere('phone', 'ilike', '%' . $term . '%')
-            ->orWhere('name', 'ilike', '%' . $term . '%')
-            ->take(5)
-            ->get();
+        if (str_contains($term, '@')) {
+            $customers = Customer::whereRaw('LOWER(email) = ?', [strtolower($term)])
+                ->orWhere('email', 'ilike', $term . '%')
+                ->take(5)
+                ->get();
+        } else {
+            $customers = Customer::where('phone', 'ilike', '%' . $term . '%')
+                ->orWhere('name', 'ilike', '%' . $term . '%')
+                ->take(5)
+                ->get();
+        }
 
         $results = [];
         foreach ($customers as $c) {

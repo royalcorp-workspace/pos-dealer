@@ -86,8 +86,6 @@ class Product extends Model
         'description',
         'warranty_duration',
         'courier_type',
-        'shipping_scheme',
-        'shipping_cost',
         'length',
         'width',
         'height',
@@ -107,7 +105,6 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'shipping_cost' => 'decimal:2',
             'previous_slugs' => 'array',
             'best_seller' => 'boolean',
             'is_new' => 'boolean',

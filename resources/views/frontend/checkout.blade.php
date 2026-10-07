@@ -246,10 +246,10 @@
                                                         $itemVariantId = $item['variant_id'] ?? (($item['id'] ?? null) !== ($item['product_id'] ?? null) ? ($item['id'] ?? null) : null);
                                                         $iVar = $itemVariantId ? \App\Models\Frontend\ProductsCatalog\ProductVariant::find($itemVariantId) : null;
                                                         $iProd = !empty($item['product_id']) ? \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']) : null;
-                                                        $iLen = (float)($iVar->length ?? $iProd->length ?? ($iVar->attributes['length'] ?? 0));
-                                                        $iWid = (float)($iVar->width ?? $iProd->width ?? ($iVar->attributes['width'] ?? 0));
-                                                        $iHei = (float)($iVar->height ?? $iProd->height ?? ($iVar->attributes['height'] ?? 0));
-                                                        $iWei = (float)($iVar->weight ?? $iProd->weight ?? ($iVar->attributes['weight'] ?? 0));
+                                                        $iLen = (float)($iVar->package_length ?: ($iVar->length ?? $iProd->length ?? ($iVar->attributes['length'] ?? 0)));
+                                                        $iWid = (float)($iVar->package_width ?: ($iVar->width ?? $iProd->width ?? ($iVar->attributes['width'] ?? 0)));
+                                                        $iHei = (float)($iVar->package_height ?: ($iVar->height ?? $iProd->height ?? ($iVar->attributes['height'] ?? 0)));
+                                                        $iWei = (float)($iVar->package_weight ?: ($iVar->weight ?? $iProd->weight ?? ($iVar->attributes['weight'] ?? 0)));
                                                     @endphp
                                                     @if($iWei > 0 || ($iLen > 0 && $iWid > 0 && $iHei > 0))
                                                         <div class="text-[11px] text-gray-400 mt-1 flex flex-wrap items-center gap-2">
@@ -342,6 +342,12 @@
 
                     <!-- Section 2: Customer Information -->
                     <div class="bg-white border border-brand-muted/80 rounded-2xl p-6 sm:p-7 shadow-sm hover:shadow-md transition-shadow">
+                        @php
+                            $isLoggedInUser = session()->get('is_logged_in') 
+                                || !empty(session()->get('user')['id']) 
+                                || !empty(session()->get('user')['sub']) 
+                                || auth()->check();
+                        @endphp
                         <div class="flex flex-wrap justify-between items-center gap-3 mb-6 pb-4 border-b border-gray-100">
                             <div class="flex items-center gap-3">
                                 <div class="w-9 h-9 rounded-xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center font-bold text-sm shadow-2xs">
@@ -352,12 +358,20 @@
                                     <p class="text-xs text-gray-500">Data kontak dan alamat lengkap pengiriman</p>
                                 </div>
                             </div>
-                            @if($savedAddresses->isNotEmpty())
-                                <button type="button" onclick="toggleAddressSelector()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-dark bg-brand-gold/15 hover:bg-brand-gold/25 transition-colors">
-                                    <i class="fa-solid fa-map-location-dot text-brand-gold-dark"></i>
-                                    Pilih Alamat Tersimpan
-                                </button>
-                            @endif
+                            <div class="flex items-center gap-2">
+                                @if(!$isLoggedInUser)
+                                    <button type="button" id="btn-reset-address" onclick="resetRecipientAddress()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-gray-200/80 transition-all cursor-pointer shadow-2xs group" title="Kosongkan formulir data penerima dan alamat">
+                                        <i class="fa-solid fa-rotate-left text-[11px] text-gray-400 group-hover:text-red-500 transition-colors"></i>
+                                        <span>Reset Alamat</span>
+                                    </button>
+                                @endif
+                                @if($savedAddresses->isNotEmpty())
+                                    <button type="button" onclick="toggleAddressSelector()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-brand-dark bg-brand-gold/15 hover:bg-brand-gold/25 transition-colors">
+                                        <i class="fa-solid fa-map-location-dot text-brand-gold-dark"></i>
+                                        Pilih Alamat Tersimpan
+                                    </button>
+                                @endif
+                            </div>
                         </div>
 
                         @if($savedAddresses->isNotEmpty())
@@ -420,7 +434,7 @@
                                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
                                     <i class="fa-solid fa-phone text-brand-gold text-[11px]"></i> Nomor Telepon / WA <span class="text-red-500">*</span>
                                 </label>
-                                <input type="tel" name="phone" id="checkout-phone" value="{{ old('phone', $defaultPhone) }}" required maxlength="16" pattern="^(\+62|62|0)[0-9]{8,14}$" class="w-full px-4 py-3 bg-gray-50/50 border @error('phone') border-red-400 bg-red-50/20 @else border-gray-200 @enderror rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="08xx xxxx xxxx / +628xx" autocomplete="tel">
+                                <input type="tel" name="phone" id="checkout-phone" value="{{ old('phone', ltrim($defaultPhone ?? '', '+')) }}" required maxlength="16" pattern="^(62|0)[0-9]{8,14}$" class="w-full px-4 py-3 bg-gray-50/50 border @error('phone') border-red-400 bg-red-50/20 @else border-gray-200 @enderror rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="08xx xxxx xxxx / 628xx" autocomplete="tel">
                                 @error('phone')
                                     <p class="text-xs text-red-500 mt-1 font-medium flex items-center gap-1">
                                         <i class="fa-solid fa-circle-exclamation"></i> {{ $message }}
@@ -508,46 +522,201 @@
                         @endif
 
                         <div>
-                            <select name="courier" required class="w-full px-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all">
-                                <option value="">-- Pilih Ekspedisi / Kurir Pengiriman --</option>
+                            @php
+                                $hasSubDistrict = !empty(old('sub_district_id', $form['sub_district_id'] ?? $selectedSubDistrictId ?? ''));
+                            @endphp
+
+                            <!-- Prompt when subdistrict not selected yet -->
+                            <div id="courier-select-subdistrict-prompt" class="{{ $hasSubDistrict ? 'hidden' : '' }} p-5 bg-amber-50/70 border border-dashed border-amber-300 rounded-2xl flex items-center gap-3.5 text-amber-900 transition-all">
+                                <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 text-base shadow-2xs">
+                                    <i class="fa-solid fa-map-location-dot"></i>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <h4 class="font-extrabold text-sm text-brand-dark mb-0.5">Pilih Kecamatan / Kelurahan Terlebih Dahulu</h4>
+                                    <p class="text-xs text-gray-600 leading-relaxed">
+                                        Pilihan kurir pengiriman dan estimasi tarif ongkir akan otomatis muncul setelah Anda memilih lokasi pengiriman tujuan di atas.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Hidden Select preserved for form submit & JS backward compatibility -->
+                            <select name="courier" id="courier-native-select" autocomplete="off" required class="sr-only">
+                                <option value="" {{ empty(old('courier')) ? 'selected' : '' }}>-- Pilih Ekspedisi / Kurir Pengiriman --</option>
                                 @foreach($couriers as $courier)
                                     @php
                                         $details = $courierPrices[$courier->code] ?? null;
                                         $isAvailable = $details['is_available'] ?? true;
                                         $calculatedCost = $details['shipping_cost'] ?? ($courier->shippingAddresses->where('type', 1)->first()->price ?? ($courier->shippingAddresses->first()->price ?? 25000));
-                                        $isCalculated = $details['is_calculated'] ?? false;
-                                        $billableWeight = $details['billable_weight'] ?? 1;
-                                        $hasFixed = $details['has_fixed_items'] ?? false;
-                                        $hasDim = $details['has_dimension_items'] ?? false;
                                     @endphp
                                     <option value="{{ $courier->code }}" 
                                             data-courier-name="{{ $courier->name }}"
                                             data-base-price="{{ $details['base_price'] ?? $calculatedCost }}"
                                             data-available="{{ $isAvailable ? '1' : '0' }}"
                                             {{ !$isAvailable ? 'disabled' : '' }}
-                                            {{ (old('courier', $form['courier'] ?? '') == $courier->code) ? 'selected' : '' }}>
-                                        @if(!$isAvailable)
-                                            {{ $courier->name }} - Di Luar Jangkauan (Tidak Melayani Wilayah Ini)
-                                        @else
-                                            {{ $courier->name }} - Rp {{ number_format($calculatedCost, 0, ',', '.') }}
-                                            @if($hasFixed && $hasDim)
-                                                (Tetap + {{ $billableWeight }} kg)
-                                            @elseif($hasFixed)
-                                                (Ongkir Tetap)
-                                            @elseif($isCalculated && $billableWeight > 0)
-                                                ({{ $billableWeight }} kg)
-                                            @else
-                                                (Tarif Tetap)
-                                            @endif
-                                            @if(!empty($details['eta_label']))
-                                                | Estimasi tiba: {{ $details['eta_label'] }}
-                                            @endif
-                                        @endif
+                                            {{ (old('courier') == $courier->code) ? 'selected' : '' }}>
+                                        {{ $courier->name }}
                                     </option>
                                 @endforeach
                             </select>
+
+                            <!-- Modern Courier Accordion Dropdown (Like Payment Method) -->
+                            <div class="space-y-3.5 {{ $hasSubDistrict ? '' : 'hidden' }}" id="courier-accordions-wrapper">
+                                @php
+                                    $selectedCourierCode = old('courier', '');
+                                    $selectedCourierModel = $couriers->firstWhere('code', $selectedCourierCode);
+                                    $groupedCouriers = [
+                                        'Kurir Internal Toko' => $couriers->where('courier_type', 'toko'),
+                                        'Ekspedisi Kargo & Reguler' => $couriers->where('courier_type', '!=', 'toko'),
+                                    ];
+                                @endphp
+
+                                @foreach($groupedCouriers as $groupTitle => $groupItems)
+                                    @if($groupItems->isNotEmpty())
+                                        @php
+                                            $isStoreGroup = str_contains(strtolower($groupTitle), 'toko');
+                                            $groupIcon = $isStoreGroup ? 'fa-solid fa-store' : 'fa-solid fa-truck-fast';
+                                            $groupColor = $isStoreGroup ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-100';
+                                            $groupSubtitle = $isStoreGroup ? 'Armada resmi internal toko (area cakupan tertentu)' : 'JNE, SiCepat, J&T, TIKI, Pos Indonesia';
+                                            $hasSelectedInGroup = $groupItems->contains('code', $selectedCourierCode);
+                                        @endphp
+                                        <div class="courier-accordion-group bg-white border {{ $hasSelectedInGroup ? 'border-brand-gold ring-2 ring-brand-gold/20' : 'border-gray-200' }} rounded-2xl overflow-hidden transition-all duration-200 shadow-2xs hover:border-brand-gold/70" data-group-type="{{ $groupTitle }}">
+                                            <!-- Group Header Accordion -->
+                                            <div class="courier-accordion-header px-4 sm:px-5 py-3.5 sm:py-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-gray-50/80 transition-colors">
+                                                <div class="flex items-center gap-3 sm:gap-3.5 min-w-0">
+                                                    <div class="w-10 h-10 rounded-xl {{ $groupColor }} flex items-center justify-center text-base shrink-0 shadow-2xs">
+                                                        <i class="{{ $groupIcon }}"></i>
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <div class="flex items-center gap-2 flex-wrap">
+                                                            <span class="font-extrabold text-sm sm:text-base text-brand-dark tracking-tight">{{ $groupTitle }}</span>
+                                                            <span class="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{{ count($groupItems) }} Pilihan</span>
+                                                        </div>
+                                                        <p class="text-xs text-gray-500 truncate mt-0.5">{{ $groupSubtitle }}</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="flex items-center gap-2.5 sm:gap-3 shrink-0 ml-2">
+                                                    <span class="courier-group-selected-badge {{ $hasSelectedInGroup ? 'inline-flex' : 'hidden' }} text-xs font-bold text-brand-gold-dark bg-brand-gold/15 border border-brand-gold/30 px-2.5 py-1 rounded-lg items-center gap-1.5 shadow-2xs transition-all">
+                                                        <i class="fa-solid fa-circle-check text-brand-gold text-xs"></i>
+                                                        <span class="badge-text truncate max-w-[110px] sm:max-w-[160px]">{{ $selectedCourierModel?->name ?? '' }}</span>
+                                                    </span>
+                                                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 accordion-chevron transition-transform duration-300 {{ $hasSelectedInGroup ? 'rotate-180' : '' }}">
+                                                        <i class="fa-solid fa-chevron-down text-xs"></i>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Accordion Items List -->
+                                            <div class="courier-accordion-content border-t border-gray-100 divide-y divide-gray-100 {{ $hasSelectedInGroup ? '' : 'hidden' }} bg-white">
+                                                @foreach($groupItems as $courier)
+                                                    @php
+                                                        $details = $courierPrices[$courier->code] ?? null;
+                                                        $isAvailable = $details['is_available'] ?? true;
+                                                        $calculatedCost = $details['shipping_cost'] ?? ($courier->shippingAddresses->where('type', 1)->first()->price ?? ($courier->shippingAddresses->first()->price ?? 25000));
+                                                        $isCalculated = $details['is_calculated'] ?? false;
+                                                        $billableWeight = $details['billable_weight'] ?? 1;
+                                                        $hasFixed = $details['has_fixed_items'] ?? false;
+                                                        $hasDim = $details['has_dimension_items'] ?? false;
+                                                        $etaLabel = $details['eta_label'] ?? null;
+                                                        $cCode = strtolower($courier->code);
+                                                        $isSelected = ($selectedCourierCode === $courier->code);
+                                                    @endphp
+                                                    <label for="courier_radio_{{ $courier->code }}" 
+                                                           id="courier-label-{{ $courier->code }}"
+                                                           class="courier-option-label flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 transition-all {{ !$isAvailable ? 'opacity-50 cursor-not-allowed bg-gray-50/60' : 'cursor-pointer hover:bg-brand-light/30' }} {{ $isSelected ? 'bg-brand-gold/5' : '' }}">
+                                                        <input type="radio" 
+                                                               id="courier_radio_{{ $courier->code }}" 
+                                                               name="courier_radio" 
+                                                               value="{{ $courier->code }}"
+                                                               data-courier-name="{{ $courier->name }}"
+                                                               data-courier-code="{{ $courier->code }}"
+                                                               data-is-available="{{ $isAvailable ? '1' : '0' }}"
+                                                               data-cost="{{ $calculatedCost }}"
+                                                               autocomplete="off"
+                                                               {{ !$isAvailable ? 'disabled' : '' }}
+                                                               {{ $isSelected ? 'checked' : '' }}
+                                                               class="sr-only">
+
+                                                        <div class="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                                                            <!-- Courier Logo / Stylized Icon Badge -->
+                                                            <div class="w-14 h-9 sm:w-16 sm:h-10 flex items-center justify-center bg-gray-50 rounded-xl border border-gray-200/80 shrink-0 p-1">
+                                                                @if($courier->courier_type === 'toko' || str_contains($cCode, 'toko'))
+                                                                    <div class="flex items-center gap-1 text-blue-700 font-extrabold text-[11px]">
+                                                                        <i class="fa-solid fa-store text-xs"></i>
+                                                                        <span>TOKO</span>
+                                                                    </div>
+                                                                @elseif(str_contains($cCode, 'jne'))
+                                                                    <span class="px-2 py-0.5 rounded-md bg-[#005BAC] text-white font-black text-[11px] tracking-wider shadow-2xs">JNE</span>
+                                                                @elseif(str_contains($cCode, 'jnt'))
+                                                                    <span class="px-2 py-0.5 rounded-md bg-[#E2001A] text-white font-black text-[11px] tracking-wider shadow-2xs">J&T</span>
+                                                                @elseif(str_contains($cCode, 'sicepat'))
+                                                                    <span class="px-1.5 py-0.5 rounded-md bg-[#D91B24] text-white font-black text-[10px] tracking-wider shadow-2xs">SICEPAT</span>
+                                                                @elseif(str_contains($cCode, 'pos'))
+                                                                    <span class="px-2 py-0.5 rounded-md bg-[#F37021] text-white font-black text-[11px] tracking-wider shadow-2xs">POS</span>
+                                                                @elseif(str_contains($cCode, 'tiki'))
+                                                                    <span class="px-2 py-0.5 rounded-md bg-[#005B9F] text-white font-black text-[11px] tracking-wider shadow-2xs">TIKI</span>
+                                                                @else
+                                                                    <div class="flex items-center gap-1 text-gray-700 font-bold text-xs">
+                                                                        <i class="fa-solid fa-truck text-xs"></i>
+                                                                        <span>{{ strtoupper($courier->code) }}</span>
+                                                                    </div>
+                                                                @endif
+                                                            </div>
+
+                                                            <!-- Name, Pricing, & Badges -->
+                                                            <div class="min-w-0 flex-1">
+                                                                <div class="flex items-center gap-2 flex-wrap">
+                                                                    <span class="font-bold text-sm text-brand-dark courier-name-text">{{ $courier->name }}</span>
+                                                                    
+                                                                    @if(!$isAvailable)
+                                                                        <span class="status-badge text-[10px] text-red-700 bg-red-50 border border-red-200/80 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                                            <i class="fa-solid fa-ban text-[9px]"></i> Tidak Melayani Wilayah Ini
+                                                                        </span>
+                                                                    @else
+                                                                        <span class="price-badge text-sm font-extrabold text-brand-gold-dark font-mono">
+                                                                            Rp {{ number_format($calculatedCost, 0, ',', '.') }}
+                                                                        </span>
+                                                                        
+                                                                        @if($hasFixed && $hasDim)
+                                                                            <span class="weight-badge text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">Tetap + {{ $billableWeight }} kg</span>
+                                                                        @elseif($hasFixed)
+                                                                            <span class="weight-badge text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">Ongkir Tetap</span>
+                                                                        @elseif($isCalculated && $billableWeight > 0)
+                                                                            <span class="weight-badge text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">{{ $billableWeight }} kg</span>
+                                                                        @endif
+
+                                                                        @if(!empty($etaLabel))
+                                                                            <span class="eta-badge text-[10px] text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                                                                <i class="fa-solid fa-clock text-[8px]"></i> {{ $etaLabel }}
+                                                                            </span>
+                                                                        @endif
+                                                                    @endif
+                                                                </div>
+                                                                <p class="description-text text-[11px] text-gray-400 mt-0.5 truncate">
+                                                                    @if(!$isAvailable)
+                                                                        Alamat tujuan berada di luar jangkauan pengiriman ekspedisi ini.
+                                                                    @else
+                                                                        {{ $courier->courier_type === 'toko' ? 'Pengiriman via armada internal toko Royal' : 'Layanan reguler ekspedisi logistik rekanan' }}
+                                                                    @endif
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Custom Radio Circle Checkmark -->
+                                                        <div class="radio-indicator w-5 h-5 rounded-full border-2 {{ $isSelected ? 'border-brand-gold bg-brand-gold' : 'border-gray-300' }} flex items-center justify-center transition-all shadow-2xs shrink-0 ml-3">
+                                                            <svg class="check-icon w-3 h-3 text-white {{ $isSelected ? 'opacity-100' : 'opacity-0' }} transition-opacity duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                                            </svg>
+                                                        </div>
+                                                    </label>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
+                                @endforeach
+                            </div>
+
                             @php
-                                $selectedCourierCode = old('courier', $form['courier'] ?? '');
                                 $selectedCourierDetails = $courierPrices[$selectedCourierCode] ?? null;
                                 $selectedEta = $selectedCourierDetails['eta_label'] ?? null;
                                 $selectedEtaSource = $selectedCourierDetails['eta_source'] ?? null;
@@ -792,6 +961,14 @@
             const nameInput = document.querySelector('input[name="name"]');
             
             let searchTimeout = null;
+            let lastSearchedEmail = '';
+
+            // Helper untuk mengecek apakah email sudah berformat lengkap (full email)
+            function isFullEmail(email) {
+                if (!email) return false;
+                const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                return emailRegex.test(email.trim());
+            }
             
             function showLoading(inputElement) {
                 let loadingEl = document.getElementById('customer-loading-indicator');
@@ -813,94 +990,185 @@
             }
 
             function handleCustomerSearch(e) {
-                const val = e.target.value.trim();
+                const target = e?.target || emailInput;
+                if (!target) return;
+                const val = target.value.trim();
                 
-                if (val.length >= 4) {
-                    showLoading(e.target);
-                    fetch(`/checkout/search-user?term=${encodeURIComponent(val)}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            hideLoading();
-                            if (data && data.length > 0) {
-                                // Ambil hasil pertama yang paling cocok
-                                const customer = data[0];
-                                
-                                // Isi otomatis nama, email, telepon
-                                if(emailInput && emailInput !== e.target && !emailInput.value) { 
-                                    emailInput.value = customer.email; 
-                                    emailInput.dispatchEvent(new Event('input')); 
+                // Autocomplete HANYA dijalankan setelah full email valid
+                if (!isFullEmail(val)) {
+                    return;
+                }
+
+                // Hindari pencarian berulang untuk email yang sama persis
+                if (val.toLowerCase() === lastSearchedEmail.toLowerCase()) {
+                    return;
+                }
+
+                showLoading(target);
+                fetch(`/checkout/search-user?term=${encodeURIComponent(val)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        hideLoading();
+                        if (data && data.length > 0) {
+                            lastSearchedEmail = val;
+                            // Ambil hasil pertama yang paling cocok
+                            const customer = data[0];
+                            
+                            // Isi otomatis nama & telepon jika belum diisi
+                            if (phoneInput && phoneInput !== target && !phoneInput.value) { 
+                                phoneInput.value = customer.phone; 
+                            }
+                            if (nameInput && !nameInput.value) { 
+                                nameInput.value = customer.name; 
+                            }
+                            
+                            if (typeof window.applyAddressData === 'function') {
+                                window.applyAddressData(customer);
+                            } else {
+                                if (customer.address) {
+                                    const addrInput = document.querySelector('textarea[name="address"]');
+                                    if (addrInput && !addrInput.value) { addrInput.value = customer.address; }
                                 }
-                                if(phoneInput && phoneInput !== e.target && !phoneInput.value) { 
-                                    phoneInput.value = customer.phone; 
-                                    phoneInput.dispatchEvent(new Event('input')); 
+                                if (customer.postal_code) {
+                                    const postalInput = document.querySelector('input[name="postal_code"]');
+                                    if (postalInput && !postalInput.value) { postalInput.value = customer.postal_code; }
                                 }
-                                if(nameInput && !nameInput.value) { 
-                                    nameInput.value = customer.name; 
-                                    nameInput.dispatchEvent(new Event('input')); 
-                                }
-                                
-                                if (typeof window.applyAddressData === 'function') {
-                                    window.applyAddressData(customer);
-                                } else {
-                                    if (customer.address) {
-                                        const addrInput = document.querySelector('textarea[name="address"]');
-                                        if(addrInput && !addrInput.value) { addrInput.value = customer.address; addrInput.dispatchEvent(new Event('input')); }
-                                    }
-                                    if (customer.postal_code) {
-                                        const postalInput = document.querySelector('input[name="postal_code"]');
-                                        if(postalInput && !postalInput.value) { postalInput.value = customer.postal_code; postalInput.dispatchEvent(new Event('input')); }
-                                    }
-                                    if (customer.sub_district_id) {
-                                        if (customer.province_id && typeof window.loadCities === 'function') {
-                                            const provSelect = document.getElementById('checkout-province');
-                                            if (provSelect) {
-                                                provSelect.value = customer.province_id;
-                                                window.loadCities(customer.province_id, customer.city_id, function() {
-                                                    if (customer.city_id) {
-                                                        window.loadSubDistricts(customer.city_id, customer.sub_district_id, function() {
-                                                            const subSelect = document.getElementById('checkout-sub-district');
-                                                            if (subSelect) {
-                                                                subSelect.value = customer.sub_district_id;
-                                                                subSelect.dispatchEvent(new Event('change'));
-                                                            }
-                                                        });
-                                                    }
-                                                });
-                                            }
-                                        } else {
-                                            const subSelect = document.getElementById('checkout-sub-district') || document.querySelector('select[name="sub_district_id"]');
-                                            if(subSelect && !subSelect.value) {
-                                                subSelect.value = customer.sub_district_id;
-                                                subSelect.dispatchEvent(new Event('change'));
-                                                subSelect.dispatchEvent(new Event('input'));
-                                            }
+                                if (customer.sub_district_id) {
+                                    if (customer.province_id && typeof window.loadCities === 'function') {
+                                        const provSelect = document.getElementById('checkout-province');
+                                        if (provSelect) {
+                                            provSelect.value = customer.province_id;
+                                            window.loadCities(customer.province_id, customer.city_id, function() {
+                                                if (customer.city_id) {
+                                                    window.loadSubDistricts(customer.city_id, customer.sub_district_id, function() {
+                                                        const subSelect = document.getElementById('checkout-sub-district');
+                                                        if (subSelect) {
+                                                            subSelect.value = customer.sub_district_id;
+                                                            subSelect.dispatchEvent(new Event('change'));
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    } else {
+                                        const subSelect = document.getElementById('checkout-sub-district') || document.querySelector('select[name="sub_district_id"]');
+                                        if (subSelect && !subSelect.value) {
+                                            subSelect.value = customer.sub_district_id;
+                                            subSelect.dispatchEvent(new Event('change'));
                                         }
                                     }
                                 }
                             }
-                        })
-                        .catch(() => hideLoading());
-                }
-            }
-
-            function debouncedCustomerSearch(e) {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(function() {
-                    handleCustomerSearch(e);
-                }, 400);
+                        }
+                    })
+                    .catch(() => hideLoading());
             }
 
             if (emailInput) {
-                emailInput.addEventListener('input', debouncedCustomerSearch);
-                emailInput.addEventListener('change', handleCustomerSearch);
-            }
-            if (phoneInput) {
-                phoneInput.addEventListener('input', debouncedCustomerSearch);
-                phoneInput.addEventListener('change', handleCustomerSearch);
+                // 1. Saat mengetik: HANYA jika sudah full email (jangan per huruf)
+                emailInput.addEventListener('input', function(e) {
+                    const val = e.target.value.trim();
+                    if (isFullEmail(val)) {
+                        clearTimeout(searchTimeout);
+                        searchTimeout = setTimeout(function() {
+                            handleCustomerSearch(e);
+                        }, 400);
+                    }
+                });
+
+                // 2. Ketika keluar dari formnya (blur) atau change
+                emailInput.addEventListener('blur', function(e) {
+                    clearTimeout(searchTimeout);
+                    handleCustomerSearch(e);
+                });
+                emailInput.addEventListener('change', function(e) {
+                    clearTimeout(searchTimeout);
+                    handleCustomerSearch(e);
+                });
             }
 
+            // Fungsi Reset Alamat untuk Informasi Penerima (Guest Checkout)
+            window.resetRecipientAddress = function() {
+                // 1. Kosongkan semua input teks & textarea penerima
+                if (nameInput) { nameInput.value = ''; }
+                if (phoneInput) { phoneInput.value = ''; }
+                if (emailInput) { emailInput.value = ''; }
+                
+                const addrInput = document.querySelector('textarea[name="address"]');
+                if (addrInput) { addrInput.value = ''; }
+                
+                const postalInput = document.querySelector('input[name="postal_code"]');
+                if (postalInput) { postalInput.value = ''; }
+                
+                const cityInput = document.querySelector('input[name="city"]') || document.getElementById('checkout-city-input');
+                if (cityInput) { cityInput.value = ''; }
+
+                // 2. Reset dropdown bertingkat Provinsi, Kota, dan Kecamatan
+                const provSelect = document.getElementById('checkout-province');
+                const citySelect = document.getElementById('checkout-city');
+                const subSelect = document.getElementById('checkout-sub-district');
+
+                if (provSelect) {
+                    provSelect.value = '';
+                    if (window.jQuery && typeof window.jQuery.fn.select2 === 'function') {
+                        window.jQuery(provSelect).val('').trigger('change.select2');
+                    }
+                }
+
+                if (citySelect) {
+                    citySelect.innerHTML = '<option value="">Pilih Provinsi Terlebih Dahulu</option>';
+                    citySelect.value = '';
+                    citySelect.disabled = true;
+                    if (window.jQuery && typeof window.jQuery.fn.select2 === 'function') {
+                        window.jQuery(citySelect).prop('disabled', true).val('').trigger('change.select2');
+                    }
+                }
+
+                if (subSelect) {
+                    subSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
+                    subSelect.value = '';
+                    subSelect.disabled = true;
+                    if (window.jQuery && typeof window.jQuery.fn.select2 === 'function') {
+                        window.jQuery(subSelect).prop('disabled', true).val('').trigger('change.select2');
+                    }
+                }
+
+                // 3. Bersihkan memori form autosave agar tidak dipulihkan otomatis
+                sessionStorage.removeItem('checkout_form_data');
+                localStorage.removeItem('checkout_form_data');
+                lastSearchedEmail = '';
+
+                // Reset pilihan kurir pengiriman
+                const cSelect = document.getElementById('courier-native-select') || document.querySelector('select[name="courier"]');
+                if (cSelect) cSelect.value = '';
+                document.querySelectorAll('input[name="courier_radio"]').forEach(r => { r.checked = false; });
+                if (typeof window.syncCourierAccordionVisuals === 'function') {
+                    window.syncCourierAccordionVisuals();
+                }
+
+                // 4. Hitung ulang ongkir (otomatis reset karena kecamatan kosong)
+                if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                    window.fetchAndUpdateShippingCost();
+                }
+
+                // 5. Tampilkan notifikasi toast jika tersedia
+                if (typeof window.dispatchEvent === 'function') {
+                    window.dispatchEvent(new CustomEvent('show-toast', {
+                        detail: {
+                            type: 'info',
+                            message: 'Informasi penerima dan alamat pengiriman berhasil dikosongkan.'
+                        }
+                    }));
+                }
+
+                // 6. Fokuskan kembali ke input email
+                if (emailInput) {
+                    emailInput.focus();
+                }
+            };
+
             // Trigger auto-completion on load if email exists (misal user login) dan sub-district belum terpilih
-            if (emailInput && emailInput.value && emailInput.value.trim().length >= 4) {
+            if (emailInput && emailInput.value && isFullEmail(emailInput.value.trim())) {
                 const subDistrictSelect = document.getElementById('checkout-sub-district');
                 if (subDistrictSelect && !subDistrictSelect.value) {
                     setTimeout(() => {
@@ -915,7 +1183,11 @@
             formInputs.forEach(input => {
                 // Jika input kosong atau field phone yang pernah diisi user, pulihkan dari sessionStorage
                 if (savedFormData[input.name] && (!input.value || input.name === 'phone')) {
-                    input.value = savedFormData[input.name];
+                    var restoredVal = savedFormData[input.name];
+                    if (input.name === 'phone') {
+                        restoredVal = String(restoredVal || '').replace(/\+/g, '').replace(/[\s\-]/g, '');
+                    }
+                    input.value = restoredVal;
                     if (input.name === 'sub_district_id' || input.name === 'province_id' || input.name === 'city_id') {
                         input.dispatchEvent(new Event('change'));
                     }
@@ -924,7 +1196,12 @@
                 // 2. Simpan setiap perubahan ke sessionStorage
                 const saveChange = (e) => {
                     const currentData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');
-                    currentData[e.target.name] = e.target.value;
+                    var val = e.target.value;
+                    if (e.target.name === 'phone') {
+                        val = String(val || '').replace(/\+/g, '').replace(/[\s\-]/g, '');
+                        e.target.value = val;
+                    }
+                    currentData[e.target.name] = val;
                     sessionStorage.setItem('checkout_form_data', JSON.stringify(currentData));
                 };
                 input.addEventListener('input', saveChange);

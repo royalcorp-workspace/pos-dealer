@@ -50,6 +50,41 @@ namespace App\Providers {
             ) {
                 \Illuminate\Support\Facades\URL::forceScheme('https');
             }
+
+            // Global audit listener: automatically populate creator, editor, and timestamps
+            \Illuminate\Support\Facades\Event::listen('eloquent.creating: *', function ($eventName, array $data) {
+                $model = $data[0] ?? null;
+                if ($model instanceof \Illuminate\Database\Eloquent\Model) {
+                    $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
+                    if ($model->isFillable('creator') && empty($model->creator)) {
+                        $model->creator = $username;
+                    }
+                    if ($model->isFillable('editor') && empty($model->editor)) {
+                        $model->editor = $username;
+                    }
+                    if ($model->usesTimestamps()) {
+                        if (empty($model->created_at)) {
+                            $model->created_at = now();
+                        }
+                        if (empty($model->updated_at)) {
+                            $model->updated_at = now();
+                        }
+                    }
+                }
+            });
+
+            \Illuminate\Support\Facades\Event::listen('eloquent.updating: *', function ($eventName, array $data) {
+                $model = $data[0] ?? null;
+                if ($model instanceof \Illuminate\Database\Eloquent\Model) {
+                    $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
+                    if ($model->isFillable('editor')) {
+                        $model->editor = $username;
+                    }
+                    if ($model->usesTimestamps()) {
+                        $model->updated_at = now();
+                    }
+                }
+            });
         }
     }
 }

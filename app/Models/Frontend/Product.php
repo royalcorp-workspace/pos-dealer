@@ -25,8 +25,6 @@ class Product extends Model
         'short_description',
         'description',
         'courier_type',
-        'shipping_scheme',
-        'shipping_cost',
         'length',
         'width',
         'height',

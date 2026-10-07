@@ -29,16 +29,28 @@ class SyncEspayMethods extends Command
                 $countUpdated = 0;
 
                 foreach ($espayData as $espayMethod) {
-                    $code = $espayMethod['bankCode']; // User wants bankCode here
-                    $name = $espayMethod['productName'];
-                    $productCode = $espayMethod['productCode']; // Keep productCode in bank_info
+                    $productCode = trim($espayMethod['productCode'] ?? '');
+                    $bankCode = trim($espayMethod['bankCode'] ?? '');
+                    // Use productCode as the primary unique code (e.g. BCAATM, CREDITCARD, GOPAYINAPP)
+                    // If productCode is empty, fallback to bankCode
+                    $code = !empty($productCode) ? $productCode : $bankCode;
+                    $name = $espayMethod['productName'] ?? $productCode;
                     
                     // Tentukan tipe
                     $isTransfer = str_contains(strtoupper($productCode), 'ATM') || str_contains(strtoupper($productCode), 'VA') || str_contains(strtoupper($productCode), 'PERMATA');
                     $isCC = str_contains(strtoupper($productCode), 'CREDITCARD');
+                    $isDebit = str_contains(strtoupper($productCode), 'DEBIT');
+                    $isQris = str_contains(strtoupper($productCode), 'QRIS');
                     $type = 3; // E-Wallet by default
-                    if ($isTransfer) $type = 2; // VA
-                    if ($isCC) $type = 5; // Credit Card
+                    if ($isTransfer) {
+                        $type = 2; // VA
+                    } elseif ($isCC) {
+                        $type = 5; // Credit Card
+                    } elseif ($isDebit) {
+                        $type = 6; // Debit Card
+                    } elseif ($isQris) {
+                        $type = 4; // QRIS
+                    }
                     
                     // Buat dummy instruksi berdasarkan tipe
                     $dummyInstructions = [];
@@ -60,9 +72,34 @@ class SyncEspayMethods extends Command
                         $dummyInstructions = [
                             ['title' => 'Kartu Kredit', 'steps' => ['Masukkan nomor Kartu Kredit', 'Masukkan masa berlaku (Valid Thru)', 'Masukkan 3 digit CVV di belakang kartu', 'Masukkan kode OTP yang dikirim via SMS']]
                         ];
+                    } elseif ($type === 6) { // Debit
+                        $dummyInstructions = [
+                            ['title' => 'Debit Online', 'steps' => ['Masukkan nomor Kartu Debit', 'Masukkan masa berlaku (Valid Thru)', 'Masukkan kode CVV jika diminta', 'Masukkan kode OTP yang dikirim via SMS']]
+                        ];
                     }
 
-                    $method = PaymentMethod::withoutGlobalScope('active')->where('code', $code)->first();
+                    // Lookup method by product code first, or bank_info->product_code
+                    $method = PaymentMethod::withoutGlobalScope('active')
+                        ->where('code', $code)
+                        ->orWhere('bank_info->product_code', $productCode)
+                        ->first();
+
+                    // If not found, and there's a legacy record where code == bankCode (e.g. '014') and same type
+                    if (!$method && !empty($bankCode)) {
+                        $legacyMethod = PaymentMethod::withoutGlobalScope('active')
+                            ->where('code', $bankCode)
+                            ->where('type', $type)
+                            ->first();
+                        if ($legacyMethod) {
+                            $method = $legacyMethod;
+                        }
+                    }
+
+                    $bankInfo = [
+                        'product_code' => $productCode,
+                        'bank_code' => $bankCode,
+                        'bank_name' => $name,
+                    ];
                     
                     if (!$method) {
                         PaymentMethod::create([
@@ -74,16 +111,17 @@ class SyncEspayMethods extends Command
                             'charge_type' => 2, // Fixed
                             'charge_value' => 0,
                             'status' => 1,
-                            'bank_info' => ['product_code' => $productCode, 'bank_code' => $code],
+                            'bank_info' => $bankInfo,
                             'instructions' => $dummyInstructions
                         ]);
                         $countNew++;
                     } else {
                         // Jangan overwrite charge karena user/admin yang setting
                         $method->update([
+                            'code' => $code, // Ensure code is updated from numeric bankCode to productCode
                             'name' => $name,
                             'provider' => 'espay',
-                            'bank_info' => ['product_code' => $productCode, 'bank_code' => $code],
+                            'bank_info' => $bankInfo,
                             'instructions' => $method->instructions ?? $dummyInstructions // Jangan timpa jika sudah ada custom
                         ]);
                         $countUpdated++;

@@ -95,4 +95,128 @@ class EtaService
             'formatted_label' => $fullLabel,
         ];
     }
+
+    /**
+     * Estimate shipping duration based on origin (Gudang Cimareme, Kab. Bandung Barat)
+     * to destination province, city, and courier type.
+     *
+     * @param string|null $courierType ('toko' or 'expedisi')
+     * @param string|null $courierCode ('jne', 'jnt', 'sicepat', 'tiki', 'pos', 'kurir_toko')
+     * @param string|null $provinceName
+     * @param string|null $cityName
+     * @return string
+     */
+    public static function estimateDuration(
+        ?string $courierType = null,
+        ?string $courierCode = null,
+        ?string $provinceName = null,
+        ?string $cityName = null
+    ): string {
+        $cCode = strtolower(trim((string) $courierCode));
+        $cType = strtolower(trim((string) $courierType));
+        $prov = trim((string) $provinceName);
+        $city = strtolower(trim((string) $cityName));
+
+        // 1. Kurir Toko (Area Lokal Bandung Raya)
+        if ($cType === 'toko' || str_contains($cCode, 'toko')) {
+            if (str_contains($city, 'bandung barat') || str_contains($city, 'cimahi')) {
+                return '1 hari';
+            }
+            return '1-2 hari';
+        }
+
+        // 2. Kurir Ekspedisi berdasarkan jarak geografis dari Gudang Cimareme (KBB, Jawa Barat)
+        if (empty($prov)) {
+            return '2-3 hari';
+        }
+
+        $provLower = strtolower($prov);
+
+        // A. Wilayah Lokal Jawa Barat
+        if (str_contains($provLower, 'jawa barat')) {
+            if (str_contains($city, 'bandung barat') || str_contains($city, 'cimahi') || str_contains($city, 'kota bandung')) {
+                return '1-2 hari';
+            }
+            return '1-3 hari';
+        }
+
+        // B. DKI Jakarta & Banten
+        if (str_contains($provLower, 'dki jakarta') || str_contains($provLower, 'jakarta') || str_contains($provLower, 'banten')) {
+            return ($cCode === 'pos' || $cCode === 'tiki') ? '2-3 hari' : '1-3 hari';
+        }
+
+        // C. Jawa Tengah & DI Yogyakarta
+        if (str_contains($provLower, 'jawa tengah') || str_contains($provLower, 'yogyakarta')) {
+            return ($cCode === 'pos') ? '2-4 hari' : '2-3 hari';
+        }
+
+        // D. Jawa Timur & Bali
+        if (str_contains($provLower, 'jawa timur') || str_contains($provLower, 'bali')) {
+            return ($cCode === 'pos') ? '3-5 hari' : '2-4 hari';
+        }
+
+        // E. Sumatera Bagian Selatan & Tengah (Lampung, Sumsel, Bengkulu, Jambi, Babel, Sumbar)
+        if (
+            str_contains($provLower, 'lampung') ||
+            str_contains($provLower, 'sumatera selatan') ||
+            str_contains($provLower, 'bengkulu') ||
+            str_contains($provLower, 'jambi') ||
+            str_contains($provLower, 'bangka belitung') ||
+            str_contains($provLower, 'sumatera barat')
+        ) {
+            return ($cCode === 'pos') ? '4-6 hari' : '3-5 hari';
+        }
+
+        // F. Sumatera Bagian Utara & Riau (Sumut, Riau, Kepri)
+        if (
+            str_contains($provLower, 'sumatera utara') ||
+            str_contains($provLower, 'riau')
+        ) {
+            return ($cCode === 'pos') ? '4-7 hari' : '3-6 hari';
+        }
+
+        // G. Aceh
+        if (str_contains($provLower, 'aceh')) {
+            return ($cCode === 'pos') ? '5-8 hari' : '4-7 hari';
+        }
+
+        // H. Nusa Tenggara Barat (NTB)
+        if (str_contains($provLower, 'nusa tenggara barat')) {
+            return ($cCode === 'pos') ? '4-6 hari' : '3-5 hari';
+        }
+
+        // I. Nusa Tenggara Timur (NTT)
+        if (str_contains($provLower, 'nusa tenggara timur')) {
+            return ($cCode === 'pos') ? '5-8 hari' : '4-7 hari';
+        }
+
+        // J. Kalimantan
+        if (str_contains($provLower, 'kalimantan')) {
+            if (str_contains($provLower, 'utara')) {
+                return ($cCode === 'pos') ? '5-8 hari' : '4-7 hari';
+            }
+            return ($cCode === 'pos') ? '4-7 hari' : '3-6 hari';
+        }
+
+        // K. Sulawesi
+        if (str_contains($provLower, 'sulawesi') || str_contains($provLower, 'gorontalo')) {
+            if (str_contains($provLower, 'utara') || str_contains($provLower, 'gorontalo')) {
+                return ($cCode === 'pos') ? '5-8 hari' : '4-7 hari';
+            }
+            return ($cCode === 'pos') ? '4-7 hari' : '3-6 hari';
+        }
+
+        // L. Maluku & Maluku Utara
+        if (str_contains($provLower, 'maluku')) {
+            return ($cCode === 'pos') ? '6-9 hari' : '5-8 hari';
+        }
+
+        // M. Papua & sekitarnya
+        if (str_contains($provLower, 'papua')) {
+            return ($cCode === 'pos') ? '7-12 hari' : '6-10 hari';
+        }
+
+        // Default Nasional
+        return '2-4 hari';
+    }
 }
