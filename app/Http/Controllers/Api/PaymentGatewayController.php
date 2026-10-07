@@ -63,47 +63,13 @@ class PaymentGatewayController extends Controller
         $baseUrl = rtrim(config('espay.base_url'), '/');
         $espayUrl = $baseUrl . '/api/v1/create-order';
 
-        // Resolve specific Espay productCode (e.g. BCAATM, CREDITCARD)
-        // Escalation: if numeric clearing code (e.g. 014) is passed, differentiate by type or fallback
+        // Resolve clearing bank code (e.g. 014, 008, 002) for Espay SendInvoice
         $pmModel = PaymentMethod::findByCodeOrBank($paymentMethodCode, $request->input('type') ? (int)$request->input('type') : null);
-        $espayBankCode = PaymentMethod::resolveEspayProductCode(
+        $espayBankCode = PaymentMethod::resolveEspayBankCode(
             codeOrBank: $paymentMethodCode,
             type: $request->input('type') ? (int)$request->input('type') : $pmModel?->type,
             paymentMethod: $pmModel
         );
-
-        try {
-            $infoUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/') . '/merchantinfo';
-            $infoResp = \Illuminate\Support\Facades\Http::asForm()->post($infoUrl, [
-                'key' => config('espay.api_key', '')
-            ]);
-            if ($infoResp->successful() && $infoResp->json('error_code') === '0000') {
-                $espayData = $infoResp->json('data') ?? [];
-                // First check exact productCode match
-                $found = collect($espayData)->firstWhere('productCode', $espayBankCode);
-                if (!$found) {
-                    $found = collect($espayData)->firstWhere('productCode', $paymentMethodCode);
-                }
-                // If input was numeric bank clearing code like '014', resolve productCode by type
-                if (!$found && ctype_digit((string)$paymentMethodCode)) {
-                    $candidates = collect($espayData)->where('bankCode', $paymentMethodCode);
-                    $reqType = (int)($request->input('type') ?: ($pmModel?->type ?: 2));
-                    if ($reqType === 5) {
-                        $found = $candidates->first(fn($item) => str_contains(strtoupper($item['productCode'] ?? ''), 'CREDITCARD'));
-                    } elseif ($reqType === 2) {
-                        $found = $candidates->first(fn($item) => str_contains(strtoupper($item['productCode'] ?? ''), 'ATM') || str_contains(strtoupper($item['productCode'] ?? ''), 'VA'));
-                    }
-                    if (!$found) {
-                        $found = $candidates->first();
-                    }
-                }
-                if ($found && !empty($found['productCode'])) {
-                    $espayBankCode = $found['productCode'];
-                }
-            }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Gagal lookup productCode API: ' . $e->getMessage());
-        }
 
         $payload = [
             'rq_uuid' => $rqUuid,

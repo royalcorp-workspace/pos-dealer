@@ -177,4 +177,92 @@ class SnapBiController extends Controller
 
         return response()->json($responseData, 200);
     }
+
+    /**
+     * SNAP BI QRIS Notification Callback Handler
+     * Endpoint: /v1.0/qr/qr-mpm-notify or /v1.0/qr/payment
+     */
+    public function qrPayment(Request $request)
+    {
+        $logMessage = "SNAP BI QRIS Payment Received\n";
+        $logMessage .= "Payload: \n" . json_encode($request->all(), JSON_PRETTY_PRINT);
+
+        // SNAP BI QR Notification payload typically contains partnerReferenceNo or originalPartnerReferenceNo
+        $partnerReferenceNo = $request->input('partnerReferenceNo') 
+            ?? $request->input('originalPartnerReferenceNo')
+            ?? $request->input('externalStoreId')
+            ?? $request->input('referenceNo')
+            ?? $request->input('order_id');
+
+        $cleanRef = trim((string)$partnerReferenceNo);
+
+        $order = null;
+        if (!empty($cleanRef)) {
+            $order = Order::where(function ($q) use ($cleanRef) {
+                $q->whereRaw("LOWER(REPLACE(order_number, '-', '')) = LOWER(?)", [str_replace('-', '', $cleanRef)])
+                  ->orWhereRaw("LOWER(order_number) = LOWER(?)", [$cleanRef]);
+            })->first();
+        }
+
+        if (!$order) {
+            $errResponse = [
+                'responseCode' => '4045500',
+                'responseMessage' => 'Transaction Not Found',
+            ];
+            $logMessage .= "\nResponse (Error): \n" . json_encode($errResponse, JSON_PRETTY_PRINT);
+            Log::channel('espay')->error($logMessage);
+            return response()->json($errResponse, 404);
+        }
+
+        if ($order->payment_status !== 2) {
+            $order->payment_status = 2; // Paid
+            $order->status = Order::STATUS_PROCESSING;
+            $order->save();
+
+            // Update status Settlement jika ada
+            if ($order->settlement_id) {
+                $settlement = \App\Models\Settlement::find($order->settlement_id);
+                if ($settlement) {
+                    $settlement->update([
+                        'status' => 'success',
+                        'settlement_date' => now(),
+                    ]);
+                }
+            }
+
+            // Catat CreditMemo
+            \App\Models\CreditMemo::create([
+                'id' => \Illuminate\Support\Str::uuid()->toString(),
+                'credit_memo_number' => 'CM-QR-' . $order->order_number . '-' . rand(100, 999),
+                'order_id' => $order->id,
+                'gateway' => 'espay_qris',
+                'transaction_id' => $request->input('originalReferenceNo') ?? ($request->input('referenceNo') ?? \Illuminate\Support\Str::uuid()->toString()),
+                'amount' => $order->total,
+                'status' => 'success',
+                'payload' => $request->all(),
+                'paid_at' => now(),
+            ]);
+
+            try {
+                $customerEmail = $order->customer->email ?? ($order->meta['customer']['email'] ?? null);
+                if ($customerEmail) {
+                    \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\PaymentSuccess($order));
+                    \Illuminate\Support\Facades\Log::channel('email')->info("PaymentSuccess email sent successfully to {$customerEmail} for QRIS Order #{$order->order_number}");
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send QRIS PaymentSuccess email: " . $e->getMessage());
+            }
+        }
+
+        $responseData = [
+            'responseCode' => '2005500',
+            'responseMessage' => 'Successful',
+        ];
+
+        $logMessage .= "\nResponse: \n" . json_encode($responseData, JSON_PRETTY_PRINT);
+        Log::channel('espay')->info($logMessage);
+
+        return response()->json($responseData, 200);
+    }
 }
+

@@ -1603,9 +1603,8 @@ class CheckoutController extends Controller
             $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
             $signature = hash('sha256', strtoupper($dataToHash));
 
-            // Espay SendInvoice expects product_code in 'bank_code' (e.g. BCAATM, CREDITCARD)
-            // Resolve product_code with escalation so bank clearing codes like '014' don't collide between BCA ATM & Credit Card
-            $espayBankCode = \App\Models\PaymentMethod::resolveEspayProductCode(
+            // Espay SendInvoice expects bank clearing code (e.g. 014, 008, 002) in 'bank_code' parameter
+            $espayBankCode = \App\Models\PaymentMethod::resolveEspayBankCode(
                 codeOrBank: $paymentMethod,
                 type: $paymentMethodModel?->type,
                 paymentMethod: $paymentMethodModel
@@ -1651,12 +1650,24 @@ class CheckoutController extends Controller
                         ]
                     );
 
+                    $updatedMeta = array_merge($order->meta ?? [], [
+                        'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
+                        'va_number' => $paymentData['va_number'] ?? '',
+                    ]);
+
+                    if (!empty($paymentData['qr_code'])) {
+                        $updatedMeta['qr_code'] = $paymentData['qr_code'];
+                    }
+                    if (!empty($paymentData['qr_string'])) {
+                        $updatedMeta['qr_string'] = $paymentData['qr_string'];
+                    }
+                    if (!empty($paymentData['payment_url'])) {
+                        $updatedMeta['payment_url'] = $paymentData['payment_url'];
+                    }
+
                     $order->update([
                         'settlement_id' => $settlement->id,
-                        'meta' => array_merge($order->meta ?? [], [
-                            'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
-                            'va_number' => $paymentData['va_number'] ?? ''
-                        ])
+                        'meta' => $updatedMeta,
                     ]);
 
                     \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Send Invoice Success\nOrder ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));

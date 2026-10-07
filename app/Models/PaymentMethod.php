@@ -224,6 +224,53 @@ class PaymentMethod extends Model
     }
 
     /**
+     * Resolves Espay numeric clearing bank code (e.g. '014', '008', '002').
+     * The Espay SendInvoice endpoint expects bank_code to be the clearing bank code (contoh: 014, 008, 002).
+     */
+    public static function resolveEspayBankCode(?string $codeOrBank, ?int $type = null, ?self $paymentMethod = null): string
+    {
+        $codeOrBank = trim((string)$codeOrBank);
+
+        // 1. If explicit bank_code exists in payment_method->bank_info
+        if ($paymentMethod && is_array($paymentMethod->bank_info) && !empty($paymentMethod->bank_info['bank_code'])) {
+            return trim((string)$paymentMethod->bank_info['bank_code']);
+        }
+
+        // 2. If codeOrBank or model code is already purely numeric (e.g. '014', '008', '002', '472', '503')
+        $rawCandidate = !empty($codeOrBank) ? $codeOrBank : ($paymentMethod?->code ?? '');
+        $rawCandidate = trim((string)$rawCandidate);
+        if (!empty($rawCandidate) && ctype_digit($rawCandidate)) {
+            return $rawCandidate;
+        }
+
+        // 3. Mapping from known alphanumeric product codes to numeric clearing bank codes
+        $productToBankMap = [
+            'BCAATM' => '014',
+            'GOPAYINAPP' => '014',
+            'GOPAYJUMPAPP' => '014',
+            'MANDIRIATM' => '008',
+            'QRISPLUS' => '008',
+            'QRIS' => '008',
+            'CREDITCARD' => '008',
+            'BRIATM' => '002',
+            'CIMBATM' => '022',
+            'DANAMONATM' => '011',
+            'BIIATM' => '016',
+            'BANKSAQUATM' => '472',
+            'OVO' => '503',
+        ];
+
+        $upper = strtoupper($rawCandidate);
+        if (isset($productToBankMap[$upper])) {
+            return $productToBankMap[$upper];
+        }
+
+        return $rawCandidate;
+    }
+
+
+
+    /**
      * Find payment method by code, product code, or clearing bank code with type escalation.
      */
     public static function findByCodeOrBank(?string $code, ?int $type = null): ?self
