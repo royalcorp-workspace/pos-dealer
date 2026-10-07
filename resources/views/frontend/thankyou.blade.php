@@ -343,21 +343,94 @@
                         </div>
                     </div>
 
-                    <!-- Payment Details (VA or Manual Transfer) -->
+                    <!-- Payment Details (QRIS, VA, or Manual Transfer) -->
                     @php
                         $vaNumber = $order->meta['va_number'] ?? null;
                         $espayRef = $order->meta['espay_reference'] ?? null;
+                        $qrCode = $order->meta['qr_code'] ?? null;
+                        $qrString = $order->meta['qr_string'] ?? null;
+                        $paymentUrl = $order->meta['payment_url'] ?? null;
                         
-                        $pmModel = \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
+                        $pmModel = \App\Models\PaymentMethod::findByCodeOrBank($rawPmCode) 
+                            ?? \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
                         $isBankTransfer = ($pmModel && (
                             $pmModel->isTypeBankTransfer() 
                             || (int)$pmModel->type === 1 
                             || strtolower((string)$pmModel->provider) !== 'espay'
                         )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true);
+                        $isQris = ($pmModel && ($pmModel->isTypeQris() || (int)$pmModel->type === 4)) 
+                            || str_contains(strtolower((string)$rawPmCode), 'qris') 
+                            || str_contains(strtolower((string)$paymentMethod), 'qris')
+                            || !empty($qrCode) || !empty($qrString);
                         $banks = $pmModel && !empty($pmModel->bank_info) ? $pmModel->bank_info : [];
                     @endphp
 
-                    @if($vaNumber)
+                    @if($isQris && ($qrCode || $qrString || $paymentUrl))
+                        <div class="p-6 sm:p-7 bg-rose-50/50 border-b border-rose-100">
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center text-sm">
+                                        <i class="fa-solid fa-qrcode"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran QRIS Interaktif (SNAP)</h4>
+                                        <p class="text-xs text-gray-500">Scan QRIS menggunakan BCA, Mandiri, GoPay, OVO, ShopeePay, atau aplikasi banking apa saja</p>
+                                    </div>
+                                </div>
+                                <span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full">QRIS SNAP</span>
+                            </div>
+
+                            <div class="bg-white rounded-2xl p-5 border border-rose-100 shadow-2xs space-y-5">
+                                <div class="flex flex-col items-center justify-center text-center">
+                                    <div class="p-4 bg-white rounded-2xl border-2 border-dashed border-rose-300 shadow-md inline-block max-w-[260px] sm:max-w-[280px]">
+                                        @if(!empty($qrCode))
+                                            <img src="{{ str_starts_with($qrCode, 'http') || str_starts_with($qrCode, 'data:') ? $qrCode : 'data:image/png;base64,' . $qrCode }}" alt="QRIS QR Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
+                                        @elseif(!empty($qrString))
+                                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ urlencode($qrString) }}" alt="QRIS Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
+                                        @elseif(!empty($paymentUrl))
+                                            <div class="p-6 text-center space-y-3">
+                                                <i class="fa-solid fa-arrow-up-right-from-square text-3xl text-rose-600"></i>
+                                                <p class="text-xs text-gray-600">Klik tautan di bawah untuk membuka halaman QRIS pembayaran:</p>
+                                                <a href="{{ $paymentUrl }}" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+                                                    <span>Buka Halaman Pembayaran QRIS</span>
+                                                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                                </a>
+                                            </div>
+                                        @endif
+                                    </div>
+                                    <p class="text-xs font-bold text-gray-700 mt-3 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-camera text-rose-600"></i> Buka aplikasi e-wallet atau m-Banking Anda & Scan kode di atas
+                                    </p>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                                    <div>
+                                        <span class="text-xs text-gray-500 font-semibold block">Total yang Harus Dibayar:</span>
+                                        <span class="text-[11px] text-gray-400">Tepat hingga nominal akhir</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-brand-dark text-lg sm:text-xl">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ round($total) }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'Nominal transfer berhasil disalin!' } }));" class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs transition-colors" title="Salin Nominal">
+                                            <i class="fa-regular fa-copy text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-4 border-t border-rose-100 no-print">
+                                <h5 class="font-bold text-brand-dark text-xs uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-circle-info text-rose-500 text-xs"></i> Petunjuk Pembayaran QRIS:
+                                </h5>
+                                <div class="bg-white rounded-xl border border-rose-100 p-3.5 text-xs text-gray-600 space-y-1.5">
+                                    <p>1. Buka aplikasi m-Banking atau e-Wallet pilihan Anda (BCA Mobile, Livin' Mandiri, BRImo, GoPay, OVO, ShopeePay, DANA, dll).</p>
+                                    <p>2. Pilih menu <strong>Scan / Bayar / QRIS</strong>.</p>
+                                    <p>3. Arahkan kamera ke QR Code di atas atau upload tangkapan layar kode QR.</p>
+                                    <p>4. Periksa kecocokan nama merchant dan total tagihan <strong>Rp {{ number_format($total, 0, ',', '.') }}</strong>, lalu konfirmasi pembayaran.</p>
+                                    <p>5. Pembayaran akan terverifikasi secara otomatis oleh sistem kami.</p>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($vaNumber)
                         <div class="p-6 sm:p-7 bg-blue-50/50 border-b border-blue-100">
                             <div class="flex items-center justify-between gap-3 mb-4">
                                 <div class="flex items-center gap-2.5">

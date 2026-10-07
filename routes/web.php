@@ -158,3 +158,7 @@ Route::get('/500', [PageController::class, 'error500'])->name('errors.500');
 // ESPAY BI-SNAP Webhooks
 Route::post('/v1.0/transfer-va/inquiry', [\App\Http\Controllers\Api\SnapBiController::class, 'inquiry']);
 Route::post('/v1.0/transfer-va/payment', [\App\Http\Controllers\Api\SnapBiController::class, 'payment']);
+Route::post('/v1.0/qr/qr-mpm-notify', [\App\Http\Controllers\Api\SnapBiController::class, 'qrPayment']);
+Route::post('/v1.0/qr-mpm-notify', [\App\Http\Controllers\Api\SnapBiController::class, 'qrPayment']);
+Route::post('/v1.0/qr/payment', [\App\Http\Controllers\Api\SnapBiController::class, 'qrPayment']);
+

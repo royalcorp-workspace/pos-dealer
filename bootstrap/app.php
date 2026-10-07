@@ -21,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
         
         $middleware->validateCsrfTokens(except: [
             'v1.0/transfer-va/*',
+            'v1.0/qr/*',
+            'v1.0/qr-mpm-notify',
             'resend-verification',
         ]);
     })
