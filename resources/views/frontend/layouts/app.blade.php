@@ -41,6 +41,18 @@
             ],
             'sameAs' => config('seo.business.social_links'),
         ];
+
+        $organizationSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'Organization',
+            '@id' => url('/#organization'),
+            'name' => config('seo.business.name'),
+            'url' => url('/'),
+            'logo' => url(config('seo.business.logo')),
+            'email' => config('seo.business.email'),
+            'telephone' => config('seo.business.telephone'),
+            'sameAs' => config('seo.business.social_links'),
+        ];
     @endphp
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,6 +62,9 @@
     <meta name="keywords" content="{{ $seoKeywords }}">
     <meta name="author" content="{{ $seoAuthor }}">
     <meta name="robots" content="{{ $seoRobots }}">
+    @if(config('seo.google_site_verification'))
+    <meta name="google-site-verification" content="{{ config('seo.google_site_verification') }}">
+    @endif
     <link rel="canonical" href="{{ $seoUrl }}">
     <link rel="icon" type="image/png" href="{{ asset('images/logo.png') }}">
     <link rel="shortcut icon" type="image/png" href="{{ asset('images/logo.png') }}">
@@ -67,7 +82,7 @@
 
     @stack('jsonld')
     <script type="application/ld+json">
-    @json($localBusinessSchema)
+    @json([$localBusinessSchema, $organizationSchema])
     </script>
 
     <!-- Google Fonts: match React app imports (Inter weights + Playfair for headings) -->

@@ -12,6 +12,7 @@ return [
     'author' => env('SEO_AUTHOR', 'IMG International Mattress Gallery'),
     'og_image' => env('SEO_OG_IMAGE', 'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&q=80&w=1200&h=800'),
     'robots' => env('SEO_ROBOTS', 'index, follow'),
+    'google_site_verification' => env('GOOGLE_SITE_VERIFICATION', null),
 
 
     /*

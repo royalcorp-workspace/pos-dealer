@@ -111,7 +111,7 @@ Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::post('/devices/{device}/logout', [AuthController::class, 'logoutDevice'])->name('devices.logout');
 
-Route::post('/forgot-password', [AuthController::class, 'processForgotPassword'])->name('forgot-password.process');
+Route::post('/forgot-password', [AuthController::class, 'processForgotPassword'])->name('forgot-password.process')->middleware('throttle:10,1');
 Route::get('/email/verify', [PageController::class, 'verifyEmail'])->name('verification.notice');
 Route::post('/resend-verification', [PageController::class, 'resendVerification'])->name('verification.resend');
 Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
@@ -140,7 +140,7 @@ Route::post('/order/{order}/cancel', [CheckoutController::class, 'cancelOrder'])
 Route::post('/order/{order}/reorder', [CheckoutController::class, 'reorder'])->name('order.reorder');
 Route::post('/order/{order}/upload-payment-proof', [CheckoutController::class, 'uploadPaymentProof'])->name('order.upload-payment-proof');
 
-Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store');
+Route::post('/reviews', [ReviewController::class, 'store'])->name('reviews.store')->middleware('throttle:15,1');
 Route::get('/products/{product}/reviews', [ReviewController::class, 'filter'])->name('reviews.filter');
 Route::post('/reviews/{review}/report', [ReviewController::class, 'report'])->name('reviews.report');
 
