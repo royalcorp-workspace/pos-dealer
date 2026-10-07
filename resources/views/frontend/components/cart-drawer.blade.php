@@ -37,7 +37,7 @@
                 x-transition:leave-end="translate-x-full"
                 class="w-screen max-w-md"
             >
-                <div class="h-full flex flex-col bg-white shadow-2xl overflow-hidden">
+                <div class="h-full flex flex-col bg-white shadow-2xl overflow-hidden overscroll-contain">
                     <div class="flex items-center justify-between p-5 md:p-6 border-b border-brand-muted shrink-0">
                         <h2 class="text-xl font-bold text-brand-dark flex items-center gap-2">
                             {{ __('Shopping Cart') }} <span class="text-gray-400 font-normal text-base">(<span id="cart-drawer-count">{{ $cartItemCount }}</span> {{ __('items') }})</span>
@@ -51,7 +51,7 @@
                         </button>
                     </div>
 
-                    <div id="cart-drawer-body" class="flex-1 min-h-0 flex flex-col bg-white overflow-hidden" data-cart-total="{{ $cartTotal }}">
+                    <div id="cart-drawer-body" class="flex-1 min-h-0 flex flex-col bg-white overflow-hidden overscroll-contain" data-cart-total="{{ $cartTotal }}">
                         @include('frontend.components.cart-drawer-body')
                     </div>
                 </div>

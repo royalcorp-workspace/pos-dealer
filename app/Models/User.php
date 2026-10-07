@@ -26,7 +26,9 @@ class User extends Authenticatable
     protected $fillable = [
         'id',
         'name',
+        'username',
         'email',
+        'phone',
         'password',
         'google_id',
         'firebase_uid',
@@ -76,5 +78,15 @@ class User extends Authenticatable
         return $this->hasOne(\App\Models\Frontend\Customer\Address::class, 'user_id', 'id')
             ->where('is_primary', true)
             ->with('subDistrict');
+    }
+
+    public function setPhoneAttribute($value): void
+    {
+        if ($value !== null) {
+            $cleaned = preg_replace('/[\s\-\.]/', '', (string) $value);
+            $this->attributes['phone'] = ltrim($cleaned, '+');
+        } else {
+            $this->attributes['phone'] = null;
+        }
     }
 }

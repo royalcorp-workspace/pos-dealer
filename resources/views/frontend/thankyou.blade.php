@@ -3,7 +3,7 @@
 @section('title', 'Pesanan Berhasil - ' . ($order?->order_number ?? 'IMG'))
 
 @php
-    $orderId = $order?->order_number ?? 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
+    $orderId = $order?->order_number ?? 'ORD.' . date('Ymd') . '.0001';
     $rawPmCode = $order?->payment_method ?? '-';
     $pmModel = \App\Models\PaymentMethod::where('code', $rawPmCode)->first()
         ?? \App\Models\PaymentMethod::find($rawPmCode);
@@ -867,10 +867,14 @@
 
 @push('scripts')
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Hapus data form checkout agar pesanan berikutnya tidak terisi data lama
-        sessionStorage.removeItem('checkout_form_data');
-    });
+    (function() {
+        try {
+            sessionStorage.removeItem('checkout_form_data');
+            localStorage.removeItem('checkout_form_data');
+            localStorage.removeItem('selectedCartCoupon');
+            localStorage.removeItem('selectedCartCoupons');
+        } catch(e) {}
+    })();
 
     window.copyVaNumber = function(text, btn) {
         if (!text) return;
@@ -984,6 +988,11 @@
         
         updateTimer();
         setInterval(updateTimer, 1000);
+
+        try {
+            localStorage.removeItem('selectedCartCoupon');
+            localStorage.removeItem('selectedCartCoupons');
+        } catch (e) {}
     });
 </script>
 @endpush

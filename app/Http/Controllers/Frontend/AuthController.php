@@ -67,7 +67,9 @@ class AuthController extends Controller
         session()->put('user', [
             'id' => $user->id,
             'name' => $user->name,
+            'username' => $user->username ?? $user->name ?? explode('@', $email)[0],
             'email' => $email,
+            'phone' => $user->phone ?? null,
             'type' => 'Member'
         ]);
 
@@ -175,7 +177,9 @@ class AuthController extends Controller
         session()->put('user', [
             'id' => $user->id,
             'name' => $user->name,
+            'username' => $user->username ?? $user->name ?? explode('@', $email)[0],
             'email' => $email,
+            'phone' => $user->phone ?? null,
             'type' => 'Member'
         ]);
 
@@ -340,7 +344,9 @@ class AuthController extends Controller
         session()->put('user', [
             'id' => $user->id,
             'name' => $user->name ?: ($customer->name ?? (!empty($name) ? $name : 'Member')),
+            'username' => $user->username ?? $user->name ?? ($customer->name ?? (!empty($name) ? $name : explode('@', $user->email)[0])),
             'email' => $user->email,
+            'phone' => $user->phone ?? null,
             'type' => 'Google Member',
         ]);
 

@@ -229,13 +229,24 @@
         });
     }
 
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            if (this.value.includes('+')) {
+                this.value = this.value.replace(/\+/g, '');
+            }
+        });
+    }
+
     if (form) {
         form.addEventListener('submit', function(e) {
+            if (phoneInput) {
+                phoneInput.value = phoneInput.value.replace(/\+/g, '').replace(/[\s\-]/g, '');
+            }
             var phone = phoneInput ? phoneInput.value.trim() : '';
             var address = addressInput ? addressInput.value.trim() : '';
 
-            // Phone Validation: starts with 0, 62, or +62, min 9 digits, max 16 digits, no text/symbols
-            var phoneRegex = /^(\+62|62|0)[0-9]{8,14}$/;
+            // Phone Validation: starts with 0 or 62, min 9 digits, max 16 digits, no text/symbols
+            var phoneRegex = /^(62|0)[0-9]{8,14}$/;
             if (!phone || !phoneRegex.test(phone)) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -243,11 +254,11 @@
                     Swal.fire({
                         icon: 'warning',
                         title: 'Nomor Telepon Tidak Valid',
-                        text: 'Nomor telepon harus diawali 0 atau +62 (minimal 9 digit angka tanpa teks atau simbol).',
+                        text: 'Nomor telepon harus diawali 08 atau 62 (minimal 9 digit angka tanpa tanda + atau simbol).',
                         confirmButtonColor: '#B8860B'
                     });
                 } else {
-                    alert('Nomor telepon harus diawali 0 atau +62 (minimal 9 digit angka tanpa teks atau simbol).');
+                    alert('Nomor telepon harus diawali 08 atau 62 (minimal 9 digit angka tanpa tanda + atau simbol).');
                 }
                 if (phoneInput) {
                     phoneInput.focus();

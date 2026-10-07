@@ -42,7 +42,6 @@ class ProductVariant extends Model
         'package_width',
         'package_height',
         'package_weight',
-        'shipping_cost',
         'status',
     ];
 
@@ -53,7 +52,6 @@ class ProductVariant extends Model
             'base_price' => 'decimal:2',
             'sell_price' => 'decimal:2',
             'reseller_price' => 'decimal:2',
-            'shipping_cost' => 'decimal:2',
             'stock_quantity' => 'integer',
             'min_order_qty' => 'integer',
             'sort_order' => 'integer',

@@ -441,6 +441,130 @@
             background: currentColor;
             border-color: currentColor;
         }
+
+        /* Typography & Rich Text (Quill Editor) Styles */
+        .prose {
+            color: #4b5563;
+            line-height: 1.75;
+        }
+        .prose p { margin-bottom: 1.25rem; }
+        .prose p:last-child { margin-bottom: 0; }
+        .prose h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--brand-dark);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--brand-dark);
+            margin-top: 1.75rem;
+            margin-bottom: 0.75rem;
+            line-height: 1.35;
+        }
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--brand-dark);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+        .prose h4 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--brand-dark);
+            margin-top: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+        .prose strong, .prose b {
+            font-weight: 700;
+            color: var(--brand-dark);
+        }
+        .prose em, .prose i { font-style: italic; }
+        .prose u { text-decoration: underline; text-underline-offset: 2px; }
+        .prose s, .prose strike { text-decoration: line-through; }
+        .prose a {
+            color: var(--brand-gold-dark);
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            font-weight: 500;
+            transition: color 0.15s ease;
+        }
+        .prose a:hover { color: var(--brand-dark); }
+        .prose ul {
+            list-style-type: disc !important;
+            padding-left: 1.5rem !important;
+            margin-top: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .prose ol {
+            list-style-type: decimal !important;
+            padding-left: 1.5rem !important;
+            margin-top: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+        .prose li {
+            margin-top: 0.375rem;
+            margin-bottom: 0.375rem;
+            padding-left: 0.25rem;
+        }
+        .prose ul ul, .prose ol ul { list-style-type: circle !important; margin-top: 0.25rem; margin-bottom: 0.25rem; }
+        .prose ol ol, .prose ul ol { list-style-type: lower-latin !important; margin-top: 0.25rem; margin-bottom: 0.25rem; }
+        .prose blockquote {
+            border-left: 4px solid var(--brand-gold);
+            padding-left: 1rem;
+            margin-top: 1.25rem;
+            margin-bottom: 1.25rem;
+            font-style: italic;
+            color: #4b5563;
+            background-color: #fdfbf7;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+        .prose img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.75rem;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .prose hr {
+            border-color: #e5e7eb;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+        }
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+        .prose th, .prose td {
+            border: 1px solid #e5e7eb;
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+        }
+        .prose th {
+            background-color: #f9fafb;
+            font-weight: 600;
+        }
+        /* Quill text alignment & indentation */
+        .ql-align-center, .prose .ql-align-center { text-align: center; }
+        .ql-align-right, .prose .ql-align-right { text-align: right; }
+        .ql-align-justify, .prose .ql-align-justify { text-align: justify; }
+        .ql-indent-1, .prose .ql-indent-1 { padding-left: 2.5rem; }
+        .ql-indent-2, .prose .ql-indent-2 { padding-left: 5rem; }
+        .ql-indent-3, .prose .ql-indent-3 { padding-left: 7.5rem; }
+        .ql-indent-4, .prose .ql-indent-4 { padding-left: 10rem; }
+        .ql-indent-5, .prose .ql-indent-5 { padding-left: 12.5rem; }
+        .ql-indent-6, .prose .ql-indent-6 { padding-left: 15rem; }
+        .ql-indent-7, .prose .ql-indent-7 { padding-left: 17.5rem; }
+        .ql-indent-8, .prose .ql-indent-8 { padding-left: 20rem; }
     </style>
     
     <!-- App JS (deferred to avoid render-blocking; preserved order ensures Alpine loads after) -->
@@ -476,6 +600,7 @@
 @endphp
 <body 
     class="min-h-screen bg-brand-light/30 flex flex-col font-sans text-brand-dark selection:bg-brand-gold/30 pb-20 md:pb-0"
+    :class="{ 'overflow-hidden': isCartOpen || isMobileMenuOpen }"
     data-route-home="{{ route('home') }}"
     data-route-cart-toggle-wishlist="{{ route('cart.toggle-wishlist') }}"
     data-route-cart-add="{{ route('cart.add') }}"
@@ -503,6 +628,7 @@
         }
     }"
     x-init="
+        $watch('isCartOpen', val => { document.body.style.overflow = val ? 'hidden' : ''; });
         window.showToast = (type, message, duration) => addToast(type, message, duration);
         @if(session('success') && is_string(session('success')) && trim(session('success')) !== '')
             addToast('success', '{{ addslashes(session('success')) }}');
@@ -1107,6 +1233,44 @@
             });
         </script>
     @endif
+
+    <!-- Global Phone Input Auto-Correct: instantly strip '+' and spaces/dashes on typing and pasting -->
+    <script>
+        (function() {
+            function sanitizePhoneInput(target) {
+                if (!target || typeof target.value !== 'string') return;
+                var original = target.value;
+                if (original.includes('+') || original.includes(' ') || original.includes('-')) {
+                    var cleaned = original.replace(/\+/g, '').replace(/[\s\-]/g, '');
+                    if (cleaned !== original) {
+                        var start = target.selectionStart;
+                        var end = target.selectionEnd;
+                        target.value = cleaned;
+                        if (start !== null && end !== null) {
+                            var diff = original.length - cleaned.length;
+                            target.setSelectionRange(Math.max(0, start - diff), Math.max(0, end - diff));
+                        }
+                    }
+                }
+            }
+
+            document.addEventListener('input', function(e) {
+                var t = e.target;
+                if (t && (t.type === 'tel' || t.name === 'phone' || (t.id && t.id.toLowerCase().includes('phone')))) {
+                    sanitizePhoneInput(t);
+                }
+            }, true);
+
+            document.addEventListener('paste', function(e) {
+                var t = e.target;
+                if (t && (t.type === 'tel' || t.name === 'phone' || (t.id && t.id.toLowerCase().includes('phone')))) {
+                    setTimeout(function() {
+                        sanitizePhoneInput(t);
+                    }, 0);
+                }
+            }, true);
+        })();
+    </script>
 
     @stack('scripts')
   </body>

@@ -24,7 +24,7 @@
                     <form action="{{ route('order.tracking') }}" method="GET" class="space-y-4">
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">Order ID</label>
-                            <input type="text" name="order_id" value="{{ $orderId }}" placeholder="Contoh: ORD-20260619-1234" class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold" />
+                            <input type="text" name="order_id" value="{{ $orderId }}" placeholder="Contoh: ORD.20261005.0001" class="w-full px-4 py-3 border border-brand-muted rounded-xl focus:outline-none focus:border-brand-gold" />
                         </div>
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">Email Pembeli</label>

@@ -261,22 +261,30 @@ document.addEventListener('DOMContentLoaded', function () {
         var alertEl = document.getElementById('courier-unavailable-alert');
         var alertMsg = document.getElementById('courier-unavailable-message');
         var submitBtn = document.querySelector('button[type="submit"]');
+        var promptEl = document.getElementById('courier-select-subdistrict-prompt');
+        var accordionsWrapper = document.getElementById('courier-accordions-wrapper');
+
+        // If subdistrict is empty, hide courier dropdown and show prompt
+        if (!subDistrictId) {
+            if (promptEl) promptEl.classList.remove('hidden');
+            if (accordionsWrapper) accordionsWrapper.classList.add('hidden');
+            if (alertEl) alertEl.classList.add('hidden');
+            if (submitBtn) submitBtn.disabled = false;
+            if (courierSelect) courierSelect.value = '';
+            document.querySelectorAll('input[name="courier_radio"]').forEach(function (r) { r.checked = false; });
+            syncCourierAccordionVisuals();
+            updateShippingUI('', 0, null);
+            return;
+        } else {
+            if (promptEl) promptEl.classList.add('hidden');
+            if (accordionsWrapper) accordionsWrapper.classList.remove('hidden');
+        }
 
         if (!courierSelect || !courier) {
             if (alertEl) alertEl.classList.add('hidden');
             if (submitBtn) submitBtn.disabled = false;
             updateShippingUI('', 0, null);
-            return;
-        }
-
-        // If subdistrict is empty, fallback to pre-rendered price
-        if (!subDistrictId) {
-            var fallbackCost = courierShippingPrices[courier] || 0;
-            var fallbackDetails = courierShippingDetails[courier] || null;
-            if (alertEl) alertEl.classList.add('hidden');
-            if (submitBtn) submitBtn.disabled = false;
-            updateShippingUI(courier, fallbackCost, fallbackDetails);
-            return;
+            // Even if no courier is selected yet, continue to fetch shipping prices for options
         }
 
         // Fetch accurate shipping cost for all couriers given this subdistrict
@@ -301,9 +309,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                             if (data.is_available === false) {
                                 opt.disabled = true;
+                                opt.style.display = 'none';
                                 opt.textContent = rawName + ' - Di Luar Jangkauan (Tidak Melayani Wilayah Ini)';
                             } else {
                                 opt.disabled = false;
+                                opt.style.display = '';
                                 var weightText = '';
                                 if (data.has_fixed_items && data.has_dimension_items) {
                                     weightText = ' (Tetap + ' + (data.billable_weight || 1) + ' kg)';
@@ -319,10 +329,61 @@ document.addEventListener('DOMContentLoaded', function () {
                             }
                         }
 
+                        // Update modern accordion card UI
+                        var courierCard = document.getElementById('courier-label-' + cCode);
+                        var courierRadio = document.getElementById('courier_radio_' + cCode);
+                        if (courierCard && courierRadio) {
+                            if (data.is_available === false) {
+                                courierRadio.disabled = true;
+                                courierRadio.checked = false;
+                                courierRadio.setAttribute('data-is-available', '0');
+                                courierCard.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-50/60');
+                                courierCard.classList.remove('cursor-pointer', 'hover:bg-brand-light/30', 'bg-brand-gold/5');
+                                
+                                var badgeContainer = courierCard.querySelector('.min-w-0 .flex-wrap');
+                                if (badgeContainer) {
+                                    badgeContainer.innerHTML = '<span class="font-bold text-sm text-brand-dark courier-name-text">' + (opt?.getAttribute('data-courier-name') || cCode.toUpperCase()) + '</span>' +
+                                        '<span class="status-badge text-[10px] text-red-700 bg-red-50 border border-red-200/80 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">' +
+                                        '<i class="fa-solid fa-ban text-[9px]"></i> Tidak Melayani Wilayah Ini' +
+                                        '</span>';
+                                }
+                                var descText = courierCard.querySelector('.description-text');
+                                if (descText) descText.textContent = data.message || 'Alamat tujuan berada di luar jangkauan pengiriman ekspedisi ini.';
+                            } else {
+                                courierRadio.disabled = false;
+                                courierRadio.setAttribute('data-is-available', '1');
+                                courierRadio.setAttribute('data-cost', data.shipping_cost);
+                                courierCard.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-50/60');
+                                courierCard.classList.add('cursor-pointer', 'hover:bg-brand-light/30');
+
+                                var wText = '';
+                                if (data.has_fixed_items && data.has_dimension_items) {
+                                    wText = '<span class="weight-badge text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">Tetap + ' + (data.billable_weight || 1) + ' kg</span>';
+                                } else if (data.has_fixed_items) {
+                                    wText = '<span class="weight-badge text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">Ongkir Tetap</span>';
+                                } else if (data.is_calculated && data.billable_weight > 0) {
+                                    wText = '<span class="weight-badge text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded font-medium">' + data.billable_weight + ' kg</span>';
+                                }
+                                var eText = data.eta_label ? '<span class="eta-badge text-[10px] text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded font-medium flex items-center gap-1"><i class="fa-solid fa-clock text-[8px]"></i> ' + data.eta_label + '</span>' : '';
+
+                                var bContainer = courierCard.querySelector('.min-w-0 .flex-wrap');
+                                if (bContainer) {
+                                    bContainer.innerHTML = '<span class="font-bold text-sm text-brand-dark courier-name-text">' + (opt?.getAttribute('data-courier-name') || cCode.toUpperCase()) + '</span>' +
+                                        '<span class="price-badge text-sm font-extrabold text-brand-gold-dark font-mono">' + formatRupiah(data.shipping_cost) + '</span>' +
+                                        wText + eText;
+                                }
+                                var dText = courierCard.querySelector('.description-text');
+                                if (dText) dText.textContent = cCode.indexOf('toko') !== -1 ? 'Pengiriman via armada internal toko Royal' : 'Layanan reguler ekspedisi logistik rekanan';
+                            }
+                        }
+
                         if (cCode.toLowerCase() === courier.toLowerCase()) {
                             selectedCourierData = data;
                         }
                     });
+
+                    // Sync group selected badge
+                    syncCourierAccordionVisuals();
 
                     if (selectedCourierData && selectedCourierData.is_available === false) {
                         if (alertEl) {
@@ -346,11 +407,110 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    function syncCourierAccordionVisuals() {
+        var groups = document.querySelectorAll('.courier-accordion-group');
+        groups.forEach(function (group) {
+            var badge = group.querySelector('.courier-group-selected-badge');
+            var badgeText = group.querySelector('.badge-text');
+            var checkedRadio = group.querySelector('input[name="courier_radio"]:checked');
+
+            if (checkedRadio && checkedRadio.getAttribute('data-is-available') !== '0') {
+                var cName = checkedRadio.getAttribute('data-courier-name') || checkedRadio.value;
+                if (badge && badgeText) {
+                    badgeText.textContent = cName;
+                    badge.classList.remove('hidden');
+                    badge.classList.add('inline-flex');
+                }
+                group.classList.add('border-brand-gold', 'ring-2', 'ring-brand-gold/20');
+                group.classList.remove('border-gray-200');
+
+                var content = group.querySelector('.courier-accordion-content');
+                var chevron = group.querySelector('.accordion-chevron');
+                if (content) content.classList.remove('hidden');
+                if (chevron) chevron.classList.add('rotate-180');
+            } else {
+                if (badge) {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('inline-flex');
+                }
+                group.classList.remove('border-brand-gold', 'ring-2', 'ring-brand-gold/20');
+                group.classList.add('border-gray-200');
+            }
+        });
+
+        // Sync individual item selection highlights
+        document.querySelectorAll('.courier-option-label').forEach(function (label) {
+            var radio = label.querySelector('input[name="courier_radio"]');
+            var indicator = label.querySelector('.radio-indicator');
+            var checkIcon = label.querySelector('.check-icon');
+
+            if (radio && radio.checked && !radio.disabled) {
+                label.classList.add('bg-brand-gold/5');
+                if (indicator) {
+                    indicator.classList.remove('border-gray-300');
+                    indicator.classList.add('border-brand-gold', 'bg-brand-gold');
+                }
+                if (checkIcon) {
+                    checkIcon.classList.remove('opacity-0');
+                    checkIcon.classList.add('opacity-100');
+                }
+            } else {
+                label.classList.remove('bg-brand-gold/5');
+                if (indicator) {
+                    indicator.classList.remove('border-brand-gold', 'bg-brand-gold');
+                    indicator.classList.add('border-gray-300');
+                }
+                if (checkIcon) {
+                    checkIcon.classList.remove('opacity-100');
+                    checkIcon.classList.add('opacity-0');
+                }
+            }
+        });
+    }
+
+    // Courier Accordion Header Toggle & Radio Click Bindings
+    function initCourierAccordionListeners() {
+        // Toggle Accordion Group
+        document.querySelectorAll('.courier-accordion-header').forEach(function (header) {
+            header.addEventListener('click', function () {
+                var group = this.closest('.courier-accordion-group');
+                if (!group) return;
+                var content = group.querySelector('.courier-accordion-content');
+                var chevron = group.querySelector('.accordion-chevron');
+                if (content) {
+                    content.classList.toggle('hidden');
+                    if (chevron) {
+                        chevron.classList.toggle('rotate-180');
+                    }
+                }
+            });
+        });
+
+        // Radio click event
+        document.querySelectorAll('input[name="courier_radio"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                if (this.disabled) return;
+                var val = this.value;
+                if (courierSelect) {
+                    courierSelect.value = val;
+                    // Trigger change so all calculations and validations fire
+                    fetchAndUpdateShippingCost();
+                }
+                syncCourierAccordionVisuals();
+            });
+        });
+    }
+
     window.fetchAndUpdateShippingCost = fetchAndUpdateShippingCost;
+    window.syncCourierAccordionVisuals = syncCourierAccordionVisuals;
+    window.updateShippingUI = updateShippingUI;
 
     if (courierSelect) {
         courierSelect.addEventListener('change', fetchAndUpdateShippingCost);
     }
+
+    initCourierAccordionListeners();
+    syncCourierAccordionVisuals();
 
     function isShippingCouponType(dt) {
         return dt === 'shipping' || dt == 3 || dt === '3' || dt === 'Gratis Ongkir';
@@ -762,6 +922,11 @@ document.addEventListener('DOMContentLoaded', function () {
         var initDetails = courierShippingDetails[courierSelect.value] || null;
         updateShippingUI(courierSelect.value, currentShippingCost, initDetails);
     } else {
+        if (courierSelect) courierSelect.value = '';
+        document.querySelectorAll('input[name="courier_radio"]').forEach(function (r) { r.checked = false; });
+        syncCourierAccordionVisuals();
+        currentShippingCost = 0;
+        updateShippingUI('', 0, null);
         updateTotal();
     }
 });
@@ -840,6 +1005,9 @@ document.addEventListener('DOMContentLoaded', function() {
             subDistrictSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
             subDistrictSelect.disabled = true;
             syncSelect2(subDistrictSelect);
+            if (typeof window.fetchAndUpdateShippingCost === 'function') {
+                window.fetchAndUpdateShippingCost();
+            }
         }
 
         if (!provinceId) {
@@ -884,6 +1052,9 @@ document.addEventListener('DOMContentLoaded', function() {
         subDistrictSelect.innerHTML = '<option value="">Memuat kecamatan/kelurahan...</option>';
         subDistrictSelect.disabled = true;
         syncSelect2(subDistrictSelect);
+        if (typeof window.fetchAndUpdateShippingCost === 'function') {
+            window.fetchAndUpdateShippingCost();
+        }
 
         if (!cityId) {
             subDistrictSelect.innerHTML = '<option value="">Pilih Kota Terlebih Dahulu</option>';
@@ -1083,6 +1254,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (cityInput && !cityInput.value && data.city) cityInput.value = data.city;
                     if (postalInput && !postalInput.value && data.postal_code) postalInput.value = data.postal_code;
                 }
+                // Reset courier selection so user chooses a fresh courier for this new subdistrict
+                if (courierSelect) courierSelect.value = '';
+                document.querySelectorAll('input[name="courier_radio"]').forEach(function (r) { r.checked = false; });
+                syncCourierAccordionVisuals();
+                updateShippingUI('', 0, null);
+
                 if (typeof window.fetchAndUpdateShippingCost === 'function') {
                     window.fetchAndUpdateShippingCost();
                 }
@@ -1135,15 +1312,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    if (checkoutPhoneInput) {
+        checkoutPhoneInput.addEventListener('input', function() {
+            if (this.value.includes('+')) {
+                this.value = this.value.replace(/\+/g, '');
+            }
+        });
+    }
+
     if (checkoutForm) {
         checkoutForm.addEventListener('submit', function(e) {
+            if (checkoutPhoneInput) {
+                checkoutPhoneInput.value = checkoutPhoneInput.value.replace(/\+/g, '').replace(/[\s\-]/g, '');
+            }
             var phone = checkoutPhoneInput ? checkoutPhoneInput.value.trim() : '';
             var address = checkoutAddressInput ? checkoutAddressInput.value.trim() : '';
             var subDistrictVal = subDistrictSelect ? subDistrictSelect.value : (document.querySelector('select[name="sub_district_id"]')?.value || '');
             var courierVal = courierSelect ? courierSelect.value : (document.querySelector('select[name="courier"]')?.value || '');
 
-            // Phone Validation: starts with 0, 62, or +62, min 9 digits, max 16 digits, no text/symbols
-            var phoneRegex = /^(\+62|62|0)[0-9]{8,14}$/;
+            // Phone Validation: starts with 0 or 62, min 9 digits, max 16 digits, no text/symbols
+            var phoneRegex = /^(62|0)[0-9]{8,14}$/;
             if (!phone || !phoneRegex.test(phone)) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1151,11 +1339,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.fire({
                         icon: 'warning',
                         title: 'Nomor Handphone Tidak Valid',
-                        text: 'Nomor handphone harus diawali 0 atau +62 (minimal 9 digit angka tanpa teks atau simbol).',
+                        text: 'Nomor handphone harus diawali 08 atau 62 (minimal 9 digit angka tanpa tanda + atau simbol).',
                         confirmButtonColor: '#B8860B'
                     });
                 } else {
-                    alert('Nomor handphone harus diawali 0 atau +62 (minimal 9 digit angka tanpa teks atau simbol).');
+                    alert('Nomor handphone harus diawali 08 atau 62 (minimal 9 digit angka tanpa tanda + atau simbol).');
                 }
                 if (checkoutPhoneInput) {
                     checkoutPhoneInput.focus();

@@ -145,4 +145,128 @@ class PaymentMethod extends Model
             8 => 'PayLater',
         ];
     }
+
+    /**
+     * Resolves Espay product code when multiple payment methods share the same clearing bank code (e.g. '014').
+     * Escalation priority:
+     * 1. If explicit product_code exists in bank_info or model, return it.
+     * 2. If codeOrBank is already alphanumeric (e.g. 'BCAATM', 'CREDITCARD'), return it.
+     * 3. If numeric bank code (e.g. '014', '008'), escalate based on payment type (VA vs CC vs E-Wallet).
+     */
+    public static function resolveEspayProductCode(?string $codeOrBank, ?int $type = null, ?self $paymentMethod = null): string
+    {
+        $codeOrBank = trim((string)$codeOrBank);
+        if ($paymentMethod && is_array($paymentMethod->bank_info) && !empty($paymentMethod->bank_info['product_code'])) {
+            return (string)$paymentMethod->bank_info['product_code'];
+        }
+
+        if (!empty($codeOrBank) && !ctype_digit($codeOrBank)) {
+            return strtoupper($codeOrBank);
+        }
+
+        $bankCode = $codeOrBank ?: ($paymentMethod?->bank_info['bank_code'] ?? '');
+        $bankCode = trim((string)$bankCode);
+        $resolvedType = $type ?? $paymentMethod?->type;
+
+        // Escalation map for shared clearing bank codes (e.g., 014 for BCA ATM vs Credit Card)
+        $map = [
+            '014' => [ // BCA
+                5 => 'CREDITCARD',
+                2 => 'BCAATM',
+                3 => 'GOPAYINAPP',
+                'default' => 'BCAATM',
+            ],
+            '008' => [ // Mandiri
+                5 => 'CREDITCARD',
+                2 => 'MANDIRIATM',
+                3 => 'QRISPLUS',
+                4 => 'QRISPLUS',
+                'default' => 'MANDIRIATM',
+            ],
+            '002' => [ // BRI
+                5 => 'CREDITCARD',
+                2 => 'BRIATM',
+                'default' => 'BRIATM',
+            ],
+            '022' => [ // CIMB Niaga
+                5 => 'CREDITCARD',
+                2 => 'CIMBATM',
+                'default' => 'CIMBATM',
+            ],
+            '011' => [ // Danamon
+                5 => 'CREDITCARD',
+                2 => 'DANAMONATM',
+                'default' => 'DANAMONATM',
+            ],
+            '016' => [ // Maybank / BII
+                5 => 'CREDITCARD',
+                2 => 'BIIATM',
+                'default' => 'BIIATM',
+            ],
+            '472' => [ // Bank Saqu
+                2 => 'BANKSAQUATM',
+                'default' => 'BANKSAQUATM',
+            ],
+            '503' => [ // OVO
+                3 => 'OVO',
+                'default' => 'OVO',
+            ],
+        ];
+
+        if (isset($map[$bankCode])) {
+            if ($resolvedType && isset($map[$bankCode][$resolvedType])) {
+                return $map[$bankCode][$resolvedType];
+            }
+            return $map[$bankCode]['default'];
+        }
+
+        return $bankCode ?: ($paymentMethod?->code ?? '');
+    }
+
+    /**
+     * Find payment method by code, product code, or clearing bank code with type escalation.
+     */
+    public static function findByCodeOrBank(?string $code, ?int $type = null): ?self
+    {
+        if (empty($code)) {
+            return null;
+        }
+
+        $code = trim($code);
+
+        // 1. Direct match on code
+        $found = static::withoutGlobalScope('active')->where('code', $code)->first();
+        if ($found) {
+            return $found;
+        }
+
+        // 2. Direct match on case-insensitive code
+        $found = static::withoutGlobalScope('active')->whereRaw('UPPER(code) = ?', [strtoupper($code)])->first();
+        if ($found) {
+            return $found;
+        }
+
+        // 3. Escalation lookup: check if code is a numeric bank code (e.g. 014) or product_code
+        $resolvedProductCode = static::resolveEspayProductCode($code, $type);
+        if ($resolvedProductCode && strtoupper($resolvedProductCode) !== strtoupper($code)) {
+            $found = static::withoutGlobalScope('active')->whereRaw('UPPER(code) = ?', [strtoupper($resolvedProductCode)])->first();
+            if ($found) {
+                return $found;
+            }
+        }
+
+        // 4. Match in bank_info JSON (product_code or bank_code)
+        $query = static::withoutGlobalScope('active')
+            ->where(function ($q) use ($code, $resolvedProductCode) {
+                $q->where('bank_info->product_code', $code)
+                  ->orWhere('bank_info->bank_code', $code)
+                  ->orWhere('bank_info->product_code', $resolvedProductCode);
+            });
+
+        if ($type) {
+            $query->where('type', $type);
+        }
+
+        return $query->first();
+    }
 }
