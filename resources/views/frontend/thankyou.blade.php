@@ -427,15 +427,21 @@
                                 <div class="flex flex-col items-center justify-center text-center">
                                     <div class="p-4 bg-white rounded-2xl border-2 border-dashed border-rose-300 shadow-md inline-block max-w-[260px] sm:max-w-[280px]">
                                         @if(!empty($qrCode))
-                                            <img src="{{ str_starts_with($qrCode, 'http') || str_starts_with($qrCode, 'data:') ? $qrCode : 'data:image/png;base64,' . $qrCode }}" alt="QRIS QR Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
+                                            <img id="qris-image-element" src="{{ str_starts_with($qrCode, 'http') || str_starts_with($qrCode, 'data:') ? $qrCode : 'data:image/png;base64,' . $qrCode }}" alt="QRIS QR Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
                                         @else
                                             @php
                                                 $qrisPayload = !empty($qrString) ? $qrString : (!empty($paymentUrl) ? $paymentUrl : 'ID.CO.QRIS.IMG.' . $orderId . '.' . round($total));
                                             @endphp
-                                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ urlencode($qrisPayload) }}" alt="QRIS Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
+                                            <img id="qris-image-element" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={{ urlencode($qrisPayload) }}" alt="QRIS Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
                                         @endif
                                     </div>
-                                    <p class="text-xs font-bold text-gray-700 mt-3 flex items-center gap-1.5">
+                                    <div class="mt-3.5 flex items-center justify-center gap-2">
+                                        <button type="button" id="btn-download-qris" onclick="downloadQrisImage('{{ $orderId }}')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer">
+                                            <i class="fa-solid fa-download text-xs"></i>
+                                            <span>Unduh QRIS</span>
+                                        </button>
+                                    </div>
+                                    <p class="text-xs font-bold text-gray-700 mt-2.5 flex items-center gap-1.5">
                                         <i class="fa-solid fa-camera text-rose-600"></i> Buka aplikasi e-wallet atau m-Banking Anda & Scan kode di atas
                                     </p>
                                 </div>
@@ -1086,6 +1092,93 @@
         }
         document.body.removeChild(textArea);
     }
+
+    window.downloadQrisImage = function(orderId) {
+        var img = document.getElementById('qris-image-element');
+        var btn = document.getElementById('btn-download-qris');
+        if (!img || !img.src) return;
+
+        var filename = 'QRIS-' + (orderId || 'IMG') + '.png';
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Mengunduh...</span>';
+        }
+
+        function restoreBtn() {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Berhasil Diunduh!</span>';
+                btn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                setTimeout(function() {
+                    btn.innerHTML = '<i class="fa-solid fa-download text-xs"></i> <span>Unduh QRIS</span>';
+                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                    btn.classList.add('bg-rose-600', 'hover:bg-rose-700');
+                }, 3000);
+            }
+        }
+
+        // 1. Data URI download (instant)
+        if (img.src.startsWith('data:')) {
+            var a = document.createElement('a');
+            a.href = img.src;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            restoreBtn();
+            window.dispatchEvent(new CustomEvent('show-toast', { 
+                detail: { type: 'success', message: 'Gambar QRIS berhasil diunduh ke perangkat Anda!' } 
+            }));
+            return;
+        }
+
+        // 2. Fetch as blob
+        fetch(img.src)
+            .then(function(res) {
+                if (!res.ok) throw new Error('Network response was not ok');
+                return res.blob();
+            })
+            .then(function(blob) {
+                var blobUrl = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(blobUrl);
+                restoreBtn();
+                window.dispatchEvent(new CustomEvent('show-toast', { 
+                    detail: { type: 'success', message: 'Gambar QRIS berhasil diunduh ke perangkat Anda!' } 
+                }));
+            })
+            .catch(function() {
+                // 3. Fallback: canvas drawing
+                try {
+                    var canvas = document.createElement('canvas');
+                    canvas.width = img.naturalWidth || 300;
+                    canvas.height = img.naturalHeight || 300;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    var dataUrl = canvas.toDataURL('image/png');
+                    var a = document.createElement('a');
+                    a.href = dataUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    restoreBtn();
+                    window.dispatchEvent(new CustomEvent('show-toast', { 
+                        detail: { type: 'success', message: 'Gambar QRIS berhasil diunduh ke perangkat Anda!' } 
+                    }));
+                } catch(e) {
+                    window.open(img.src, '_blank');
+                    restoreBtn();
+                }
+            });
+    };
 </script>
 
 <script>
