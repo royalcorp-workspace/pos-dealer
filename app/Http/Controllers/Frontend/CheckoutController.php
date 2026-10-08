@@ -1424,6 +1424,7 @@ class CheckoutController extends Controller
                 $etaSource = $shippingCalc['eta_source'] ?? ($selectedCourierCode === 'kurir_toko' ? 'store' : 'biteship');
 
                 $orderMeta = array_merge(
+                    is_array($bufferMeta) ? $bufferMeta : [],
                     $shippingAddressData ? ['shipping_address' => $shippingAddressData] : [],
                     [
                         'buffer_id' => $buffer?->id ?? ($sessionOrderData['id'] ?? null),
@@ -1440,6 +1441,14 @@ class CheckoutController extends Controller
                         'payment_method_name' => $paymentMethodModel?->name,
                         'payment_method_code' => $paymentMethod,
                         'items' => !empty($itemsForOrderData) ? $itemsForOrderData : array_values($cart),
+                        'applied_vouchers' => $appliedVouchers,
+                        'voucher_codes' => $bufferMeta['voucher_codes'] ?? ($sessionOrderData['voucher_codes'] ?? []),
+                        'voucher_code' => $bufferMeta['voucher_code'] ?? ($sessionOrderData['voucher_code'] ?? ''),
+                        'voucher_discount' => $bufferMeta['voucher_discount'] ?? ($sessionOrderData['voucher_discount'] ?? 0),
+                        'product_voucher_discount' => $bufferMeta['product_voucher_discount'] ?? ($sessionOrderData['product_voucher_discount'] ?? 0),
+                        'shipping_voucher_discount' => $bufferMeta['shipping_voucher_discount'] ?? ($sessionOrderData['shipping_voucher_discount'] ?? 0),
+                        'original_cart_total' => $bufferMeta['original_cart_total'] ?? ($sessionOrderData['original_cart_total'] ?? null),
+                        'promo_discount' => $bufferMeta['promo_discount'] ?? ($sessionOrderData['promo_discount'] ?? null),
                     ]
                 );
 
@@ -1920,13 +1929,19 @@ class CheckoutController extends Controller
 
         // Send notification email
         try {
-            $customerEmail = $order->customer->email ?? ($customerData['email'] ?? null);
+            $customerEmail = $order->customer?->email 
+                ?? ($customerData['email'] ?? null)
+                ?? ($order->meta['customer']['email'] ?? null)
+                ?? ($order->customer_email ?? null)
+                ?? ($order->email ?? null);
+
             if ($customerEmail) {
+                $order->loadMissing(['customer', 'items', 'voucher', 'courier']);
                 \Illuminate\Support\Facades\Mail::to($customerEmail)->send(new \App\Mail\OrderCreated($order));
                 \Illuminate\Support\Facades\Log::channel('email')->info("OrderCreated email sent successfully to {$customerEmail} for Order #{$order->order_number}");
             }
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send OrderCreated email to {$customerEmail}: " . $e->getMessage(), [
+            \Illuminate\Support\Facades\Log::channel('email')->error("Failed to send OrderCreated email to " . ($customerEmail ?? 'unknown') . ": " . $e->getMessage(), [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'exception' => $e->getMessage(),

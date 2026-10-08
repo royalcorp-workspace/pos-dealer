@@ -81,7 +81,7 @@
                 }
             }"
             @click.stop
-            @show-auth-toast.window="showToast = true; toastMessage = $event.detail.message; toastType = $event.detail.type || 'success'; setTimeout(() => showToast = false, 3000)"
+            x-on:show-auth-toast.window="showToast = true; toastMessage = $event.detail.message; toastType = $event.detail.type || 'success'; setTimeout(() => showToast = false, 3000)"
             x-on:auth-error-login.window="errorMessage = $event.detail.message; unverifiedEmail = ''"
             x-on:auth-unverified-login.window="unverifiedEmail = $event.detail.email; errorMessage = ''; resendSuccessMessage = ''"
             x-on:auth-error-login-clear.window="errorMessage = ''; unverifiedEmail = ''; resendSuccessMessage = ''"

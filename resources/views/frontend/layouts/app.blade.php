@@ -643,7 +643,8 @@
         }
     }"
     x-init="
-        $watch('isCartOpen', val => { document.body.style.overflow = val ? 'hidden' : ''; });
+        $watch('isCartOpen', val => { document.body.style.overflow = (val || isMobileMenuOpen) ? 'hidden' : ''; });
+        $watch('isMobileMenuOpen', val => { document.body.style.overflow = (val || isCartOpen) ? 'hidden' : ''; });
         window.showToast = (type, message, duration) => addToast(type, message, duration);
         @if(session('success') && is_string(session('success')) && trim(session('success')) !== '')
             addToast('success', '{{ addslashes(session('success')) }}');
@@ -670,12 +671,15 @@
         @endif
     "
     @open-cart.window="isCartOpen = true"
+    @open-mobile-menu.window="isMobileMenuOpen = true"
+    @close-mobile-menu.window="isMobileMenuOpen = false"
+    @toggle-mobile-menu.window="isMobileMenuOpen = !isMobileMenuOpen"
     @open-auth.window="isAuthOpen = true; setTimeout(() => window.initFirebaseGoogleSignIn && window.initFirebaseGoogleSignIn(), 100)"
     @open-review.window="selectedProductForReview = $event.detail"
     @open-review="selectedProductForReview = $event.detail"
     @cart-added.window="addToast('success', $event.detail && $event.detail.message ? $event.detail.message : 'Produk berhasil masuk keranjang')"
     @cart-add-failed.window="addToast('error', $event.detail && $event.detail.message ? $event.detail.message : 'Gagal menambahkan produk ke keranjang')"
-    @show-toast.window="addToast($event.detail.type, $event.detail.message, $event.detail.duration)"
+    x-on:show-toast.window="addToast($event.detail.type, $event.detail.message, $event.detail.duration)"
 >
     @if(env('GTM_ID'))
     <!-- Google Tag Manager (noscript) -->
@@ -702,6 +706,7 @@
     @include('frontend.components.footer')
 
     <!-- Modals & Overlays -->
+    @include('frontend.components.mobile-menu')
     @include('frontend.components.cart-drawer')
     @include('frontend.components.auth-modal')
     @include('frontend.components.review-modal')
@@ -1284,6 +1289,49 @@
                     }, 0);
                 }
             }, true);
+        })();
+    </script>
+
+    <!-- Mobile Menu Global Robust Controller -->
+    <script>
+        (function() {
+            window.openMobileMenu = function() {
+                var body = document.body;
+                if (window.Alpine && body && body._x_dataStack && body._x_dataStack[0]) {
+                    body._x_dataStack[0].isMobileMenuOpen = true;
+                }
+                var drawer = document.getElementById('mobile-menu-drawer');
+                if (drawer) {
+                    drawer.style.display = 'block';
+                    drawer.removeAttribute('x-cloak');
+                }
+                body.style.overflow = 'hidden';
+                window.dispatchEvent(new CustomEvent('open-mobile-menu'));
+            };
+
+            window.closeMobileMenu = function() {
+                var body = document.body;
+                if (window.Alpine && body && body._x_dataStack && body._x_dataStack[0]) {
+                    body._x_dataStack[0].isMobileMenuOpen = false;
+                }
+                var drawer = document.getElementById('mobile-menu-drawer');
+                if (drawer) {
+                    drawer.style.display = 'none';
+                }
+                body.style.overflow = '';
+                window.dispatchEvent(new CustomEvent('close-mobile-menu'));
+            };
+
+            window.toggleMobileMenu = function(e) {
+                if (e && e.preventDefault) e.preventDefault();
+                var drawer = document.getElementById('mobile-menu-drawer');
+                var isVisible = drawer && window.getComputedStyle(drawer).display !== 'none';
+                if (isVisible) {
+                    window.closeMobileMenu();
+                } else {
+                    window.openMobileMenu();
+                }
+            };
         })();
     </script>
 

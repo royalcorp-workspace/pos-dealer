@@ -78,20 +78,23 @@
     }
 @endphp
 
-<header class="w-full {{ $headerBg }} {{ $borderBottom }} sticky top-0 z-40 font-sans {{ $textColor }}" x-data="{ activeMegaMenu: null, searchOpen: false, isMobileMenuOpen: false }">
+<header class="w-full {{ $headerBg }} {{ $borderBottom }} sticky top-0 z-40 font-sans {{ $textColor }}" x-data="{ activeMegaMenu: null, searchOpen: false }">
     <!-- Top Bar -->
     <div class="container mx-auto px-4 md:px-6 h-auto py-3 md:h-20 md:py-0 flex flex-nowrap items-center justify-between gap-3 md:gap-6">
         <!-- Logo -->
         <div class="flex items-center gap-3 flex-shrink-0">
             <button 
-                class="md:hidden {{ $iconColor }} transition-colors focus:outline-none relative w-6 h-6 flex-shrink-0"
-                @click="isMobileMenuOpen = !isMobileMenuOpen"
+                type="button"
+                id="mobile-menu-hamburger-btn"
+                class="md:hidden {{ $iconColor }} transition-colors focus:outline-none relative w-8 h-8 flex items-center justify-center flex-shrink-0 cursor-pointer p-1"
+                @click="isMobileMenuOpen = !isMobileMenuOpen; $dispatch('toggle-mobile-menu')"
+                onclick="window.toggleMobileMenu && window.toggleMobileMenu(event)"
                 aria-label="Buka menu"
             >
                 <!-- menu icon -->
-                <svg :class="isMobileMenuOpen ? 'opacity-0 scale-50' : 'opacity-100 scale-100'" class="w-6 h-6 absolute inset-0 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg :class="isMobileMenuOpen ? 'opacity-0 scale-50' : 'opacity-100 scale-100'" class="w-6 h-6 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <!-- close icon -->
-                <svg :class="isMobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50'" class="w-6 h-6 absolute inset-0 transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <svg :class="isMobileMenuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-50'" class="w-6 h-6 absolute transition-all duration-300 transform" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
             <a href="{{ route('home') }}" class="flex items-center gap-2.5 group text-left">
                 <span class="text-3xl lg:text-4xl font-extrabold tracking-tight font-serif {{ $logoColor }} group-hover:text-brand-gold-dark transition-colors">
@@ -762,157 +765,6 @@
                     </a>
                 </li>
             </ul>
-        </div>
-    </div>
-
-    
-
-    <!-- Mobile Accordion Menu Overlay -->
-    <div 
-        x-show="isMobileMenuOpen"
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 -translate-y-2"
-        x-transition:enter-end="opacity-100 translate-y-0"
-        x-transition:leave="transition ease-in duration-150"
-        x-transition:leave-start="opacity-100 translate-y-0"
-        x-transition:leave-end="opacity-0 -translate-y-2"
-        x-cloak
-        class="md:hidden border-t border-brand-muted/60 bg-white overflow-hidden shadow-2xl max-h-[85vh] z-50 overflow-y-auto"
-        x-data="{ openSection: null }"
-    >
-        <div class="p-4 space-y-4 font-sans">
-            @if($isLoggedIn)
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 p-3 rounded-2xl bg-brand-light/70 border border-brand-muted/80 font-bold text-brand-dark text-sm hover:border-brand-gold/60 transition-all" @click="isMobileMenuOpen = false">
-                    <div class="w-9 h-9 rounded-full bg-brand-dark flex items-center justify-center text-brand-gold font-bold text-sm shrink-0 shadow-xs">
-                        {{ strtoupper(substr($user['name'] ?? 'B', 0, 1)) }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <span class="block truncate font-bold text-brand-dark text-sm">{{ $user['name'] ?? __('Akun Saya') }}</span>
-                        <span class="text-[11px] text-gray-500 font-normal truncate block">{{ $user['email'] ?? '' }}</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-xs text-brand-gold shrink-0"></i>
-                </a>
-            @endif
-
-            <!-- Home Link -->
-            <a href="{{ route('home') }}" class="flex items-center justify-between p-3 rounded-xl bg-brand-light font-bold text-brand-dark text-sm" @click="isMobileMenuOpen = false">
-                <span>{{ __('Home') }}</span>
-                <svg class="w-4 h-4 text-brand-gold" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-
-                        <!-- Mobile Language Switcher -->
-            <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-brand-muted/70">
-                <span class="text-sm font-bold text-brand-dark">{{ __('Bahasa') }}</span>
-                <div class="flex items-center bg-white rounded-lg border border-gray-200 overflow-hidden shadow-xs">
-                    <a href="{{ route('lang.switch', 'id') }}" class="px-3 py-1.5 text-xs font-bold transition-colors {{ app()->getLocale() === 'id' ? 'bg-brand-gold text-white' : 'text-gray-500 hover:bg-gray-100' }}">ID</a>
-                    <a href="{{ route('lang.switch', 'en') }}" class="px-3 py-1.5 text-xs font-bold transition-colors {{ app()->getLocale() === 'en' ? 'bg-brand-gold text-white' : 'text-gray-500 hover:bg-gray-100' }}">EN</a>
-                </div>
-            </div>
-
-            <!-- Kasur & Kategori Accordion -->
-            <div class="border border-brand-muted/70 rounded-2xl overflow-hidden">
-                <button 
-                    @click="openSection = (openSection === 'categories' ? null : 'categories')"
-                    class="w-full flex items-center justify-between p-3.5 bg-white text-left font-bold text-brand-dark text-sm focus:outline-hidden"
-                >
-                    <span class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-brand-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3v4M8 3v4"/></svg>
-                        {{ __('Produk Kategori') }}
-                    </span>
-                    <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'categories' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-                <div x-show="openSection === 'categories'" class="bg-brand-light/50 border-t border-brand-muted/40 p-2 space-y-1">
-                    @foreach($categories as $category)
-                        <div class="space-y-0.5">
-                            <a 
-                                href="{{ route('category.show', $category->slug) }}" 
-                                class="flex items-center justify-between p-2.5 rounded-lg text-sm text-gray-800 font-bold hover:bg-white hover:text-brand-gold-dark transition-colors text-left"
-                                @click="isMobileMenuOpen = false"
-                            >
-                                <span>{{ html_entity_decode($category->name) }}</span>
-                                <svg class="w-3.5 h-3.5 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                            </a>
-                            @if($category->children && $category->children->count() > 0)
-                                <div class="pl-4 pr-1 py-1.5 flex flex-wrap gap-1.5 border-l-2 border-brand-gold/30 ml-3">
-                                    @foreach($category->children as $child)
-                                        <a 
-                                            href="{{ route('category.show', $child->slug) }}" 
-                                            class="inline-block py-1 px-2.5 rounded-lg text-xs text-stone-600 bg-white/80 border border-stone-200/60 hover:text-brand-dark hover:border-brand-gold transition-colors text-left"
-                                            @click="isMobileMenuOpen = false"
-                                        >
-                                            {{ html_entity_decode($child->name) }}
-                                        </a>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
-                    <a href="{{ route('categories') }}" class="block p-2.5 text-xs font-bold text-brand-gold-dark text-left" @click="isMobileMenuOpen = false">
-                        {{ __('Lihat Semua Kategori &rarr;') }}
-                    </a>
-                </div>
-            </div>
-
-            <!-- Brand Accordion -->
-            <div class="border border-brand-muted/70 rounded-2xl overflow-hidden">
-                <button 
-                    @click="openSection = (openSection === 'brands' ? null : 'brands')"
-                    class="w-full flex items-center justify-between p-3.5 bg-white text-left font-bold text-brand-dark text-sm focus:outline-hidden"
-                >
-                    <span class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-brand-gold-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-                        {{ __('Brand') }}
-                    </span>
-                    <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="openSection === 'brands' ? 'rotate-180 text-brand-gold' : ''" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-                <div x-show="openSection === 'brands'" class="bg-white border-t border-brand-muted/40 p-3 sm:p-4">
-                    <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
-                        @foreach($brands as $brand)
-                            @php
-                                $displayName = Str::title(strtolower(html_entity_decode($brand->name)));
-                            @endphp
-                            <a 
-                                href="{{ route('brands.show', $brand->slug) }}" 
-                                class="flex items-center justify-center p-3 rounded-xl border border-gray-100 bg-[#FAF8F5]/50 hover:bg-white hover:border-brand-gold/60 hover:shadow-2xs transition-all text-center"
-                                @click="isMobileMenuOpen = false"
-                            >
-                                <h4 class="font-bold text-brand-dark text-sm tracking-tight leading-tight">
-                                    {{ $displayName }}
-                                </h4>
-                            </a>
-                        @endforeach
-                    </div>
-                    <div class="pt-3 border-t border-gray-100 mt-3 text-center">
-                        <a href="{{ route('brands') }}" class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-gold-dark hover:text-brand-dark" @click="isMobileMenuOpen = false">
-                            <span>{{ __('Lihat Semua Brand') }}</span>
-                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Direct Links -->
-            <div class="space-y-1 pt-2">
-                <a href="{{ route('promos') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-bold text-brand-dark" @click="isMobileMenuOpen = false">
-                    <span class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-red-500"></span>
-                        {{ __('Promo Spesial') }}
-                    </span>
-                    <span class="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-bold uppercase">Hot</span>
-                </a>
-                <a href="{{ route('bundling.index') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-bold text-brand-dark" @click="isMobileMenuOpen = false">
-                    <span>{{ __('Bundling Hemat') }}</span>
-                    <svg class="w-4 h-4 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="{{ route('blog') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-semibold text-gray-700" @click="isMobileMenuOpen = false">
-                    <span>{{ __('Blog & Artikel Tidur') }}</span>
-                    <svg class="w-4 h-4 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-                <a href="{{ route('help') }}" class="flex items-center justify-between p-3 rounded-xl hover:bg-brand-light text-sm font-semibold text-gray-700" @click="isMobileMenuOpen = false">
-                    <span>{{ __('Pusat Bantuan & FAQ') }}</span>
-                    <svg class="w-4 h-4 text-gray-300" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </a>
-            </div>
         </div>
     </div>
 
