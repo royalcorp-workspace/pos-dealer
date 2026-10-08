@@ -344,7 +344,7 @@
             <!-- Footer & Official Brand Partners -->
             <div class="footer">
                 @php
-                    $officialBrandLogos = \App\Models\Frontend\ProductsCatalog\Brand::where('status', true)
+                    $officialBrandLogos = \App\Models\Frontend\ProductsCatalog\Brand::where('status', 1)
                         ->where('deleted', false)
                         ->whereNotNull('logo')
                         ->where('logo', '!=', '')

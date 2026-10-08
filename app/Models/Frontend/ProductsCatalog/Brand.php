@@ -17,6 +17,9 @@ class Brand extends Model
 
     protected $table = 'brands';
 
+    public const STATUS_ACTIVE = 1;
+    public const STATUS_INACTIVE = 2;
+
     protected $fillable = [
         'name',
         'slug',
@@ -39,12 +42,17 @@ class Brand extends Model
     {
         return [
             'sort_order' => 'integer',
-            'status' => 'boolean',
+            'status' => 'integer',
             'is_featured' => 'boolean',
             'deleted' => 'boolean',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE)->where('deleted', false);
     }
 
     public function getLogoUrlAttribute(): ?string
