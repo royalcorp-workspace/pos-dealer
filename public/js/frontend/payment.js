@@ -5,37 +5,59 @@ window.addEventListener('pageshow', function (event) {
     }
 });
 
+// Modal Dialog Controls for Payment Method Selection
+window.openPaymentMethodModal = function () {
+    var modal = document.getElementById('payment-method-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+};
+
+window.closePaymentMethodModal = function () {
+    var modal = document.getElementById('payment-method-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+};
+
+window.selectPaymentMethodOption = function (methodCode) {
+    var radio = document.getElementById('payment_method_' + methodCode);
+    if (radio) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+        setTimeout(function () {
+            window.closePaymentMethodModal();
+        }, 180);
+    }
+};
+
 window.processPayment = function () {
     var selectedMethod = document.querySelector('input[name="payment_method"]:checked');
     var validationAlert = document.getElementById('payment-method-validation-error');
-    var accordionsWrapper = document.getElementById('payment-accordions-wrapper');
+    var triggerCard = document.getElementById('payment-method-trigger-card');
 
     if (!selectedMethod) {
         if (validationAlert) {
             validationAlert.classList.remove('hidden');
             validationAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        if (accordionsWrapper) {
-            accordionsWrapper.classList.add('p-2.5', 'rounded-2xl', 'border-2', 'border-red-400', 'bg-red-50/20');
+        if (triggerCard) {
+            triggerCard.classList.add('ring-2', 'ring-red-400', 'border-red-400');
         }
         window.dispatchEvent(new CustomEvent('show-toast', { 
-            detail: { type: 'warning', message: 'Silakan pilih  metode pembayaran terlebih dahulu.' } 
+            detail: { type: 'warning', message: 'Silakan pilih metode pembayaran terlebih dahulu.' } 
         }));
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Pilih Metode Pembayaran',
-                text: 'Silakan pilih salah satu metode pembayaran (Transfer Bank / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan.',
-                confirmButtonColor: '#1e3a8a',
-                confirmButtonText: 'Mengerti'
-            });
-        }
+        
+        // Open modal popup automatically so user can pick
+        window.openPaymentMethodModal();
         return;
     }
 
     // Clear validation if method is selected
     if (validationAlert) validationAlert.classList.add('hidden');
-    if (accordionsWrapper) accordionsWrapper.classList.remove('p-2.5', 'border-2', 'border-red-400', 'bg-red-50/20');
+    if (triggerCard) triggerCard.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
 
     var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
     var categoryType = selectedMethod.getAttribute('data-category-type') || '';
@@ -109,7 +131,7 @@ window.processPayment = function () {
             sessionStorage.removeItem('checkout_form_data');
             localStorage.removeItem('checkout_form_data');
 
-            // Cek apakah response meminta membuka iframe / Snap Espay
+            // Cek apakah response meminta membuka iframe / Snap Espay (Khusus QRIS, Debit, Credit Card)
             if (data.open_iframe && data.espay_kit) {
                 var modal = document.getElementById('espay-snap-modal');
                 var iframe = document.getElementById('sgoplus-iframe');
@@ -171,7 +193,7 @@ window.processPayment = function () {
                 }
             }
 
-            // Default redirect
+            // Default redirect: Langsung ke Thank You page (Virtual Account, Transfer Manual, dll)
             window.location.href = data.redirect_url || thankYouUrl;
         } else {
             var errorMsg = (data && data.message) ? data.message : 'Terjadi kendala saat memproses pembayaran.';
@@ -212,85 +234,103 @@ window.processPayment = function () {
 
 document.addEventListener('DOMContentLoaded', function() {
     var radios = document.querySelectorAll('input[name="payment_method"]');
+    var triggerCard = document.getElementById('payment-method-trigger-card');
+    var selectedCard = document.getElementById('payment-method-selected-card');
+    var selectedLogoContainer = document.getElementById('selected-method-logo-display');
+    var selectedNameDisplay = document.getElementById('selected-method-name-display');
+    var selectedBadgeDisplay = document.getElementById('selected-method-badge-display');
+    var selectedChargeDisplay = document.getElementById('selected-method-charge-display');
+    var selectedSubDisplay = document.getElementById('selected-method-sub-display');
+
     var detailsContainer = document.getElementById('transfer-manual-details');
     var banksContainer = document.getElementById('instructions-banks-container');
     var chargeRow = document.getElementById('charge-row');
     var chargeAmountLabel = document.getElementById('charge-amount');
     var finalTotalLabel = document.getElementById('final-total');
-    
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            window.closePaymentMethodModal();
+        }
+    });
+
+    // Close modal on backdrop click
+    var methodModal = document.getElementById('payment-method-modal');
+    if (methodModal) {
+        methodModal.addEventListener('click', function(e) {
+            if (e.target === methodModal) {
+                window.closePaymentMethodModal();
+            }
+        });
+    }
+
     function toggleDetails() {
-        var selected = document.querySelector('input[name="payment_method"]:checked');        
-        // 0. Visual Update for Radio Buttons
-        document.querySelectorAll('.payment-method-label').forEach(function(label) {
-            label.classList.remove('bg-brand-gold/5');
-            var circle = label.querySelector('.rounded-full');
-            if (circle) {
-                circle.classList.remove('border-brand-gold', 'bg-brand-gold');
-                circle.classList.add('border-gray-300');
-            }
-            var svg = label.querySelector('svg');
-            if (svg) {
-                svg.classList.remove('opacity-100');
-                svg.classList.add('opacity-0');
-            }
-        });
+        var selected = document.querySelector('input[name="payment_method"]:checked');
 
-        // 0b. Visual & Badge Update for Shopee Accordion Groups
-        var accordionGroups = document.querySelectorAll('.payment-accordion-group');
-        accordionGroups.forEach(function(group) {
-            var badge = group.querySelector('.category-selected-badge');
-            var badgeText = group.querySelector('.badge-text');
-            var checkedInGroup = group.querySelector('input[name="payment_method"]:checked');
-            
-            if (checkedInGroup) {
-                var methodName = checkedInGroup.getAttribute('data-method-name') || checkedInGroup.value;
-                if (badge && badgeText) {
-                    badgeText.textContent = methodName;
-                    badge.classList.remove('hidden');
-                    badge.classList.add('inline-flex');
+        // Update modal option cards visual
+        document.querySelectorAll('.payment-method-card').forEach(function(card) {
+            var input = card.querySelector('input[name="payment_method"]');
+            var indicator = card.querySelector('.method-radio-indicator');
+            var dot = card.querySelector('.method-radio-dot');
+
+            if (input && input.checked) {
+                card.classList.add('border-brand-gold', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/30');
+                card.classList.remove('border-gray-200');
+                if (indicator) {
+                    indicator.classList.add('border-brand-gold', 'bg-brand-gold/10');
+                    indicator.classList.remove('border-gray-300');
                 }
-                group.classList.add('border-brand-gold', 'ring-2', 'ring-brand-gold/20');
-                group.classList.remove('border-gray-200');
-
-                var content = group.querySelector('.payment-accordion-content');
-                var chevron = group.querySelector('.accordion-chevron');
-                if (content) content.classList.remove('hidden');
-                if (chevron) chevron.classList.add('rotate-180');
+                if (dot) dot.classList.remove('opacity-0');
             } else {
-                if (badge) {
-                    badge.classList.add('hidden');
-                    badge.classList.remove('inline-flex');
+                card.classList.remove('border-brand-gold', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/30');
+                card.classList.add('border-gray-200');
+                if (indicator) {
+                    indicator.classList.remove('border-brand-gold', 'bg-brand-gold/10');
+                    indicator.classList.add('border-gray-300');
                 }
-                group.classList.remove('border-brand-gold', 'ring-2', 'ring-brand-gold/20');
-                group.classList.add('border-gray-200');
+                if (dot) dot.classList.add('opacity-0');
             }
         });
-        
+
+        // Update Selected Card on main page
         if (selected) {
-            var label = selected.closest('.payment-method-label');
-            if (label) {
-                label.classList.add('bg-brand-gold/5');
-                var circle = label.querySelector('.rounded-full');
-                if (circle) {
-                    circle.classList.remove('border-gray-300');
-                    circle.classList.add('border-brand-gold', 'bg-brand-gold');
-                }
-                var svg = label.querySelector('svg');
-                if (svg) {
-                    svg.classList.remove('opacity-0');
-                    svg.classList.add('opacity-100');
+            var parentCard = selected.closest('.payment-method-card');
+            var logoBadge = parentCard ? parentCard.querySelector('.method-logo-badge') : null;
+
+            if (triggerCard) triggerCard.classList.add('hidden');
+            if (selectedCard) selectedCard.classList.remove('hidden');
+
+            if (selectedLogoContainer && logoBadge) {
+                selectedLogoContainer.innerHTML = logoBadge.innerHTML;
+            }
+            if (selectedNameDisplay) {
+                selectedNameDisplay.textContent = selected.getAttribute('data-method-name') || selected.value;
+            }
+            if (selectedBadgeDisplay) {
+                var isManual = selected.getAttribute('data-is-manual') === '1';
+                selectedBadgeDisplay.textContent = selected.getAttribute('data-method-badge') || (isManual ? 'Verifikasi Manual' : 'Otomatis');
+                if (isManual) {
+                    selectedBadgeDisplay.className = 'text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-bold';
+                } else {
+                    selectedBadgeDisplay.className = 'text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold';
                 }
             }
+            if (selectedSubDisplay) {
+                selectedSubDisplay.textContent = selected.getAttribute('data-method-subtitle') || 'Metode pembayaran siap diproses';
+            }
+        } else {
+            if (triggerCard) triggerCard.classList.remove('hidden');
+            if (selectedCard) selectedCard.classList.add('hidden');
         }
 
-        
         // 1. Kalkulasi Charge/Biaya Admin
         if (selected && finalTotalLabel) {
             var baseTotal = parseFloat(finalTotalLabel.getAttribute('data-base-total') || '0');
             var hasCharge = selected.getAttribute('data-has-charge') === '1';
             var chargeType = parseInt(selected.getAttribute('data-charge-type') || '2');
             var chargeValue = parseFloat(selected.getAttribute('data-charge-value') || '0');
-            
+
             var charge = 0;
             if (hasCharge && chargeValue > 0) {
                 if (chargeType === 1) { // Percentage
@@ -299,14 +339,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     charge = chargeValue;
                 }
             }
-            
+
             if (charge > 0) {
                 if (chargeRow) chargeRow.classList.remove('hidden');
                 if (chargeAmountLabel) chargeAmountLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(charge);
+                if (selectedChargeDisplay) {
+                    selectedChargeDisplay.textContent = '+Biaya Rp ' + new Intl.NumberFormat('id-ID').format(charge);
+                    selectedChargeDisplay.classList.remove('hidden');
+                }
             } else {
                 if (chargeRow) chargeRow.classList.add('hidden');
+                if (selectedChargeDisplay) selectedChargeDisplay.classList.add('hidden');
             }
-            
+
             if (finalTotalLabel) {
                 finalTotalLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(baseTotal + charge);
             }
@@ -314,6 +359,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (sidebarTotalLabel) {
                 sidebarTotalLabel.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(baseTotal + charge);
             }
+        } else {
+            if (chargeRow) chargeRow.classList.add('hidden');
+            if (selectedChargeDisplay) selectedChargeDisplay.classList.add('hidden');
         }
         
         // 2. Tampilkan Instruksi Transfer Manual (jika dipilih)

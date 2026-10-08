@@ -306,166 +306,207 @@
                         </div>
                     </div>
 
-                    @php
-                        $groupedMethods = collect($paymentMethods)->groupBy('type');
-                    @endphp
-                    
-                    <div class="space-y-3.5 transition-all duration-300" id="payment-accordions-wrapper">
-                        @foreach($groupedMethods as $type => $methods)
-                            @php
-                                $typeLower = strtolower($type);
-                                $catIcon = 'fa-solid fa-building-columns';
-                                $catColor = 'bg-blue-50 text-blue-600 border border-blue-100';
-                                $catSubtitle = 'BCA, Mandiri, BRI, CIMB, Danamon, Bank Saqu, Maybank';
-                                
-                                if (str_contains($typeLower, 'transfer') || str_contains($typeLower, 'manual')) {
-                                    $catIcon = 'fa-solid fa-money-bill-transfer';
-                                    $catColor = 'bg-amber-50 text-amber-700 border border-amber-100';
-                                    $catSubtitle = 'Transfer manual ke rekening resmi kami (verifikasi bukti transfer)';
-                                } elseif (str_contains($typeLower, 'wallet') || str_contains($typeLower, 'qris')) {
-                                    $catIcon = 'fa-solid fa-wallet';
-                                    $catColor = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
-                                    $catSubtitle = 'GoPay, OVO, QRIS Plus (Bayar instan via aplikasi)';
-                                } elseif (str_contains($typeLower, 'debit')) {
-                                    $catIcon = 'fa-solid fa-credit-card';
-                                    $catColor = 'bg-teal-50 text-teal-600 border border-teal-100';
-                                    $catSubtitle = 'Debit Online BRI, Mandiri, BNI, BCA, Permata dengan proteksi 3D Secure';
-                                } elseif (str_contains($typeLower, 'card') || str_contains($typeLower, 'kartu') || str_contains($typeLower, 'credit')) {
-                                    $catIcon = 'fa-regular fa-credit-card';
-                                    $catColor = 'bg-purple-50 text-purple-600 border border-purple-100';
-                                    $catSubtitle = 'Visa, MasterCard, JCB dengan proteksi 3D Secure';
-                                }
-                            @endphp
-                            <div class="payment-accordion-group bg-white border border-gray-200 rounded-2xl overflow-hidden transition-all duration-200 shadow-2xs hover:border-brand-gold/70" data-group-type="{{ $type }}">
-                                <!-- Header (Shopee Accordion Dropdown) -->
-                                <div class="payment-accordion-header px-4 sm:px-5 py-3.5 sm:py-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-gray-50/80 transition-colors">
-                                    <div class="flex items-center gap-3 sm:gap-3.5 min-w-0">
-                                        <div class="w-10 h-10 rounded-xl {{ $catColor }} flex items-center justify-center text-base shrink-0 shadow-2xs">
-                                            <i class="{{ $catIcon }}"></i>
-                                        </div>
-                                        <div class="min-w-0">
-                                            <div class="flex items-center gap-2 flex-wrap">
-                                                <span class="font-extrabold text-sm sm:text-base text-brand-dark tracking-tight">{{ $type }}</span>
-                                                <span class="text-[11px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{{ count($methods) }} Pilihan</span>
-                                            </div>
-                                            <p class="text-xs text-gray-500 truncate mt-0.5">{{ $catSubtitle }}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="flex items-center gap-2.5 sm:gap-3 shrink-0 ml-2">
-                                        <!-- Selected Method Badge on Header -->
-                                        <span class="category-selected-badge hidden text-xs font-bold text-brand-gold-dark bg-brand-gold/15 border border-brand-gold/30 px-2.5 py-1 rounded-lg items-center gap-1.5 shadow-2xs transition-all">
-                                            <i class="fa-solid fa-circle-check text-brand-gold text-xs"></i>
-                                            <span class="badge-text truncate max-w-[110px] sm:max-w-[160px]"></span>
-                                        </span>
-                                        <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 accordion-chevron transition-transform duration-300">
-                                            <i class="fa-solid fa-chevron-down text-xs"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Accordion Content / Options -->
-                                <div class="payment-accordion-content border-t border-gray-100 divide-y divide-gray-100 hidden bg-white">
-                                    @foreach($methods as $method)
-                                        @php
-                                            $mCode = strtoupper($method['code']);
-                                            $mName = strtoupper($method['name']);
-                                        @endphp
-                                        <label for="payment_method_{{ $method['code'] }}" class="payment-method-label flex items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 cursor-pointer hover:bg-brand-light/30 transition-all">
-                                            <input type="radio" id="payment_method_{{ $method['code'] }}" name="payment_method" value="{{ $method['code'] }}" 
-                                                data-is-manual="{{ !empty($method['is_manual']) ? '1' : '0' }}"
-                                                data-banks='@json($method["bank_info"] ?? [])'
-                                                data-has-charge="{{ ($method['has_charge'] ?? false) ? '1' : '0' }}"
-                                                data-charge-type="{{ $method['charge_type'] ?? 2 }}"
-                                                data-charge-value="{{ $method['charge_value'] ?? 0 }}"
-                                                data-category-type="{{ $method['type_id'] ?? $type }}"
-                                                data-product-code="{{ $method['product_code'] ?? '' }}"
-                                                data-bank-code="{{ $method['bank_code'] ?? '' }}"
-                                                data-method-name="{{ $method['name'] }}"
-                                                class="sr-only">
-                                            
-                                            <div class="flex items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
-                                                <!-- Official Logo / Styled Badge -->
-                                                <div class="w-14 h-9 sm:w-16 sm:h-10 flex items-center justify-center bg-gray-50 rounded-xl border border-gray-200/80 shrink-0 p-1">
-                                                    @if(!empty($method['image']))
-                                                        <img src="{{ cms_asset($method['image']) }}" alt="{{ $method['name'] }}" class="max-h-6 max-w-12 sm:max-w-14 object-contain">
-                                                    @elseif(str_contains($mCode, 'BCA') || str_contains($mName, 'BCA'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#00529C] text-white font-black text-[11px] tracking-wider shadow-2xs">BCA</span>
-                                                    @elseif(str_contains($mCode, 'BRI') || str_contains($mName, 'BRI'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#00529C] text-white font-black text-[11px] tracking-wider shadow-2xs">BRI</span>
-                                                    @elseif(str_contains($mCode, 'MANDIRI') || str_contains($mName, 'MANDIRI'))
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-[#003d79] text-[#FFB700] font-black text-[10px] tracking-wider shadow-2xs">MANDIRI</span>
-                                                    @elseif(str_contains($mCode, 'CIMB') || str_contains($mName, 'CIMB'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#800000] text-white font-black text-[11px] tracking-wider shadow-2xs">CIMB</span>
-                                                    @elseif(str_contains($mCode, 'DANAMON') || str_contains($mName, 'DANAMON'))
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-[#F15A24] text-white font-black text-[10px] tracking-wider shadow-2xs">DANAMON</span>
-                                                    @elseif(str_contains($mCode, 'SAQU') || str_contains($mName, 'SAQU'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#008080] text-white font-black text-[11px] tracking-wider shadow-2xs">SAQU</span>
-                                                    @elseif(str_contains($mCode, 'BII') || str_contains($mName, 'BII') || str_contains($mName, 'MAYBANK'))
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-[#FFCC00] text-black font-black text-[10px] tracking-wider shadow-2xs">MAYBANK</span>
-                                                    @elseif(str_contains($mCode, 'GOPAY') || str_contains($mName, 'GOPAY'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#00AED6] text-white font-black text-[10px] tracking-wider flex items-center gap-1 shadow-2xs">
-                                                            <i class="fa-solid fa-wallet text-[9px]"></i> GoPay
-                                                        </span>
-                                                    @elseif(str_contains($mCode, 'OVO') || str_contains($mName, 'OVO'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#4C3299] text-white font-black text-[11px] tracking-wider shadow-2xs">OVO</span>
-                                                    @elseif(str_contains($mCode, 'QRIS') || str_contains($mName, 'QRIS'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#ED1C24] text-white font-black text-[10px] tracking-wider flex items-center gap-1 shadow-2xs">
-                                                            <i class="fa-solid fa-qrcode text-[9px]"></i> QRIS
-                                                        </span>
-                                                    @elseif(str_contains($mCode, 'DEBIT') || str_contains($mName, 'DEBIT'))
-                                                        <span class="px-2 py-0.5 rounded-md bg-[#008080] text-white font-black text-[10px] tracking-wider shadow-2xs flex items-center gap-1">
-                                                            <i class="fa-solid fa-credit-card text-[9px]"></i> DEBIT
-                                                        </span>
-                                                    @elseif(str_contains($mCode, 'CREDIT') || str_contains($mName, 'CREDIT') || str_contains($mName, 'CARD'))
-                                                        <div class="flex items-center gap-1">
-                                                            <i class="fa-brands fa-cc-visa text-blue-700 text-base"></i>
-                                                            <i class="fa-brands fa-cc-mastercard text-rose-500 text-base"></i>
-                                                            <i class="fa-brands fa-cc-jcb text-emerald-600 text-base"></i>
-                                                        </div>
-                                                    @elseif(!empty($method['is_manual']))
-                                                        <span class="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold text-[10px] flex items-center gap-0.5">
-                                                            <i class="fa-solid fa-building-columns text-[10px]"></i> TRF
-                                                        </span>
-                                                    @else
-                                                        <i class="fa-solid fa-building-columns text-brand-dark text-base"></i>
-                                                    @endif
-                                                </div>
-                                                
-                                                <!-- Name & Information -->
-                                                <div class="min-w-0 flex-1">
-                                                    <div class="flex items-center gap-2 flex-wrap">
-                                                        <span class="font-bold text-sm text-brand-dark truncate">{{ $method['name'] }}</span>
-                                                        @if(!empty($method['is_manual']))
-                                                            <span class="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded font-bold">Verifikasi Manual</span>
-                                                        @else
-                                                            <span class="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded font-bold inline-flex items-center gap-0.5">
-                                                                <i class="fa-solid fa-bolt text-[8px]"></i> Otomatis
-                                                            </span>
-                                                        @endif
-                                                        @if(($method['has_charge'] ?? false) && ($method['charge_value'] ?? 0) > 0)
-                                                            <span class="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.2 rounded font-medium">
-                                                                +Biaya {{ ($method['charge_type'] ?? 2) == 1 ? $method['charge_value'].'%' : 'Rp '.number_format($method['charge_value'], 0, ',', '.') }}
-                                                            </span>
-                                                        @endif
-                                                    </div>
-                                                    <p class="text-[11px] text-gray-400 mt-0.5 truncate">
-                                                        {{ !empty($method['is_manual']) ? 'Upload bukti transfer setelah pembayaran dilakukan' : 'Pembayaran terverifikasi instan tanpa bukti transfer' }}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            
-                                            <!-- Custom Radio Circle Checkmark -->
-                                            <div class="w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all shadow-2xs shrink-0 ml-3">
-                                                <svg class="w-3 h-3 text-white opacity-0 transition-opacity duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                                </svg>
-                                            </div>
-                                        </label>
-                                    @endforeach
-                                </div>
+                    <!-- 1. Trigger Card: Belum Dipilih -->
+                    <div id="payment-method-trigger-card" onclick="openPaymentMethodModal()" class="group bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 border-2 border-dashed border-brand-gold/60 hover:border-brand-gold rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 hover:shadow-md flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                            <div class="w-12 h-12 rounded-2xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
+                                <i class="fa-solid fa-wallet"></i>
                             </div>
-                        @endforeach
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-extrabold text-base sm:text-lg text-brand-dark group-hover:text-brand-gold-dark transition-colors">Pilih Metode Pembayaran</h3>
+                                    <span class="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full uppercase tracking-wider">Wajib Dipilih</span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1 truncate">Klik di sini untuk memilih Virtual Account, Transfer Bank, QRIS, atau Kartu Kredit</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" class="px-4 sm:px-5 py-2.5 bg-brand-dark group-hover:bg-brand-darker text-brand-gold rounded-xl font-bold text-xs sm:text-sm tracking-wide uppercase transition-all shadow-sm flex items-center gap-2 cursor-pointer">
+                                <span>Pilih</span>
+                                <i class="fa-solid fa-chevron-right text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 2. Selected Card: Sudah Dipilih -->
+                    <div id="payment-method-selected-card" onclick="openPaymentMethodModal()" class="hidden bg-white border-2 border-brand-gold rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
+                            <div id="selected-method-logo-display" class="w-14 h-10 sm:w-16 sm:h-11 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-2xs">
+                                <!-- Dynamic logo inserted -->
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 id="selected-method-name-display" class="font-extrabold text-sm sm:text-base text-brand-dark truncate"></h3>
+                                    <span id="selected-method-badge-display" class="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold"></span>
+                                    <span id="selected-method-charge-display" class="hidden text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full font-medium"></span>
+                                </div>
+                                <p id="selected-method-sub-display" class="text-xs text-gray-500 mt-0.5 truncate"></p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button type="button" class="text-xs font-bold text-brand-gold-dark hover:text-brand-dark bg-brand-gold/15 hover:bg-brand-gold/25 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                                <span>Ubah Metode</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Popup Modal Pemilihan Metode Pembayaran (Popup Snap Style) -->
+                    <div id="payment-method-modal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 transition-all duration-300">
+                        <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh] relative animate-in fade-in zoom-in-95 duration-200">
+                            <!-- Modal Header -->
+                            <div class="px-5 sm:px-6 py-4 bg-brand-dark text-white flex items-center justify-between border-b border-gray-800 shrink-0">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-xl bg-brand-gold/20 flex items-center justify-center text-brand-gold text-base">
+                                        <i class="fa-solid fa-wallet"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-base sm:text-lg tracking-tight text-white flex items-center gap-2">
+                                            <span>Pilih Metode Pembayaran</span>
+                                        </h3>
+                                        <p class="text-xs text-gray-400">Silakan pilih cara pembayaran yang Anda inginkan</p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="closePaymentMethodModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer" title="Tutup">
+                                    <i class="fa-solid fa-xmark text-sm"></i>
+                                </button>
+                            </div>
+
+                            <!-- Modal Body (Scrollable List) -->
+                            <div class="overflow-y-auto p-4 sm:p-6 space-y-5 flex-1 divide-y divide-gray-100" id="payment-modal-body">
+                                @php
+                                    $groupedMethods = collect($paymentMethods)->groupBy('type');
+                                @endphp
+                                @foreach($groupedMethods as $type => $methods)
+                                    @php
+                                        $typeLower = strtolower($type);
+                                        $catIcon = 'fa-solid fa-building-columns';
+                                        $catColor = 'bg-blue-50 text-blue-600 border border-blue-100';
+                                        
+                                        if (str_contains($typeLower, 'transfer') || str_contains($typeLower, 'manual')) {
+                                            $catIcon = 'fa-solid fa-money-bill-transfer';
+                                            $catColor = 'bg-amber-50 text-amber-700 border border-amber-100';
+                                        } elseif (str_contains($typeLower, 'wallet') || str_contains($typeLower, 'qris')) {
+                                            $catIcon = 'fa-solid fa-wallet';
+                                            $catColor = 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+                                        } elseif (str_contains($typeLower, 'debit')) {
+                                            $catIcon = 'fa-solid fa-credit-card';
+                                            $catColor = 'bg-teal-50 text-teal-600 border border-teal-100';
+                                        } elseif (str_contains($typeLower, 'card') || str_contains($typeLower, 'kartu') || str_contains($typeLower, 'credit')) {
+                                            $catIcon = 'fa-regular fa-credit-card';
+                                            $catColor = 'bg-purple-50 text-purple-600 border border-purple-100';
+                                        }
+                                    @endphp
+                                    <div class="pt-4 first:pt-0">
+                                        <div class="flex items-center gap-2 mb-3">
+                                            <div class="w-6 h-6 rounded-lg {{ $catColor }} flex items-center justify-center text-xs shrink-0">
+                                                <i class="{{ $catIcon }}"></i>
+                                            </div>
+                                            <h4 class="font-extrabold text-sm text-brand-dark tracking-tight">{{ $type }}</h4>
+                                            <span class="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.2 rounded-full">{{ count($methods) }} Pilihan</span>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            @foreach($methods as $method)
+                                                @php
+                                                    $mCode = strtoupper($method['code']);
+                                                    $mName = strtoupper($method['name']);
+                                                    $isManual = !empty($method['is_manual']);
+                                                @endphp
+                                                <div onclick="selectPaymentMethodOption('{{ $method['code'] }}')" class="payment-method-card bg-white border border-gray-200 hover:border-brand-gold rounded-2xl p-3 sm:p-3.5 cursor-pointer transition-all duration-200 hover:shadow-xs flex items-center justify-between gap-3 group relative select-none" data-method-code="{{ $method['code'] }}">
+                                                    <input type="radio" id="payment_method_{{ $method['code'] }}" name="payment_method" value="{{ $method['code'] }}" 
+                                                        data-is-manual="{{ $isManual ? '1' : '0' }}"
+                                                        data-banks='@json($method["bank_info"] ?? [])'
+                                                        data-has-charge="{{ ($method['has_charge'] ?? false) ? '1' : '0' }}"
+                                                        data-charge-type="{{ $method['charge_type'] ?? 2 }}"
+                                                        data-charge-value="{{ $method['charge_value'] ?? 0 }}"
+                                                        data-category-type="{{ $method['type_id'] ?? $type }}"
+                                                        data-product-code="{{ $method['product_code'] ?? '' }}"
+                                                        data-bank-code="{{ $method['bank_code'] ?? '' }}"
+                                                        data-method-name="{{ $method['name'] }}"
+                                                        data-method-subtitle="{{ $isManual ? 'Transfer manual & upload bukti transfer' : 'Otomatis terverifikasi instan' }}"
+                                                        data-method-badge="{{ $isManual ? 'Verifikasi Manual' : 'Otomatis' }}"
+                                                        class="sr-only">
+                                                    
+                                                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                                                        <!-- Official Logo / Badge -->
+                                                        <div class="method-logo-badge w-12 h-9 sm:w-14 sm:h-10 flex items-center justify-center bg-gray-50 rounded-xl border border-gray-200/80 shrink-0 p-1 group-hover:border-brand-gold/50 transition-colors">
+                                                            @if(!empty($method['image']))
+                                                                <img src="{{ cms_asset($method['image']) }}" alt="{{ $method['name'] }}" class="max-h-6 max-w-10 sm:max-w-12 object-contain">
+                                                            @elseif(str_contains($mCode, 'BCA') || str_contains($mName, 'BCA'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#00529C] text-white font-black text-[10px] tracking-wider">BCA</span>
+                                                            @elseif(str_contains($mCode, 'BRI') || str_contains($mName, 'BRI'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#00529C] text-white font-black text-[10px] tracking-wider">BRI</span>
+                                                            @elseif(str_contains($mCode, 'MANDIRI') || str_contains($mName, 'MANDIRI'))
+                                                                <span class="px-1 py-0.5 rounded bg-[#003d79] text-[#FFB700] font-black text-[9px] tracking-wider">MANDIRI</span>
+                                                            @elseif(str_contains($mCode, 'CIMB') || str_contains($mName, 'CIMB'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#800000] text-white font-black text-[10px] tracking-wider">CIMB</span>
+                                                            @elseif(str_contains($mCode, 'DANAMON') || str_contains($mName, 'DANAMON'))
+                                                                <span class="px-1 py-0.5 rounded bg-[#F15A24] text-white font-black text-[9px] tracking-wider">DANAMON</span>
+                                                            @elseif(str_contains($mCode, 'SAQU') || str_contains($mName, 'SAQU'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#008080] text-white font-black text-[10px] tracking-wider">SAQU</span>
+                                                            @elseif(str_contains($mCode, 'BII') || str_contains($mName, 'BII') || str_contains($mName, 'MAYBANK'))
+                                                                <span class="px-1 py-0.5 rounded bg-[#FFCC00] text-black font-black text-[9px] tracking-wider">MAYBANK</span>
+                                                            @elseif(str_contains($mCode, 'GOPAY') || str_contains($mName, 'GOPAY'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#00AED6] text-white font-black text-[9px] tracking-wider">GoPay</span>
+                                                            @elseif(str_contains($mCode, 'OVO') || str_contains($mName, 'OVO'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#4C3299] text-white font-black text-[10px] tracking-wider">OVO</span>
+                                                            @elseif(str_contains($mCode, 'QRIS') || str_contains($mName, 'QRIS'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#ED1C24] text-white font-black text-[9px] tracking-wider">QRIS</span>
+                                                            @elseif(str_contains($mCode, 'DEBIT') || str_contains($mName, 'DEBIT'))
+                                                                <span class="px-1.5 py-0.5 rounded bg-[#008080] text-white font-black text-[9px] tracking-wider">DEBIT</span>
+                                                            @elseif(str_contains($mCode, 'CREDIT') || str_contains($mName, 'CREDIT') || str_contains($mName, 'CARD'))
+                                                                <div class="flex items-center gap-0.5">
+                                                                    <i class="fa-brands fa-cc-visa text-blue-700 text-sm"></i>
+                                                                    <i class="fa-brands fa-cc-mastercard text-rose-500 text-sm"></i>
+                                                                </div>
+                                                            @elseif(!empty($method['is_manual']))
+                                                                <span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[9px]">TRF</span>
+                                                            @else
+                                                                <i class="fa-solid fa-building-columns text-brand-dark text-sm"></i>
+                                                            @endif
+                                                        </div>
+
+                                                        <!-- Method Details -->
+                                                        <div class="min-w-0 flex-1">
+                                                            <div class="font-bold text-xs sm:text-sm text-brand-dark truncate">{{ $method['name'] }}</div>
+                                                            <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                                                @if($isManual)
+                                                                    <span class="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded font-medium">Manual</span>
+                                                                @else
+                                                                    <span class="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-medium">Instan</span>
+                                                                @endif
+                                                                @if(($method['has_charge'] ?? false) && ($method['charge_value'] ?? 0) > 0)
+                                                                    <span class="text-[9px] text-gray-500 bg-gray-100 px-1.5 py-0.2 rounded">
+                                                                        +{{ ($method['charge_type'] ?? 2) == 1 ? $method['charge_value'].'%' : 'Rp '.number_format($method['charge_value'], 0, ',', '.') }}
+                                                                    </span>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Radio Checkmark Indicator -->
+                                                    <div class="method-radio-indicator w-5 h-5 rounded-full border-2 border-gray-300 flex items-center justify-center shrink-0 transition-all">
+                                                        <div class="method-radio-dot w-2.5 h-2.5 rounded-full bg-brand-gold opacity-0 transition-opacity"></div>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <!-- Modal Footer -->
+                            <div class="px-5 sm:px-6 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3 text-xs shrink-0">
+                                <div class="flex items-center gap-1.5 text-gray-500 text-[11px]">
+                                    <i class="fa-solid fa-shield-check text-emerald-600 text-xs"></i>
+                                    <span>Terenkripsi &amp; Berlisensi Bank Indonesia</span>
+                                </div>
+                                <button type="button" onclick="closePaymentMethodModal()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-bold text-xs transition-colors cursor-pointer">
+                                    Tutup
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     
                     <div id="transfer-manual-details" data-order-total="{{ $orderData['total'] }}" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/40 rounded-2xl hidden transition-all">
