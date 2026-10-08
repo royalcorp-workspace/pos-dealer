@@ -824,6 +824,7 @@ class CheckoutController extends Controller
             'price_product_setting_discount' => $priceProductSettingDiscount,
             'product_voucher_discount' => $productVoucherDiscount,
             'shipping_voucher_discount' => $shippingVoucherDiscount,
+            'shipping_cost_subsidy' => $shippingVoucherDiscount,
             'applied_vouchers' => $appliedVouchers,
             'subtotal' => $dbSubtotal,
             'voucher_discount' => $voucherDiscount,
@@ -1446,7 +1447,8 @@ class CheckoutController extends Controller
                         'voucher_code' => $bufferMeta['voucher_code'] ?? ($sessionOrderData['voucher_code'] ?? ''),
                         'voucher_discount' => $bufferMeta['voucher_discount'] ?? ($sessionOrderData['voucher_discount'] ?? 0),
                         'product_voucher_discount' => $bufferMeta['product_voucher_discount'] ?? ($sessionOrderData['product_voucher_discount'] ?? 0),
-                        'shipping_voucher_discount' => $bufferMeta['shipping_voucher_discount'] ?? ($sessionOrderData['shipping_voucher_discount'] ?? 0),
+                        'shipping_voucher_discount' => $bufferMeta['shipping_voucher_discount'] ?? ($sessionOrderData['shipping_voucher_discount'] ?? ($sessionOrderData['shipping_cost_subsidy'] ?? ($buffer?->shipping_cost_subsidy ?? 0))),
+                        'shipping_cost_subsidy' => $buffer?->shipping_cost_subsidy ?? ($sessionOrderData['shipping_cost_subsidy'] ?? ($sessionOrderData['shipping_voucher_discount'] ?? 0)),
                         'original_cart_total' => $bufferMeta['original_cart_total'] ?? ($sessionOrderData['original_cart_total'] ?? null),
                         'promo_discount' => $bufferMeta['promo_discount'] ?? ($sessionOrderData['promo_discount'] ?? null),
                     ]
@@ -1484,7 +1486,13 @@ class CheckoutController extends Controller
                 $orderSubtotal = $buffer?->subtotal ?? ($sessionOrderData['subtotal'] ?? 0);
                 $orderDiscount = $buffer?->discount ?? ($sessionOrderData['total_discount'] ?? 0);
                 $orderShippingCost = $buffer?->shipping_cost ?? ($sessionOrderData['shipping_cost'] ?? 0);
-                $orderShippingSubsidy = $buffer?->shipping_cost_subsidy ?? ($sessionOrderData['shipping_cost_subsidy'] ?? 0);
+                $orderShippingSubsidy = (float) (
+                    $buffer?->shipping_cost_subsidy 
+                    ?? ($sessionOrderData['shipping_cost_subsidy'] 
+                    ?? ($sessionOrderData['shipping_voucher_discount'] 
+                    ?? ($bufferMeta['shipping_voucher_discount'] 
+                    ?? 0)))
+                );
                 $orderTotal = ($orderSubtotal - $orderDiscount + $orderShippingCost - $orderShippingSubsidy) + $charge;
 
                 $order = Order::create([
@@ -1961,54 +1969,13 @@ class CheckoutController extends Controller
 
         $thankYouUrl = route('thankyou', ['order_id' => $order->id]);
 
-        // Determine whether this payment method requires interactive Snap iframe
-        // As requested: Only QRIS, Debit Card, and Credit Card use Snap iframe in-frame.
-        // Virtual Accounts, Bank Transfers, and E-Wallets redirect directly to Thank You page without double confirmation!
-        $isSnapEligible = false;
-        $categoryTypeInt = (int)($categoryType ?? $paymentMethodModel?->type ?? 0);
-        $upperMethod = strtoupper((string)$paymentMethod);
-
-        if (in_array($categoryTypeInt, [4, 5, 6], true)) {
-            $isSnapEligible = true;
-        } elseif (
-            str_contains($upperMethod, 'QRIS') ||
-            str_contains($upperMethod, 'DEBIT') ||
-            str_contains($upperMethod, 'CREDIT') ||
-            str_contains($upperMethod, 'CARD')
-        ) {
-            $isSnapEligible = true;
-        }
-
-        // If Espay payment method and eligible for Snap iframe
-        if ($isEspay && $isSnapEligible) {
-            $apiKey = config('espay.api_key');
-            $commCode = config('espay.merchant_key');
-            $paymentId = $order->order_number;
-            $sig = sha1($paymentId . '590' . $apiKey);
-
-            // Return espay_kit payload for Snap iframe integration
-            return response()->json([
-                'success' => true,
-                'open_iframe' => true,
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'redirect_url' => $thankYouUrl,
-                'espay_kit' => [
-                    'key' => $apiKey,
-                    'paymentId' => $paymentId,
-                    'backUrl' => $thankYouUrl,
-                    'commCode' => $commCode,
-                    'bankCode' => $resolvedBankCode,
-                    'productCode' => $resolvedProductCode,
-                    'signature' => $sig,
-                    'amount' => (string) round((float) $order->total),
-                ]
-            ]);
-        }
-
+        // Eskalasi langsung ke Thank You Page (Bypass Espay Kit Iframe)
+        // Mencegah double konfirmasi & kit sandbox: QRIS, VA, dan semua metode langsung ditampilkan di halaman Thank You
         return response()->json([
             'success' => true,
             'open_iframe' => false,
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
             'redirect_url' => $thankYouUrl
         ]);
     }
