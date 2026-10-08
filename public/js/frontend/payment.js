@@ -39,6 +39,8 @@ window.processPayment = function () {
 
     var isManualTransfer = selectedMethod.getAttribute('data-is-manual') === '1';
     var categoryType = selectedMethod.getAttribute('data-category-type') || '';
+    var productCode = selectedMethod.getAttribute('data-product-code') || '';
+    var bankCode = selectedMethod.getAttribute('data-bank-code') || '';
 
     var container = document.getElementById('payment-container');
     var processUrl = container ? container.dataset.routePaymentProcess : '/payment/process';
@@ -55,6 +57,8 @@ window.processPayment = function () {
         body.append('payment_method', selectedMethod.value);
         body.append('order_id', orderId);
         body.append('category_type', categoryType);
+        body.append('product_code', productCode);
+        body.append('bank_code', bankCode);
         if (fileInput && fileInput.files && fileInput.files.length > 0) {
             body.append('payment_proof', fileInput.files[0]);
         }
@@ -69,7 +73,9 @@ window.processPayment = function () {
         body = JSON.stringify({
             payment_method: selectedMethod.value,
             order_id: orderId,
-            category_type: categoryType
+            category_type: categoryType,
+            product_code: productCode,
+            bank_code: bankCode
         });
         headers = {
             'Content-Type': 'application/json',
@@ -102,6 +108,70 @@ window.processPayment = function () {
             localStorage.removeItem('selectedCartCoupons');
             sessionStorage.removeItem('checkout_form_data');
             localStorage.removeItem('checkout_form_data');
+
+            // Cek apakah response meminta membuka iframe / Snap Espay
+            if (data.open_iframe && data.espay_kit) {
+                var modal = document.getElementById('espay-snap-modal');
+                var iframe = document.getElementById('sgoplus-iframe');
+                var loader = document.getElementById('espay-iframe-loader');
+                var manualRedirectBtn = document.getElementById('espay-manual-redirect-btn');
+
+                var targetUrl = data.redirect_url || data.espay_kit.backUrl || thankYouUrl;
+                if (manualRedirectBtn) {
+                    manualRedirectBtn.href = targetUrl;
+                }
+
+                var iframeUrl = '';
+                if (typeof SGOSignature !== 'undefined' && typeof SGOSignature.getIframeURL === 'function') {
+                    try {
+                        iframeUrl = SGOSignature.getIframeURL(data.espay_kit);
+                    } catch (e) {
+                        console.error('SGOSignature getIframeURL error:', e);
+                    }
+                }
+
+                if (!iframeUrl) {
+                    var domain = "https://sandbox-kit.espay.id";
+                    var sig = data.espay_kit.signature || '';
+                    var key = data.espay_kit.key || '';
+                    var pId = data.espay_kit.paymentId || '';
+                    var bUrl = encodeURIComponent(data.espay_kit.backUrl || thankYouUrl);
+                    var bCode = data.espay_kit.bankCode || '';
+                    var prCode = data.espay_kit.productCode || '';
+                    iframeUrl = domain + "/plugin/merchantkey/?signature=" + sig + "&domain=" + domain + "&key=" + key + "&paymentId=" + pId + "&backUrl=" + bUrl + "&bankCode=" + bCode + "&productCode=" + prCode;
+                }
+
+                if (modal && iframe) {
+                    if (loader) {
+                        loader.style.opacity = '1';
+                        loader.classList.remove('hidden');
+                    }
+
+                    iframe.onload = function () {
+                        if (loader) {
+                            loader.style.opacity = '0';
+                            setTimeout(function () {
+                                loader.classList.add('hidden');
+                            }, 300);
+                        }
+                    };
+
+                    iframe.src = iframeUrl;
+                    modal.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+
+                    if (typeof SGOSignature !== 'undefined' && typeof SGOSignature.receiveForm === 'function') {
+                        try {
+                            SGOSignature.receiveForm();
+                        } catch (e) {
+                            console.error('SGOSignature receiveForm error:', e);
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Default redirect
             window.location.href = data.redirect_url || thankYouUrl;
         } else {
             var errorMsg = (data && data.message) ? data.message : 'Terjadi kendala saat memproses pembayaran.';
@@ -399,4 +469,57 @@ document.addEventListener('DOMContentLoaded', function() {
     
     updateTimer();
     setInterval(updateTimer, 1000);
+});
+
+// Espay Snap Modal Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    var closeEspayModalBtn = document.getElementById('close-espay-modal-btn');
+    if (closeEspayModalBtn) {
+        closeEspayModalBtn.addEventListener('click', function () {
+            var manualRedirectBtn = document.getElementById('espay-manual-redirect-btn');
+            var container = document.getElementById('payment-container');
+            var targetUrl = (manualRedirectBtn && manualRedirectBtn.href && manualRedirectBtn.href !== '#') 
+                ? manualRedirectBtn.href 
+                : (container ? container.dataset.routeThankyou : '/thankyou');
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Tutup Jendela Pembayaran?',
+                    text: 'Pesanan Anda telah disimpan di sistem. Anda dapat melihat instruksi dan memeriksa status pembayaran di halaman rincian pesanan.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#1e3a8a',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Ya, Lihat Rincian Pesanan',
+                    cancelButtonText: 'Lanjutkan Bayar'
+                }).then(function (result) {
+                    if (result.isConfirmed) {
+                        window.location.href = targetUrl;
+                    }
+                });
+            } else {
+                if (confirm('Pesanan Anda sudah tersimpan. Buka rincian pesanan?')) {
+                    window.location.href = targetUrl;
+                }
+            }
+        });
+    }
+
+    // Handle messages from Espay Snap Iframe
+    window.addEventListener('message', function (event) {
+        if (!event.data) return;
+        try {
+            var msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (msg.status === 'success' || msg.status === 'paid' || msg.action === 'close' || msg.type === 'close') {
+                var manualRedirectBtn = document.getElementById('espay-manual-redirect-btn');
+                var container = document.getElementById('payment-container');
+                var targetUrl = (manualRedirectBtn && manualRedirectBtn.href && manualRedirectBtn.href !== '#') 
+                    ? manualRedirectBtn.href 
+                    : (container ? container.dataset.routeThankyou : '/thankyou');
+                window.location.href = targetUrl;
+            }
+        } catch (e) {
+            // Not JSON or non-object message, safely ignore
+        }
+    });
 });

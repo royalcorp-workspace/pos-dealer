@@ -378,7 +378,9 @@
                                                 data-has-charge="{{ ($method['has_charge'] ?? false) ? '1' : '0' }}"
                                                 data-charge-type="{{ $method['charge_type'] ?? 2 }}"
                                                 data-charge-value="{{ $method['charge_value'] ?? 0 }}"
-                                                data-category-type="{{ $type }}"
+                                                data-category-type="{{ $method['type_id'] ?? $type }}"
+                                                data-product-code="{{ $method['product_code'] ?? '' }}"
+                                                data-bank-code="{{ $method['bank_code'] ?? '' }}"
                                                 data-method-name="{{ $method['name'] }}"
                                                 class="sr-only">
                                             
@@ -510,5 +512,57 @@
         </div>
     </div>
 
+    <!-- Espay Snap Payment Modal Dialog -->
+    <div id="espay-snap-modal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 transition-all duration-300">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[95vh] relative">
+            <!-- Modal Header -->
+            <div class="px-5 py-4 bg-brand-dark text-white flex items-center justify-between border-b border-gray-800">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-brand-gold/20 flex items-center justify-center text-brand-gold">
+                        <i class="fa-solid fa-shield-halved text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
+                            <span>Pembayaran Aman</span>
+                            <span class="text-[10px] font-semibold bg-brand-gold/20 text-brand-gold border border-brand-gold/30 px-2 py-0.5 rounded-full">Espay Snap</span>
+                        </h3>
+                        <p class="text-xs text-gray-400">Selesaikan transaksi Anda melalui panel di bawah ini</p>
+                    </div>
+                </div>
+                <button type="button" id="close-espay-modal-btn" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer" title="Tutup">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Iframe Container with Loader -->
+            <div class="relative flex-1 w-full bg-gray-50 min-h-[480px] sm:min-h-[560px] flex items-center justify-center overflow-hidden">
+                <!-- Loader inside Iframe Area -->
+                <div id="espay-iframe-loader" class="absolute inset-0 flex flex-col items-center justify-center bg-white z-10 transition-opacity duration-300">
+                    <div class="w-10 h-10 border-3 border-brand-gold border-t-transparent rounded-full animate-spin mb-3"></div>
+                    <p class="text-sm font-semibold text-gray-700">Memuat Saluran Pembayaran...</p>
+                    <p class="text-xs text-gray-400 mt-1">Mohon tunggu, jangan tutup halaman ini</p>
+                </div>
+
+                <!-- Iframe for Espay Snap / SGO Plus -->
+                <iframe id="sgoplus-iframe" name="sgoplus-iframe" class="w-full h-[500px] sm:h-[580px] border-0 z-20 relative" src="" allowfullscreen allow="payment"></iframe>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs">
+                <div class="flex items-center gap-1.5 text-gray-500 text-[11px]">
+                    <i class="fa-solid fa-lock text-emerald-600 text-xs"></i>
+                    <span>Terenkripsi 256-bit SSL & Berlisensi Bank Indonesia</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a id="espay-manual-redirect-btn" href="#" class="font-bold text-brand-gold-dark hover:text-brand-dark hover:underline flex items-center gap-1 text-xs">
+                        <span>Lihat Rincian Pesanan</span>
+                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ config('espay.js_url', 'https://sandbox-kit.espay.id/public/signature/js') }}"></script>
     <script src="{{ asset('js/frontend/payment.js') }}?v={{ filemtime(public_path('js/frontend/payment.js')) }}"></script>
 @endsection

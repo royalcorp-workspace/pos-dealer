@@ -964,20 +964,201 @@ class CheckoutController extends Controller
         }
 
         $dbMethods = \App\Models\PaymentMethod::active()->orderBy('sort_order')->get();
-        $paymentMethods = [];
+        $uniqueMethods = [];
 
         foreach ($dbMethods as $method) {
+            $rawCode = strtoupper(trim((string)$method->code));
+            $rawName = strtoupper(trim((string)$method->name));
+            $type = (int)$method->type;
+
+            $channelKey = null;
+
+            // 1. Bank Transfer Manual
+            if ($type === 1 || in_array($rawCode, ['TRANSFER_MANUAL', 'TRF'], true) || str_contains($rawName, 'TRANSFER')) {
+                $channelKey = 'manual_transfer';
+            }
+            // 2. QRIS (Type 4)
+            elseif ($type === 4 || str_contains($rawCode, 'QRIS') || str_contains($rawName, 'QRIS')) {
+                $channelKey = 'qris';
+            }
+            // 3. Kartu Kredit (Type 5)
+            elseif ($type === 5 || str_contains($rawCode, 'CREDIT') || str_contains($rawName, 'CREDIT')) {
+                $channelKey = 'credit_card';
+            }
+            // 4. Kartu Debit (Type 6)
+            elseif ($type === 6 || str_contains($rawCode, 'DEBIT') || str_contains($rawName, 'DEBIT')) {
+                $channelKey = 'debit_card';
+            }
+            // 5. E-Wallet GoPay (Type 3 atau nama/kode GOPAY)
+            elseif (str_contains($rawCode, 'GOPAY') || str_contains($rawName, 'GOPAY') || ($type === 3 && $rawCode === '014')) {
+                $channelKey = 'ewallet_gopay';
+            }
+            // 6. E-Wallet OVO (Type 3 atau nama/kode OVO)
+            elseif (str_contains($rawCode, 'OVO') || str_contains($rawName, 'OVO') || ($type === 3 && $rawCode === '503')) {
+                $channelKey = 'ewallet_ovo';
+            }
+            // 7. Virtual Account BCA (Type 2 / code 014 / BCA)
+            elseif (($type === 2 && ($rawCode === '014' || str_contains($rawCode, 'BCA') || str_contains($rawName, 'BCA'))) || str_contains($rawCode, 'BCAATM')) {
+                $channelKey = 'va_bca';
+            }
+            // 8. Virtual Account Mandiri
+            elseif (str_contains($rawCode, 'MANDIRI') || str_contains($rawName, 'MANDIRI') || $rawCode === '008') {
+                $channelKey = 'va_mandiri';
+            }
+            // 9. Virtual Account BRI
+            elseif (str_contains($rawCode, 'BRI') || str_contains($rawName, 'BRI') || $rawCode === '002') {
+                $channelKey = 'va_bri';
+            }
+            // 10. Virtual Account CIMB Niaga
+            elseif (str_contains($rawCode, 'CIMB') || str_contains($rawName, 'CIMB') || $rawCode === '022') {
+                $channelKey = 'va_cimb';
+            }
+            // 11. Virtual Account Danamon
+            elseif (str_contains($rawCode, 'DANAMON') || str_contains($rawName, 'DANAMON') || $rawCode === '011') {
+                $channelKey = 'va_danamon';
+            }
+            // 12. Virtual Account Bank Saqu
+            elseif (str_contains($rawCode, 'SAQU') || str_contains($rawName, 'SAQU') || $rawCode === '472') {
+                $channelKey = 'va_saqu';
+            }
+            // 13. Virtual Account Maybank / BII
+            elseif (str_contains($rawCode, 'BII') || str_contains($rawName, 'BII') || str_contains($rawName, 'MAYBANK') || $rawCode === '016') {
+                $channelKey = 'va_maybank';
+            }
+            else {
+                $channelKey = 'other_' . ($method->code ?: $method->id);
+            }
+
+            if (isset($uniqueMethods[$channelKey])) {
+                continue;
+            }
+
             $isManual = (int)$method->type === 1 
                 || $method->isTypeBankTransfer() 
                 || strtolower((string)$method->provider) !== 'espay' 
                 || in_array($method->code, ['transfer_manual', 'trf'], true);
 
-            $paymentMethods[] = [
-                'code' => $method->code,
-                'name' => $method->name,
+            $resolvedType = $method->type;
+            $displayName = $method->name;
+            $bankCode = '';
+            $productCode = '';
+
+            switch ($channelKey) {
+                case 'ewallet_gopay':
+                    $displayName = 'GoPay';
+                    $finalCode = 'GOPAYJUMPAPP';
+                    $productCode = 'GOPAYJUMPAPP';
+                    $bankCode = '014';
+                    $resolvedType = 3;
+                    break;
+                case 'ewallet_ovo':
+                    $displayName = 'OVO';
+                    $finalCode = 'OVO';
+                    $productCode = 'OVO';
+                    $bankCode = '503';
+                    $resolvedType = 3;
+                    break;
+                case 'qris':
+                    $displayName = 'QRIS';
+                    $finalCode = 'QRISPLUS';
+                    $productCode = 'QRISPLUS';
+                    $bankCode = '008';
+                    $resolvedType = 4;
+                    break;
+                case 'credit_card':
+                    $displayName = 'Kartu Kredit';
+                    $finalCode = 'CREDITCARD';
+                    $productCode = 'CREDITCARD';
+                    $bankCode = '008';
+                    $resolvedType = 5;
+                    break;
+                case 'debit_card':
+                    $displayName = 'Kartu Debit';
+                    $finalCode = 'DEBITCARD';
+                    $productCode = 'DEBITCARD';
+                    $bankCode = '008';
+                    $resolvedType = 6;
+                    break;
+                case 'va_bca':
+                    $displayName = 'BCA Virtual Account';
+                    $finalCode = 'BCAATM';
+                    $productCode = 'BCAATM';
+                    $bankCode = '014';
+                    $resolvedType = 2;
+                    break;
+                case 'va_mandiri':
+                    $displayName = 'Mandiri Virtual Account';
+                    $finalCode = 'MANDIRIATM';
+                    $productCode = 'MANDIRIATM';
+                    $bankCode = '008';
+                    $resolvedType = 2;
+                    break;
+                case 'va_bri':
+                    $displayName = 'BRI Virtual Account';
+                    $finalCode = 'BRIATM';
+                    $productCode = 'BRIATM';
+                    $bankCode = '002';
+                    $resolvedType = 2;
+                    break;
+                case 'va_cimb':
+                    $displayName = 'CIMB Niaga Virtual Account';
+                    $finalCode = 'CIMBATM';
+                    $productCode = 'CIMBATM';
+                    $bankCode = '022';
+                    $resolvedType = 2;
+                    break;
+                case 'va_danamon':
+                    $displayName = 'Danamon Virtual Account';
+                    $finalCode = 'DANAMONATM';
+                    $productCode = 'DANAMONATM';
+                    $bankCode = '011';
+                    $resolvedType = 2;
+                    break;
+                case 'va_saqu':
+                    $displayName = 'Bank Saqu Virtual Account';
+                    $finalCode = 'BANKSAQUATM';
+                    $productCode = 'BANKSAQUATM';
+                    $bankCode = '472';
+                    $resolvedType = 2;
+                    break;
+                case 'va_maybank':
+                    $displayName = 'Maybank Virtual Account';
+                    $finalCode = 'BIIATM';
+                    $productCode = 'BIIATM';
+                    $bankCode = '016';
+                    $resolvedType = 2;
+                    break;
+                case 'manual_transfer':
+                    $displayName = 'Transfer Bank Manual';
+                    $finalCode = 'transfer_manual';
+                    $resolvedType = 1;
+                    break;
+                default:
+                    $finalCode = $method->code;
+                    $productCode = \App\Models\PaymentMethod::resolveEspayProductCode($method->code, $method->type, $method);
+                    $bankCode = \App\Models\PaymentMethod::resolveEspayBankCode($method->code, $method->type, $method);
+                    break;
+            }
+
+            $typeLabel = match ((int)$resolvedType) {
+                1 => 'Bank Transfer Manual',
+                2 => 'Virtual Account',
+                3 => 'E-Wallet',
+                4 => 'QRIS',
+                5 => 'Kartu Kredit',
+                6 => 'Kartu Debit',
+                default => $method->typeLabel(),
+            };
+
+            $uniqueMethods[$channelKey] = [
+                'code' => $finalCode,
+                'db_code' => $method->code,
+                'product_code' => $productCode,
+                'bank_code' => $bankCode,
+                'name' => $displayName,
                 'image' => $method->image,
-                'type' => $method->typeLabel(),
-                'type_id' => $method->type,
+                'type' => $typeLabel,
+                'type_id' => $resolvedType,
                 'provider' => $method->provider,
                 'is_manual' => $isManual,
                 'has_charge' => $method->has_charge,
@@ -986,6 +1167,8 @@ class CheckoutController extends Controller
                 'bank_info' => $method->bank_info,
             ];
         }
+
+        $paymentMethods = array_values($uniqueMethods);
 
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
@@ -1603,10 +1786,48 @@ class CheckoutController extends Controller
             $dataToHash = "##{$signatureKey}##{$rqUuid}##{$rqDatetime}##{$espayOrderId}##{$amount}##IDR##{$commCode}##SENDINVOICE##";
             $signature = hash('sha256', strtoupper($dataToHash));
 
+            $reqProductCode = $request->input('product_code');
+            $reqBankCode = $request->input('bank_code');
+
+            $resolvedProductCode = !empty($reqProductCode) 
+                ? $reqProductCode 
+                : \App\Models\PaymentMethod::resolveEspayProductCode(
+                    codeOrBank: $paymentMethod,
+                    type: $categoryType ?? $paymentMethodModel?->type,
+                    paymentMethod: $paymentMethodModel
+                );
+
+            $resolvedBankCode = !empty($reqBankCode) 
+                ? $reqBankCode 
+                : \App\Models\PaymentMethod::resolveEspayBankCode(
+                    codeOrBank: $paymentMethod,
+                    type: $categoryType ?? $paymentMethodModel?->type,
+                    paymentMethod: $paymentMethodModel
+                );
+
+            // Special explicit overrides for clearing codes (misal 014: BCA VA vs GoPay Jump App)
+            $upperMethod = strtoupper($paymentMethod);
+            if (in_array($upperMethod, ['GOPAY', 'GOPAYJUMPAPP', 'GOPAYINAPP']) || (($categoryType === 3 || $paymentMethodModel?->type === 3) && in_array($paymentMethod, ['014', 'GOPAY', 'GOPAYJUMPAPP', 'GOPAYINAPP']))) {
+                $resolvedProductCode = 'GOPAYJUMPAPP';
+                $resolvedBankCode = '014';
+            } elseif (in_array($upperMethod, ['BCAATM', 'BCA']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['014', 'BCAATM', 'BCA']))) {
+                $resolvedProductCode = 'BCAATM';
+                $resolvedBankCode = '014';
+            } elseif (in_array($upperMethod, ['QRIS', 'QRISPLUS']) || ($categoryType === 4 || $paymentMethodModel?->type === 4)) {
+                $resolvedProductCode = 'QRISPLUS';
+                $resolvedBankCode = '008';
+            } elseif (in_array($upperMethod, ['OVO']) || (($categoryType === 3 || $paymentMethodModel?->type === 3) && in_array($paymentMethod, ['503', 'OVO']))) {
+                $resolvedProductCode = 'OVO';
+                $resolvedBankCode = '503';
+            } elseif (in_array($upperMethod, ['CREDITCARD', 'CREDIT']) || ($categoryType === 5 || $paymentMethodModel?->type === 5)) {
+                $resolvedProductCode = 'CREDITCARD';
+                $resolvedBankCode = '008';
+            }
+
             // Espay SendInvoice expects bank clearing code (e.g. 014, 008, 002) in 'bank_code' parameter
-            $espayBankCode = \App\Models\PaymentMethod::resolveEspayBankCode(
+            $espayBankCode = $resolvedBankCode ?: \App\Models\PaymentMethod::resolveEspayBankCode(
                 codeOrBank: $paymentMethod,
-                type: $paymentMethodModel?->type,
+                type: $categoryType ?? $paymentMethodModel?->type,
                 paymentMethod: $paymentMethodModel
             );
 
@@ -1723,9 +1944,38 @@ class CheckoutController extends Controller
         session()->put('thankyou_order_id', $order->id);
         session()->put('last_created_order_id', $order->id);
 
+        $thankYouUrl = route('thankyou', ['order_id' => $order->id]);
+
+        // If Espay payment method (Embed Kit integration)
+        if ($isEspay) {
+            $apiKey = config('espay.api_key');
+            $commCode = config('espay.merchant_key');
+            $paymentId = $order->order_number;
+            $sig = sha1($paymentId . '590' . $apiKey);
+
+            // Return espay_kit payload for Snap iframe integration
+            return response()->json([
+                'success' => true,
+                'open_iframe' => true,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'redirect_url' => $order->meta['payment_url'] ?? $thankYouUrl,
+                'espay_kit' => [
+                    'key' => $apiKey,
+                    'paymentId' => $paymentId,
+                    'backUrl' => $thankYouUrl,
+                    'commCode' => $commCode,
+                    'bankCode' => $resolvedBankCode,
+                    'productCode' => $resolvedProductCode,
+                    'signature' => $sig,
+                    'amount' => (string) round((float) $order->total),
+                ]
+            ]);
+        }
+
         return response()->json([
             'success' => true,
-            'redirect_url' => route('thankyou', ['order_id' => $order->id])
+            'redirect_url' => $thankYouUrl
         ]);
     }
 

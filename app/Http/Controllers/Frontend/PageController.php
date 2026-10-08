@@ -283,10 +283,6 @@ public function help()
 
     public function sitemap(Request $request)
     {
-        if (! $this->isCrawlerOrBot($request)) {
-            abort(404);
-        }
-
         $urls = [
             [
                 'loc' => route('home'),
@@ -410,13 +406,12 @@ public function help()
 
     public function robots(Request $request)
     {
-        if (! $this->isCrawlerOrBot($request)) {
-            abort(404);
-        }
-
         $robots = "User-agent: *" . PHP_EOL;
+        $robots .= "Disallow: /cart" . PHP_EOL;
         $robots .= "Disallow: /checkout" . PHP_EOL;
         $robots .= "Disallow: /payment" . PHP_EOL;
+        $robots .= "Disallow: /thankyou" . PHP_EOL;
+        $robots .= "Disallow: /order/" . PHP_EOL;
         $robots .= "Disallow: /dashboard" . PHP_EOL;
         $robots .= "Disallow: /forgot-password" . PHP_EOL;
         $robots .= "Disallow: /reset-password" . PHP_EOL;

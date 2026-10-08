@@ -161,7 +161,11 @@ class PaymentMethod extends Model
         }
 
         if (!empty($codeOrBank) && !ctype_digit($codeOrBank)) {
-            return strtoupper($codeOrBank);
+            $upper = strtoupper($codeOrBank);
+            if (in_array($upper, ['GOPAYINAPP', 'GOPAY', 'GOPAYJUMPAPP'])) {
+                return 'GOPAYJUMPAPP';
+            }
+            return $upper;
         }
 
         $bankCode = $codeOrBank ?: ($paymentMethod?->bank_info['bank_code'] ?? '');
@@ -170,10 +174,10 @@ class PaymentMethod extends Model
 
         // Escalation map for shared clearing bank codes (e.g., 014 for BCA ATM vs Credit Card)
         $map = [
-            '014' => [ // BCA
+            '014' => [ // BCA / GoPay
                 5 => 'CREDITCARD',
                 2 => 'BCAATM',
-                3 => 'GOPAYINAPP',
+                3 => 'GOPAYJUMPAPP',
                 'default' => 'BCAATM',
             ],
             '008' => [ // Mandiri
@@ -280,6 +284,53 @@ class PaymentMethod extends Model
         }
 
         $code = trim($code);
+        $upper = strtoupper($code);
+
+        // Khusus GoPay E-Wallet Jump App lookup (Type 3)
+        if (in_array($upper, ['GOPAYJUMPAPP', 'GOPAYINAPP', 'GOPAY']) || ($type === 3 && $code === '014')) {
+            $gopay = static::withoutGlobalScope('active')
+                ->where('type', 3)
+                ->where(function($q) {
+                    $q->where('code', 'GOPAYJUMPAPP')
+                      ->orWhere('code', '014')
+                      ->orWhere('code', 'GOPAYINAPP')
+                      ->orWhereRaw("UPPER(name) LIKE '%GOPAY%'");
+                })
+                ->first();
+            if ($gopay) {
+                return $gopay;
+            }
+        }
+
+        // Khusus BCA Virtual Account (Type 2)
+        if (in_array($upper, ['BCAATM', 'BCA_VA', 'BCAVA', 'BCA']) || ($type === 2 && $code === '014')) {
+            $bca = static::withoutGlobalScope('active')
+                ->where('type', 2)
+                ->where(function($q) {
+                    $q->where('code', 'BCAATM')
+                      ->orWhere('code', '014')
+                      ->orWhereRaw("UPPER(name) LIKE '%BCA%'");
+                })
+                ->first();
+            if ($bca) {
+                return $bca;
+            }
+        }
+
+        // Khusus QRIS (Type 4)
+        if (in_array($upper, ['QRISPLUS', 'QRIS']) || $type === 4) {
+            $qris = static::withoutGlobalScope('active')
+                ->where(function($q) {
+                    $q->where('code', 'QRISPLUS')
+                      ->orWhere('code', 'QRIS')
+                      ->orWhere('type', 4)
+                      ->orWhereRaw("UPPER(name) LIKE '%QRIS%'");
+                })
+                ->first();
+            if ($qris) {
+                return $qris;
+            }
+        }
 
         // 1. Direct match on code
         $found = static::withoutGlobalScope('active')->where('code', $code)->first();
@@ -288,7 +339,7 @@ class PaymentMethod extends Model
         }
 
         // 2. Direct match on case-insensitive code
-        $found = static::withoutGlobalScope('active')->whereRaw('UPPER(code) = ?', [strtoupper($code)])->first();
+        $found = static::withoutGlobalScope('active')->whereRaw('UPPER(code) = ?', [$upper])->first();
         if ($found) {
             return $found;
         }
