@@ -44,8 +44,10 @@
     }
     $total = $order?->total ?? 0;
     $status = $order?->status ?? 1;
-    $statusLabel = \App\Models\Frontend\Order::statusLabels()[$status] ?? 'Menunggu Pembayaran';
-    $statusBadge = $order?->getStatusBadgeClassAttribute() ?? 'bg-yellow-100 text-yellow-700';
+    $paymentStatus = (int)($order?->payment_status ?? 1);
+    $isPaid = ($paymentStatus === 2) || ($status >= 2 && $status !== \App\Models\Frontend\Order::STATUS_CANCELLED);
+    $statusLabel = $isPaid ? 'Sudah Dibayar (Lunas)' : (\App\Models\Frontend\Order::statusLabels()[$status] ?? 'Menunggu Pembayaran');
+    $statusBadge = $isPaid ? 'bg-emerald-100 text-emerald-800' : ($order?->getStatusBadgeClassAttribute() ?? 'bg-yellow-100 text-yellow-700');
     $items = $order?->items;
     if (empty($items) || count($items) === 0) {
         $items = \App\Models\Frontend\Order\OrderItem::where('order_id', $order?->id)->get();
@@ -249,8 +251,8 @@
                         </p>
                     </div>
 
-                    <!-- Payment Deadline Countdown Notice (If Unpaid) -->
-                    @if($status == 1)
+                    <!-- Payment Deadline Countdown Notice (If Unpaid) vs Lunas Notice -->
+                    @if(!$isPaid && $status == 1)
                         <div class="bg-gradient-to-r from-amber-50 via-amber-50/80 to-amber-50 border-y border-amber-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 no-print">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -264,6 +266,21 @@
                             <div class="self-end sm:self-center font-mono font-black text-lg sm:text-xl text-red-600 bg-white px-3 py-1.5 rounded-xl shadow-2xs border border-red-200 tracking-widest shrink-0" id="thankyou-countdown" data-remaining="{{ $remainingSeconds }}" data-created="{{ $paymentStartedAt->toIso8601String() }}">
                                 {{ $initialCountdownText }}
                             </div>
+                        </div>
+                    @elseif($isPaid)
+                        <div class="bg-gradient-to-r from-emerald-50 via-emerald-50/80 to-emerald-50 border-y border-emerald-200/80 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 no-print">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-circle-check text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-emerald-950 font-bold text-xs sm:text-sm">Status Pembayaran: LUNAS</p>
+                                    <p class="text-[11px] sm:text-xs text-emerald-700">Pembayaran transaksi pesanan ini telah berhasil kami terima dan terverifikasi.</p>
+                                </div>
+                            </div>
+                            <span class="self-end sm:self-center font-bold text-xs text-emerald-800 bg-white border border-emerald-300 px-3 py-1.5 rounded-xl shadow-2xs shrink-0 inline-flex items-center gap-1.5">
+                                <i class="fa-solid fa-check text-emerald-600"></i> Terverifikasi
+                            </span>
                         </div>
                     @endif
 
@@ -365,7 +382,33 @@
                         $banks = $pmModel && !empty($pmModel->bank_info) ? $pmModel->bank_info : [];
                     @endphp
 
-                    @if($isQris && ($qrCode || $qrString || $paymentUrl))
+                    @if($isPaid)
+                        <div class="p-6 sm:p-7 bg-emerald-50/50 border-b border-emerald-100">
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran Berhasil Diverifikasi</h4>
+                                        <p class="text-xs text-gray-500">Metode: {{ $paymentMethod }}</p>
+                                    </div>
+                                </div>
+                                <span class="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                                    Lunas
+                                </span>
+                            </div>
+                            <div class="bg-white rounded-2xl p-5 border border-emerald-100 shadow-2xs flex items-center justify-between">
+                                <div>
+                                    <span class="text-xs text-gray-500 font-semibold block">Total yang Telah Dibayar</span>
+                                    <span class="font-black text-brand-dark text-lg sm:text-xl">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                                </div>
+                                <span class="text-xs text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                                    <i class="fa-solid fa-check mr-1"></i> Terkonfirmasi
+                                </span>
+                            </div>
+                        </div>
+                    @elseif($isQris)
                         <div class="p-6 sm:p-7 bg-rose-50/50 border-b border-rose-100">
                             <div class="flex items-center justify-between gap-3 mb-4">
                                 <div class="flex items-center gap-2.5">
@@ -373,11 +416,11 @@
                                         <i class="fa-solid fa-qrcode"></i>
                                     </div>
                                     <div>
-                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran QRIS Interaktif (SNAP)</h4>
+                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran QRIS Interaktif</h4>
                                         <p class="text-xs text-gray-500">Scan QRIS menggunakan BCA, Mandiri, GoPay, OVO, ShopeePay, atau aplikasi banking apa saja</p>
                                     </div>
                                 </div>
-                                <span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full">QRIS SNAP</span>
+                                <span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full">QRIS Interaktif</span>
                             </div>
 
                             <div class="bg-white rounded-2xl p-5 border border-rose-100 shadow-2xs space-y-5">
@@ -385,17 +428,11 @@
                                     <div class="p-4 bg-white rounded-2xl border-2 border-dashed border-rose-300 shadow-md inline-block max-w-[260px] sm:max-w-[280px]">
                                         @if(!empty($qrCode))
                                             <img src="{{ str_starts_with($qrCode, 'http') || str_starts_with($qrCode, 'data:') ? $qrCode : 'data:image/png;base64,' . $qrCode }}" alt="QRIS QR Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
-                                        @elseif(!empty($qrString))
-                                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ urlencode($qrString) }}" alt="QRIS Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
-                                        @elseif(!empty($paymentUrl))
-                                            <div class="p-6 text-center space-y-3">
-                                                <i class="fa-solid fa-arrow-up-right-from-square text-3xl text-rose-600"></i>
-                                                <p class="text-xs text-gray-600">Klik tautan di bawah untuk membuka halaman QRIS pembayaran:</p>
-                                                <a href="{{ $paymentUrl }}" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-md">
-                                                    <span>Buka Halaman Pembayaran QRIS</span>
-                                                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
-                                                </a>
-                                            </div>
+                                        @else
+                                            @php
+                                                $qrisPayload = !empty($qrString) ? $qrString : (!empty($paymentUrl) ? $paymentUrl : 'ID.CO.QRIS.IMG.' . $orderId . '.' . round($total));
+                                            @endphp
+                                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ urlencode($qrisPayload) }}" alt="QRIS Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
                                         @endif
                                     </div>
                                     <p class="text-xs font-bold text-gray-700 mt-3 flex items-center gap-1.5">
@@ -702,22 +739,55 @@
                             $staticPromoDiscount = max(0, (float) $orderMeta['promo_discount'] - $priceProductSettingDiscount);
                         }
                         
-                        // Voucher Diskon Produk
+                        // Voucher Diskon Produk & Subsidi Ongkir
+                        $shippingSubsidy = 0.0;
+                        if (!empty($orderMeta['shipping_voucher_discount']) && (float)$orderMeta['shipping_voucher_discount'] > 0) {
+                            $shippingSubsidy = (float)$orderMeta['shipping_voucher_discount'];
+                        } elseif (!empty($order?->shipping_cost_subsidy) && (float)$order->shipping_cost_subsidy > 0) {
+                            $shippingSubsidy = (float)$order->shipping_cost_subsidy;
+                        } elseif (!empty($orderMeta['shipping_cost_subsidy']) && (float)$orderMeta['shipping_cost_subsidy'] > 0) {
+                            $shippingSubsidy = (float)$orderMeta['shipping_cost_subsidy'];
+                        } elseif (!empty($orderMeta['shipping_subsidy']) && (float)$orderMeta['shipping_subsidy'] > 0) {
+                            $shippingSubsidy = (float)$orderMeta['shipping_subsidy'];
+                        } elseif (!empty($orderMeta['shipping_discount']) && (float)$orderMeta['shipping_discount'] > 0) {
+                            $shippingSubsidy = (float)$orderMeta['shipping_discount'];
+                        }
+
+                        $shippingVoucherCode = null;
+                        if (!empty($orderMeta['applied_vouchers'])) {
+                            foreach ($orderMeta['applied_vouchers'] as $av) {
+                                if (!empty($av['is_shipping'])) {
+                                    $shippingVoucherCode = $av['code'] ?? ($av['voucher']['code'] ?? null);
+                                    if ($shippingSubsidy <= 0 && !empty($av['discount'])) {
+                                        $shippingSubsidy = (float) $av['discount'];
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        if (!$shippingVoucherCode && !empty($orderMeta['voucher_codes'])) {
+                            foreach ($orderMeta['voucher_codes'] as $vc) {
+                                if (str_contains(strtoupper($vc), 'ONGKIR') || str_contains(strtoupper($vc), 'SHIP') || str_contains(strtoupper($vc), 'FREE')) {
+                                    $shippingVoucherCode = $vc;
+                                    break;
+                                }
+                            }
+                        }
+
                         $productVoucherDiscount = (float) ($orderMeta['product_voucher_discount'] ?? 0);
-                        $shippingVoucherDiscount = (float) ($orderMeta['shipping_voucher_discount'] ?? ($order?->shipping_cost_subsidy ?? 0));
                         $voucherNominal = (float) ($order?->voucher_nominal ?? ($orderMeta['voucher_discount'] ?? 0));
                         
                         if ($productVoucherDiscount <= 0 && $voucherNominal > 0) {
-                            $productVoucherDiscount = max(0, $voucherNominal - $shippingVoucherDiscount);
+                            $productVoucherDiscount = max(0, $voucherNominal - $shippingSubsidy);
                         }
                         
                         $productVoucherCode = null;
                         if (!empty($orderMeta['applied_vouchers'])) {
                             $appliedProductVouchers = collect($orderMeta['applied_vouchers'])->filter(fn($av) => empty($av['is_shipping']));
-                            $productVoucherCode = $appliedProductVouchers->pluck('code')->first();
+                            $productVoucherCode = $appliedProductVouchers->pluck('code')->first() ?? $appliedProductVouchers->pluck('voucher.code')->first();
                         }
                         if (empty($productVoucherCode) && !empty($orderMeta['voucher_codes'])) {
-                            $productVoucherCode = collect($orderMeta['voucher_codes'])->filter(fn($c) => !str_contains(strtoupper($c), 'ONGKIR'))->first();
+                            $productVoucherCode = collect($orderMeta['voucher_codes'])->filter(fn($c) => !str_contains(strtoupper($c), 'ONGKIR') && !str_contains(strtoupper($c), 'SHIP'))->first();
                         }
                         if (empty($productVoucherCode) && !empty($orderMeta['voucher_code'])) {
                             $productVoucherCode = $orderMeta['voucher_code'];
@@ -775,14 +845,14 @@
                             <span class="font-semibold text-gray-800 shrink-0 whitespace-nowrap text-right">Rp {{ number_format($shippingCost, 0, ',', '.') }}</span>
                         </div>
 
-                        {{-- 6. Voucher Gratis Ongkir --}}
-                        @if($shippingVoucherDiscount > 0)
+                        {{-- 6. Subsidi Ongkir --}}
+                        @if($shippingSubsidy > 0)
                             <div class="flex justify-between items-center text-emerald-700 bg-emerald-50/70 px-3 py-2 rounded-xl border border-emerald-200/60 gap-2">
                                 <span class="flex items-center gap-1.5 min-w-0 font-medium truncate">
                                     <i class="fa-solid fa-truck-fast text-xs text-emerald-600 shrink-0"></i>
-                                    <span class="truncate">Voucher Gratis Ongkir</span>
+                                    <span class="truncate">Subsidi Ongkir{{ $shippingVoucherCode ? ' (' . $shippingVoucherCode . ')' : '' }}</span>
                                 </span>
-                                <span class="font-bold shrink-0 whitespace-nowrap text-right">- Rp {{ number_format($shippingVoucherDiscount, 0, ',', '.') }}</span>
+                                <span class="font-bold shrink-0 whitespace-nowrap text-right">- Rp {{ number_format($shippingSubsidy, 0, ',', '.') }}</span>
                             </div>
                         @endif
 
@@ -875,6 +945,13 @@
                         <div class="flex justify-between items-center text-gray-600 gap-2">
                             <span class="min-w-0">Metode Pembayaran</span>
                             <span class="font-bold text-brand-dark text-right shrink-0">{{ $paymentMethod }}</span>
+                        </div>
+
+                        <div class="flex justify-between items-center text-gray-600 gap-2">
+                            <span class="min-w-0">Status Pembayaran</span>
+                            <span class="font-bold text-xs {{ $isPaid ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-amber-700 bg-amber-50 border border-amber-200' }} px-2.5 py-0.5 rounded-full text-right shrink-0">
+                                {{ $isPaid ? 'Lunas' : 'Menunggu Pembayaran' }}
+                            </span>
                         </div>
 
                         <div class="pt-3.5 border-t border-dashed border-gray-200 flex justify-between items-baseline gap-2">

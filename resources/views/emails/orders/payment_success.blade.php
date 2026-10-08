@@ -344,7 +344,12 @@
             <!-- Footer & Official Brand Partners -->
             <div class="footer">
                 @php
-                    $officialBrandLogos = \App\Models\Frontend\ProductsCatalog\Brand::whereNotNull('logo')->where('logo', '!=', '')->get();
+                    $officialBrandLogos = \App\Models\Frontend\ProductsCatalog\Brand::where('status', true)
+                        ->where('deleted', false)
+                        ->whereNotNull('logo')
+                        ->where('logo', '!=', '')
+                        ->orderBy('sort_order', 'asc')
+                        ->get();
                 @endphp
                 @if($officialBrandLogos->isNotEmpty())
                 <div style="margin-bottom: 20px; padding: 14px 10px; background-color: #ffffff; border: 1px solid #f2ebd9; border-radius: 8px; text-align: center;">
