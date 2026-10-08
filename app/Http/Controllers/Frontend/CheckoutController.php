@@ -1961,8 +1961,26 @@ class CheckoutController extends Controller
 
         $thankYouUrl = route('thankyou', ['order_id' => $order->id]);
 
-        // If Espay payment method (Embed Kit integration)
-        if ($isEspay) {
+        // Determine whether this payment method requires interactive Snap iframe
+        // As requested: Only QRIS, Debit Card, and Credit Card use Snap iframe in-frame.
+        // Virtual Accounts, Bank Transfers, and E-Wallets redirect directly to Thank You page without double confirmation!
+        $isSnapEligible = false;
+        $categoryTypeInt = (int)($categoryType ?? $paymentMethodModel?->type ?? 0);
+        $upperMethod = strtoupper((string)$paymentMethod);
+
+        if (in_array($categoryTypeInt, [4, 5, 6], true)) {
+            $isSnapEligible = true;
+        } elseif (
+            str_contains($upperMethod, 'QRIS') ||
+            str_contains($upperMethod, 'DEBIT') ||
+            str_contains($upperMethod, 'CREDIT') ||
+            str_contains($upperMethod, 'CARD')
+        ) {
+            $isSnapEligible = true;
+        }
+
+        // If Espay payment method and eligible for Snap iframe
+        if ($isEspay && $isSnapEligible) {
             $apiKey = config('espay.api_key');
             $commCode = config('espay.merchant_key');
             $paymentId = $order->order_number;
@@ -1974,7 +1992,7 @@ class CheckoutController extends Controller
                 'open_iframe' => true,
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
-                'redirect_url' => $order->meta['payment_url'] ?? $thankYouUrl,
+                'redirect_url' => $thankYouUrl,
                 'espay_kit' => [
                     'key' => $apiKey,
                     'paymentId' => $paymentId,
@@ -1990,6 +2008,7 @@ class CheckoutController extends Controller
 
         return response()->json([
             'success' => true,
+            'open_iframe' => false,
             'redirect_url' => $thankYouUrl
         ]);
     }

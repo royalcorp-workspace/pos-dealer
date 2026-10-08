@@ -339,19 +339,25 @@
 
             <!-- Footer & Official Brand Partners -->
             <div class="footer">
-                <div style="margin-bottom: 20px; padding: 14px 10px; background-color: #ffffff; border: 1px solid #f2ebd9; border-radius: 8px;">
-                    <p style="font-size: 11px; font-weight: 700; color: #ad8a58; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 8px;">
+                @php
+                    $officialBrandLogos = \App\Models\Frontend\ProductsCatalog\Brand::whereNotNull('logo')->where('logo', '!=', '')->get();
+                @endphp
+                @if($officialBrandLogos->isNotEmpty())
+                <div style="margin-bottom: 20px; padding: 14px 10px; background-color: #ffffff; border: 1px solid #f2ebd9; border-radius: 8px; text-align: center;">
+                    <p style="font-size: 11px; font-weight: 700; color: #ad8a58; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 10px;">
                         ★ Official Brand Partners ★
                     </p>
-                    <div>
-                        <span class="brand-pill">LADY AMERICANA</span>
-                        <span class="brand-pill">ELITE</span>
-                        <span class="brand-pill">ROYAL FOAM</span>
-                        <span class="brand-pill">SERENITY</span>
-                        <span class="brand-pill">MORO</span>
-                        <span class="brand-pill">TOTE</span>
-                    </div>
+                    <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto;">
+                        <tr>
+                            @foreach($officialBrandLogos as $ob)
+                            <td style="padding: 4px 8px; vertical-align: middle; text-align: center;">
+                                <img src="{{ cms_asset($ob->logo) }}" alt="{{ $ob->name }}" height="26" style="max-height: 26px; max-width: 65px; height: auto; width: auto; object-fit: contain; display: inline-block;" />
+                            </td>
+                            @endforeach
+                        </tr>
+                    </table>
                 </div>
+                @endif
 
                 <p style="font-size: 12px; line-height: 1.6; color: #71717a; margin: 0 0 8px;">
                     <strong>IMG (International Mattress Gallery)</strong><br>
