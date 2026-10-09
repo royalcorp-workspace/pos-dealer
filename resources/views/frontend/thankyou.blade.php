@@ -370,14 +370,22 @@
                             || str_contains(strtolower((string)$paymentMethod), 'qris')
                             || !empty($order->meta['qr_code']) || !empty($order->meta['qr_string']);
 
-                        $vaNumber = $isQris ? null : ($order->meta['va_number'] ?? null);
+                        $isDebitCard = ($pmModel && ((int)$pmModel->type === 6 || $pmModel->isTypeDebitCard())) 
+                            || str_contains(strtolower((string)$rawPmCode), 'debit') 
+                            || str_contains(strtolower((string)$paymentMethod), 'debit');
+
+                        $isCreditCard = ($pmModel && ((int)$pmModel->type === 5 || $pmModel->isTypeCreditCard())) 
+                            || str_contains(strtolower((string)$rawPmCode), 'credit') 
+                            || str_contains(strtolower((string)$paymentMethod), 'credit');
+
+                        $vaNumber = ($isQris || $isDebitCard || $isCreditCard) ? null : ($order->meta['va_number'] ?? null);
                         $trxId = $order->trx_id ?? ($order->meta['trx_id'] ?? ($order->meta['reference'] ?? ($order->meta['espay_reference'] ?? null)));
                         $espayRef = $order->meta['espay_reference'] ?? $trxId;
                         $qrCode = $order->meta['qr_code'] ?? null;
                         $qrString = $order->meta['qr_string'] ?? null;
                         $paymentUrl = $order->meta['payment_url'] ?? null;
                         
-                        $isBankTransfer = !$isQris && (($pmModel && (
+                        $isBankTransfer = !$isQris && !$isDebitCard && !$isCreditCard && (($pmModel && (
                             $pmModel->isTypeBankTransfer() 
                             || (int)$pmModel->type === 1 
                             || strtolower((string)$pmModel->provider) !== 'espay'
@@ -486,6 +494,132 @@
                                     <p>3. Arahkan kamera ke QR Code di atas atau upload tangkapan layar kode QR.</p>
                                     <p>4. Periksa kecocokan nama merchant dan total tagihan <strong>Rp {{ number_format($total, 0, ',', '.') }}</strong>, lalu konfirmasi pembayaran.</p>
                                     <p>5. Pembayaran akan terverifikasi secara otomatis oleh sistem kami.</p>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($isDebitCard)
+                        <div class="p-6 sm:p-7 bg-indigo-50/50 border-b border-indigo-100">
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm">
+                                        <i class="fa-solid fa-credit-card"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran Kartu Debit / Direct Debit</h4>
+                                        <p class="text-xs text-gray-500">Pembayaran debit online otomatis dari rekening Anda</p>
+                                    </div>
+                                </div>
+                                <span class="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">Direct Debit</span>
+                            </div>
+
+                            <div class="bg-white rounded-2xl p-5 border border-indigo-100 shadow-2xs space-y-4">
+                                @if(!empty($trxId))
+                                    <div class="flex items-center justify-between gap-2 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                                        <div>
+                                            <span class="text-[11px] text-gray-500 font-semibold block">ID Transaksi (TRX ID):</span>
+                                            <span class="font-mono font-bold text-indigo-900 text-xs sm:text-sm tracking-wider select-all" id="debit-trx-id">{{ $trxId }}</span>
+                                        </div>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ $trxId }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'TRX ID berhasil disalin!' } }));" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-2xs shrink-0 cursor-pointer" title="Salin TRX ID">
+                                            <i class="fa-regular fa-copy text-xs"></i> <span>Salin TRX ID</span>
+                                        </button>
+                                    </div>
+                                @endif
+
+                                <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                                    <div>
+                                        <span class="text-xs text-gray-500 font-semibold block">Total yang Harus Dibayar:</span>
+                                        <span class="text-[11px] text-gray-400">Tepat hingga nominal akhir</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-brand-dark text-lg sm:text-xl">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ round($total) }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'Nominal transfer berhasil disalin!' } }));" class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs transition-colors" title="Salin Nominal">
+                                            <i class="fa-regular fa-copy text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if(!empty($paymentUrl))
+                                    <div class="pt-3 border-t border-gray-100 text-center">
+                                        <a href="{{ $paymentUrl }}" target="_blank" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm">
+                                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                            <span>Buka Halaman Otorisasi Debit</span>
+                                        </a>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="mt-4 pt-4 border-t border-indigo-100 no-print">
+                                <h5 class="font-bold text-brand-dark text-xs uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-circle-info text-indigo-500 text-xs"></i> Petunjuk Pembayaran Direct Debit:
+                                </h5>
+                                <div class="bg-white rounded-xl border border-indigo-100 p-3.5 text-xs text-gray-600 space-y-1.5">
+                                    <p>1. Pastikan fitur Direct Debit / E-Commerce rekening Anda sudah aktif.</p>
+                                    <p>2. Periksa detail tagihan sejumlah <strong>Rp {{ number_format($total, 0, ',', '.') }}</strong>.</p>
+                                    <p>3. Masukkan kode otorisasi atau OTP yang dikirimkan oleh bank melalui SMS ke nomor ponsel Anda.</p>
+                                    <p>4. Transaksi akan otomatis terverifikasi begitu otorisasi debit disetujui bank.</p>
+                                </div>
+                            </div>
+                        </div>
+                    @elseif($isCreditCard)
+                        <div class="p-6 sm:p-7 bg-purple-50/50 border-b border-purple-100">
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-sm">
+                                        <i class="fa-solid fa-credit-card"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran Kartu Kredit (3D Secure)</h4>
+                                        <p class="text-xs text-gray-500">Visa / MasterCard / JCB dengan proteksi 3D Secure</p>
+                                    </div>
+                                </div>
+                                <span class="text-[11px] font-bold text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full">3D Secure</span>
+                            </div>
+
+                            <div class="bg-white rounded-2xl p-5 border border-purple-100 shadow-2xs space-y-4">
+                                @if(!empty($trxId))
+                                    <div class="flex items-center justify-between gap-2 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
+                                        <div>
+                                            <span class="text-[11px] text-gray-500 font-semibold block">ID Transaksi (TRX ID):</span>
+                                            <span class="font-mono font-bold text-purple-900 text-xs sm:text-sm tracking-wider select-all" id="cc-trx-id">{{ $trxId }}</span>
+                                        </div>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ $trxId }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'TRX ID berhasil disalin!' } }));" class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-2xs shrink-0 cursor-pointer" title="Salin TRX ID">
+                                            <i class="fa-regular fa-copy text-xs"></i> <span>Salin TRX ID</span>
+                                        </button>
+                                    </div>
+                                @endif
+
+                                <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                                    <div>
+                                        <span class="text-xs text-gray-500 font-semibold block">Total yang Harus Dibayar:</span>
+                                        <span class="text-[11px] text-gray-400">Tepat hingga nominal akhir</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-brand-dark text-lg sm:text-xl">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ round($total) }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'Nominal transfer berhasil disalin!' } }));" class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs transition-colors" title="Salin Nominal">
+                                            <i class="fa-regular fa-copy text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if(!empty($paymentUrl))
+                                    <div class="pt-3 border-t border-gray-100 text-center">
+                                        <a href="{{ $paymentUrl }}" target="_blank" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm">
+                                            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                                            <span>Buka Halaman Pembayaran Kartu</span>
+                                        </a>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div class="mt-4 pt-4 border-t border-purple-100 no-print">
+                                <h5 class="font-bold text-brand-dark text-xs uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-circle-info text-purple-500 text-xs"></i> Petunjuk Pembayaran Kartu Kredit:
+                                </h5>
+                                <div class="bg-white rounded-xl border border-purple-100 p-3.5 text-xs text-gray-600 space-y-1.5">
+                                    <p>1. Sistem akan mengarahkan ke halaman pembayaran aman 3D Secure Espay.</p>
+                                    <p>2. Masukkan 16 digit nomor kartu kredit, masa berlaku (MM/YY), dan kode CVV.</p>
+                                    <p>3. Masukkan kode OTP verifikasi yang dikirimkan oleh bank ke ponsel Anda.</p>
+                                    <p>4. Transaksi akan terkonfirmasi secara instan setelah otorisasi berhasil.</p>
                                 </div>
                             </div>
                         </div>
