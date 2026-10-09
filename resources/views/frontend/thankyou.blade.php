@@ -362,23 +362,27 @@
 
                     <!-- Payment Details (QRIS, VA, or Manual Transfer) -->
                     @php
-                        $vaNumber = $order->meta['va_number'] ?? null;
-                        $espayRef = $order->meta['espay_reference'] ?? null;
+                        $pmModel = \App\Models\PaymentMethod::findByCodeOrBank($rawPmCode) 
+                            ?? \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
+                        
+                        $isQris = ($pmModel && ((int)$pmModel->type === 4 || $pmModel->isTypeQris())) 
+                            || str_contains(strtolower((string)$rawPmCode), 'qris') 
+                            || str_contains(strtolower((string)$paymentMethod), 'qris')
+                            || !empty($order->meta['qr_code']) || !empty($order->meta['qr_string']);
+
+                        $vaNumber = $isQris ? null : ($order->meta['va_number'] ?? null);
+                        $trxId = $order->trx_id ?? ($order->meta['trx_id'] ?? ($order->meta['reference'] ?? ($order->meta['espay_reference'] ?? null)));
+                        $espayRef = $order->meta['espay_reference'] ?? $trxId;
                         $qrCode = $order->meta['qr_code'] ?? null;
                         $qrString = $order->meta['qr_string'] ?? null;
                         $paymentUrl = $order->meta['payment_url'] ?? null;
                         
-                        $pmModel = \App\Models\PaymentMethod::findByCodeOrBank($rawPmCode) 
-                            ?? \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
-                        $isBankTransfer = ($pmModel && (
+                        $isBankTransfer = !$isQris && (($pmModel && (
                             $pmModel->isTypeBankTransfer() 
                             || (int)$pmModel->type === 1 
                             || strtolower((string)$pmModel->provider) !== 'espay'
-                        )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true);
-                        $isQris = ($pmModel && ($pmModel->isTypeQris() || (int)$pmModel->type === 4)) 
-                            || str_contains(strtolower((string)$rawPmCode), 'qris') 
-                            || str_contains(strtolower((string)$paymentMethod), 'qris')
-                            || !empty($qrCode) || !empty($qrString);
+                        )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true));
+
                         $banks = $pmModel && !empty($pmModel->bank_info) ? $pmModel->bank_info : [];
                     @endphp
 
@@ -445,6 +449,18 @@
                                         <i class="fa-solid fa-camera text-rose-600"></i> Buka aplikasi e-wallet atau m-Banking Anda & Scan kode di atas
                                     </p>
                                 </div>
+
+                                @if(!empty($trxId))
+                                    <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 p-3 bg-rose-50/50 rounded-xl border border-rose-100">
+                                        <div>
+                                            <span class="text-[11px] text-gray-500 font-semibold block">ID Transaksi (TRX ID):</span>
+                                            <span class="font-mono font-bold text-rose-900 text-xs sm:text-sm tracking-wider select-all" id="qris-trx-id">{{ $trxId }}</span>
+                                        </div>
+                                        <button type="button" onclick="navigator.clipboard.writeText('{{ $trxId }}'); window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'success', message: 'TRX ID berhasil disalin!' } }));" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-2xs shrink-0 cursor-pointer" title="Salin TRX ID">
+                                            <i class="fa-regular fa-copy text-xs"></i> <span>Salin TRX ID</span>
+                                        </button>
+                                    </div>
+                                @endif
 
                                 <div class="flex items-center justify-between pt-3 border-t border-gray-100">
                                     <div>

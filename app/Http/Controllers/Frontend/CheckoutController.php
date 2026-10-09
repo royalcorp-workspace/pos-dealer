@@ -1844,23 +1844,42 @@ class CheckoutController extends Controller
             );
 
             // Generator native IMG backend: Berjalan mandiri tanpa membutuhkan kredensial Espay di .env
-            $generateNativePayment = function() use ($order, $amount, $charge, $paymentMethod, $resolvedBankCode) {
+            $generateNativePayment = function() use ($order, $amount, $charge, $paymentMethod, $resolvedBankCode, $categoryType, $paymentMethodModel) {
                 $cleanOrderNum = preg_replace('/[^\d]/', '', $order->order_number);
                 if (strlen($cleanOrderNum) < 8) {
                     $cleanOrderNum = date('Ymd') . rand(1000, 9999);
                 }
-                $bankPrefix = match($resolvedBankCode) {
-                    '014' => '8808',  // BCA
-                    '008' => '89508', // Mandiri
-                    '002' => '12345', // BRI
-                    '009' => '988',   // BNI
-                    '022' => '5919',  // CIMB Niaga
-                    '011' => '8922',  // Danamon
-                    '013' => '8412',  // Permata
-                    default => '8808'
-                };
-                $generatedVa = $bankPrefix . substr($cleanOrderNum, -8);
-                $qrisString = 'ID.CO.QRIS.IMG.' . $order->order_number . '.' . round((float)$order->total);
+
+                $isTypeQris = ($categoryType === 4 || $paymentMethodModel?->type === 4);
+                $isTypeCreditCard = ($categoryType === 5 || $paymentMethodModel?->type === 5);
+                $isTypeDebitCard = ($categoryType === 6 || $paymentMethodModel?->type === 6);
+
+                $generatedVa = null;
+                $qrisString = null;
+                $qrCode = null;
+
+                if ($isTypeQris) {
+                    $trxId = 'TRX-QRIS-' . $order->order_number . '-' . rand(1000, 9999);
+                    $qrisString = 'ID.CO.QRIS.IMG.' . $order->order_number . '.' . round((float)$order->total);
+                    $qrCode = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($qrisString);
+                } elseif ($isTypeCreditCard) {
+                    $trxId = 'TRX-CC-' . $order->order_number . '-' . rand(1000, 9999);
+                } elseif ($isTypeDebitCard) {
+                    $trxId = 'TRX-DC-' . $order->order_number . '-' . rand(1000, 9999);
+                } else {
+                    $bankPrefix = match($resolvedBankCode) {
+                        '014' => '8808',  // BCA
+                        '008' => '89508', // Mandiri
+                        '002' => '12345', // BRI
+                        '009' => '988',   // BNI
+                        '022' => '5919',  // CIMB Niaga
+                        '011' => '8922',  // Danamon
+                        '013' => '8412',  // Permata
+                        default => '8808'
+                    };
+                    $generatedVa = $bankPrefix . substr($cleanOrderNum, -8);
+                    $trxId = 'TRX-VA-' . $generatedVa . '-' . rand(1000, 9999);
+                }
 
                 $settlement = \App\Models\Settlement::updateOrCreate(
                     ['reference_id' => $order->order_number],
@@ -1874,10 +1893,23 @@ class CheckoutController extends Controller
                 );
 
                 $updatedMeta = array_merge($order->meta ?? [], [
-                    'espay_reference' => 'REF-' . $order->order_number,
-                    'va_number' => $generatedVa,
-                    'qr_string' => $qrisString,
+                    'trx_id' => $trxId,
+                    'reference' => $trxId,
+                    'espay_reference' => $trxId,
                 ]);
+
+                if ($generatedVa) {
+                    $updatedMeta['va_number'] = $generatedVa;
+                } else {
+                    unset($updatedMeta['va_number']);
+                }
+
+                if ($qrisString) {
+                    $updatedMeta['qr_string'] = $qrisString;
+                }
+                if ($qrCode) {
+                    $updatedMeta['qr_code'] = $qrCode;
+                }
 
                 $order->update([
                     'settlement_id' => $settlement->id,
@@ -1938,10 +1970,20 @@ class CheckoutController extends Controller
                             ]
                         );
 
+                        $isTypeQris = ($categoryType === 4 || $paymentMethodModel?->type === 4);
+                        $trxId = $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ('TRX-QRIS-' . $order->order_number . '-' . rand(1000, 9999)));
+
                         $updatedMeta = array_merge($order->meta ?? [], [
+                            'trx_id' => $trxId,
+                            'reference' => $trxId,
                             'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
-                            'va_number' => $paymentData['va_number'] ?? '',
                         ]);
+
+                        if ($isTypeQris) {
+                            unset($updatedMeta['va_number']);
+                        } elseif (!empty($paymentData['va_number'])) {
+                            $updatedMeta['va_number'] = $paymentData['va_number'];
+                        }
 
                         if (!empty($paymentData['qr_code'])) {
                             $updatedMeta['qr_code'] = $paymentData['qr_code'];
