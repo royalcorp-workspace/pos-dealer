@@ -1971,12 +1971,20 @@ class CheckoutController extends Controller
                         );
 
                         $isTypeQris = ($categoryType === 4 || $paymentMethodModel?->type === 4);
-                        $trxId = $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ('TRX-QRIS-' . $order->order_number . '-' . rand(1000, 9999)));
+                        
+                        // Prioritaskan trx_id atau reference yang didapatkan langsung dari respon Espay
+                        $trxId = $paymentData['trx_id'] 
+                            ?? ($paymentData['referenceNo'] 
+                            ?? ($paymentData['additionalInfo']['referenceNo'] ?? null))
+                            ?? ($paymentData['reference'] 
+                            ?? ('TRX-QRIS-' . $order->order_number . '-' . rand(1000, 9999)));
+
+                        $espayRef = $paymentData['reference'] ?? ($paymentData['trx_id'] ?? $trxId);
 
                         $updatedMeta = array_merge($order->meta ?? [], [
                             'trx_id' => $trxId,
                             'reference' => $trxId,
-                            'espay_reference' => $paymentData['reference'] ?? ($paymentData['trx_id'] ?? ''),
+                            'espay_reference' => $espayRef,
                         ]);
 
                         if ($isTypeQris) {
