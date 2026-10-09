@@ -1925,7 +1925,10 @@ class CheckoutController extends Controller
                 // =========================================================================
                 $snapQrUrl = preg_replace('#/rest/.*$#', '', $espayBaseUrl) . '/api/v1.0/qr/qr-mpm-generate';
                 $partnerReferenceNo = str_replace(['-', '.'], '', $order->order_number);
-                $qrisProductCode = $paymentMethodModel?->bank_info['product_code'] ?? 'SALDOMUQR';
+                $qrisProductCode = 'SALDOMUQR';
+                if (!empty($paymentMethodModel?->bank_info['product_code']) && !in_array(strtoupper((string)$paymentMethodModel->bank_info['product_code']), ['QRISPLUS', 'QRIS'])) {
+                    $qrisProductCode = $paymentMethodModel->bank_info['product_code'];
+                }
                 $formattedAmount = number_format((float)$order->total, 2, '.', '');
                 $validityPeriod = now()->addDay()->toIso8601String();
 
@@ -2013,7 +2016,6 @@ class CheckoutController extends Controller
                             }
                         }
 
-                        $trxId = $trxId ?: ('TRX-QRIS-' . $order->order_number . '-' . rand(1000, 9999));
                         $qrContent = $paymentData['qrContent'] ?? ($paymentData['qr_string'] ?? null);
                         $qrImage = $paymentData['qrImage'] ?? null;
                         $qrUrl = $paymentData['qrUrl'] ?? null;
@@ -2037,12 +2039,19 @@ class CheckoutController extends Controller
 
                         \Illuminate\Support\Facades\Log::channel('espay')->info("Espay SNAP QRIS MPM Success\nOrder ID: {$order->order_number}\nTRX ID: {$trxId}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
                     } else {
-                        \Illuminate\Support\Facades\Log::channel('espay')->warning("Espay SNAP QRIS MPM unfulfilled, falling back to IMG native payment. Order ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
-                        $generateNativePayment();
+                        \Illuminate\Support\Facades\Log::channel('espay')->error("Espay SNAP QRIS MPM Failed\nOrder ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
+                        $errMsg = $paymentData['responseMessage'] ?? ($paymentData['error_message'] ?? 'Layanan QRIS tidak dapat diakses saat ini.');
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Gagal memproses QRIS Espay: ' . $errMsg
+                        ], 400);
                     }
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::channel('espay')->warning("Espay SNAP QRIS Exception ({$e->getMessage()}), falling back to IMG native payment for Order {$order->order_number}");
-                    $generateNativePayment();
+                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay SNAP QRIS Exception ({$e->getMessage()}) for Order {$order->order_number}");
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Terjadi kendala saat menghubungi gateway QRIS: ' . $e->getMessage()
+                    ], 500);
                 }
             } elseif ($isTypeDebitCard) {
                 // =========================================================================
@@ -2146,7 +2155,6 @@ class CheckoutController extends Controller
                             ?? ($paymentData['referenceNo'] 
                             ?? ($paymentData['trx_id'] ?? null));
 
-                        $trxId = $trxId ?: ('TRX-DC-' . $order->order_number . '-' . rand(1000, 9999));
                         $paymentUrl = $paymentData['webRedirectUrl'] 
                             ?? ($paymentData['payment_url'] 
                             ?? ($paymentData['redirect_url'] ?? null));
@@ -2169,12 +2177,19 @@ class CheckoutController extends Controller
 
                         \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Direct Debit Success\nOrder ID: {$order->order_number}\nTRX ID: {$trxId}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
                     } else {
-                        \Illuminate\Support\Facades\Log::channel('espay')->warning("Espay Direct Debit unfulfilled, falling back to IMG native payment. Order ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
-                        $generateNativePayment();
+                        \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Direct Debit Failed\nOrder ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
+                        $errMsg = $paymentData['responseMessage'] ?? ($paymentData['error_message'] ?? 'Layanan Direct Debit tidak dapat diakses saat ini.');
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Gagal memproses Direct Debit Espay: ' . $errMsg
+                        ], 400);
                     }
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::channel('espay')->warning("Espay Direct Debit Exception ({$e->getMessage()}), falling back to IMG native payment for Order {$order->order_number}");
-                    $generateNativePayment();
+                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Direct Debit Exception ({$e->getMessage()}) for Order {$order->order_number}");
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Terjadi kendala saat menghubungi gateway Direct Debit: ' . $e->getMessage()
+                    ], 500);
                 }
             } else {
                 // =========================================================================
