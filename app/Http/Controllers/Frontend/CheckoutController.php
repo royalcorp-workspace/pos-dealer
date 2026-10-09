@@ -1788,6 +1788,11 @@ class CheckoutController extends Controller
             ], 500);
         }
 
+        $paymentType = (int) ($paymentMethodModel?->type ?? $categoryType ?? 0);
+        $isTypeQris = ($paymentType === 4);
+        $isTypeCreditCard = ($paymentType === 5);
+        $isTypeDebitCard = ($paymentType === 6);
+
         $isEspay = $paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay';
         if ($isEspay) {
             $amount = number_format((float)($order->total), 2, '.', '');
@@ -1826,15 +1831,9 @@ class CheckoutController extends Controller
             } elseif (in_array($upperMethod, ['BCAATM', 'BCA']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['014', 'BCAATM', 'BCA']))) {
                 $resolvedProductCode = 'BCAATM';
                 $resolvedBankCode = '014';
-            } elseif (in_array($upperMethod, ['QRIS', 'QRISPLUS']) || ($categoryType === 4 || $paymentMethodModel?->type === 4)) {
-                $resolvedProductCode = 'QRISPLUS';
-                $resolvedBankCode = '008';
             } elseif (in_array($upperMethod, ['OVO']) || (($categoryType === 3 || $paymentMethodModel?->type === 3) && in_array($paymentMethod, ['503', 'OVO']))) {
                 $resolvedProductCode = 'OVO';
                 $resolvedBankCode = '503';
-            } elseif (in_array($upperMethod, ['CREDITCARD', 'CREDIT']) || ($categoryType === 5 || $paymentMethodModel?->type === 5)) {
-                $resolvedProductCode = 'CREDITCARD';
-                $resolvedBankCode = '008';
             }
 
             // Espay SendInvoice expects bank clearing code (e.g. 014, 008, 002) in 'bank_code' parameter
@@ -1845,15 +1844,11 @@ class CheckoutController extends Controller
             );
 
             // Generator native IMG backend: Berjalan mandiri tanpa membutuhkan kredensial Espay di .env
-            $generateNativePayment = function() use ($order, $amount, $charge, $paymentMethod, $resolvedBankCode, $categoryType, $paymentMethodModel) {
+            $generateNativePayment = function() use ($order, $amount, $charge, $paymentMethod, $resolvedBankCode, $categoryType, $paymentMethodModel, $isTypeQris, $isTypeCreditCard, $isTypeDebitCard) {
                 $cleanOrderNum = preg_replace('/[^\d]/', '', $order->order_number);
                 if (strlen($cleanOrderNum) < 8) {
                     $cleanOrderNum = date('Ymd') . rand(1000, 9999);
                 }
-
-                $isTypeQris = ($categoryType === 4 || $paymentMethodModel?->type === 4);
-                $isTypeCreditCard = ($categoryType === 5 || $paymentMethodModel?->type === 5);
-                $isTypeDebitCard = ($categoryType === 6 || $paymentMethodModel?->type === 6);
 
                 $generatedVa = null;
                 $qrisString = null;
@@ -1919,8 +1914,6 @@ class CheckoutController extends Controller
 
                 \Illuminate\Support\Facades\Log::channel('espay')->info("IMG Backend Native Payment generated successfully without .env Espay credentials for Order #{$order->order_number}");
             };
-
-            $isTypeQris = ($categoryType === 4 || $paymentMethodModel?->type === 4 || in_array($upperMethod, ['QRIS', 'QRISPLUS']));
 
             // Jika kredensial Espay tidak diset di .env, gunakan integrasi native IMG backend secara mandiri
             if (empty($signatureKey) || empty($commCode)) {
@@ -2233,8 +2226,6 @@ class CheckoutController extends Controller
                                 'notes' => "Payment via {$paymentMethod}"
                             ]
                         );
-
-                        $isTypeCreditCard = ($categoryType === 5 || $paymentMethodModel?->type === 5 || in_array($upperMethod, ['CREDITCARD', 'CREDIT']));
 
                         $trxId = $paymentData['trx_id'] 
                             ?? ($paymentData['referenceNo'] 
