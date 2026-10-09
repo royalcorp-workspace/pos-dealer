@@ -1792,6 +1792,7 @@ class CheckoutController extends Controller
         if ($isEspay) {
             $amount = number_format((float)($order->total), 2, '.', '');
             $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
+            $espayBaseUrl = $baseUrl;
             $espayUrl = str_replace('/rest/merchant', '/rest/merchantpg', $baseUrl) . '/sendinvoice';
 
             // Check credentials from .env config or database payment_method bank_info
