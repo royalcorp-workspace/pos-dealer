@@ -179,8 +179,8 @@ class Voucher extends Model
                                 ->orWhereRaw('orders.order_number = voucher_usages.order_id');
                          });
                   })
-                  ->orWhereRaw("meta->>'voucher_code' = ?", [$this->code])
-                  ->orWhereRaw("meta->'voucher_codes' ?? ?", [$this->code]);
+                  ->orWhereRaw("UPPER(COALESCE(meta->>'voucher_code', '')) LIKE ?", ['%' . strtoupper($this->code) . '%'])
+                  ->orWhereRaw("UPPER(COALESCE(CAST(meta->'voucher_codes' AS TEXT), '')) LIKE ?", ['%' . strtoupper($this->code) . '%']);
             })
             ->exists();
     }
