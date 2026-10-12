@@ -170,6 +170,14 @@ window.processPayment = function () {
                                 loader.classList.add('hidden');
                             }, 300);
                         }
+                        try {
+                            var currentIframeUrl = iframe.contentWindow.location.href;
+                            if (currentIframeUrl && (currentIframeUrl.includes('/thankyou') || currentIframeUrl.includes('/thank-you'))) {
+                                window.location.href = currentIframeUrl;
+                            }
+                        } catch (e) {
+                            // Cross-origin restriction while still on Espay host
+                        }
                     };
 
                     iframe.src = iframeUrl;

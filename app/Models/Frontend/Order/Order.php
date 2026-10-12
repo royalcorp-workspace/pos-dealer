@@ -141,8 +141,12 @@ class Order extends Model
         });
 
         static::updating(function ($model) {
-            $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
-            $model->editor = $username;
+            if ($model->isDirty('payment_status') && !$model->isDirty('editor')) {
+                $model->editor = 'inquiry payment';
+            } elseif (!$model->isDirty('editor')) {
+                $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
+                $model->editor = $username;
+            }
             $model->updated_at = now();
 
             if ((int) $model->jde_push_status === 2 && empty($model->jde_push_date)) {

@@ -113,8 +113,21 @@ class SnapBiController extends Controller
         }
 
         if ($order->payment_status !== 2) {
+            $orderMeta = $order->meta ?? [];
+            if (!empty($cleanVa)) {
+                $orderMeta['va_number'] = $cleanVa;
+            }
+            $inquiryReqId = $request->input('inquiryRequestId') ?? $request->input('trx_id');
+            if (!empty($inquiryReqId)) {
+                $orderMeta['trx_id'] = $inquiryReqId;
+                $orderMeta['reference'] = $inquiryReqId;
+                $orderMeta['espay_reference'] = $inquiryReqId;
+            }
+
             $order->payment_status = 2; // Paid
             $order->status = Order::STATUS_PROCESSING;
+            $order->editor = 'inquiry payment';
+            $order->meta = $orderMeta;
             $order->save();
 
             // Update status Settlement jika ada
@@ -220,8 +233,17 @@ class SnapBiController extends Controller
         }
 
         if ($order->payment_status !== 2) {
+            $orderMeta = $order->meta ?? [];
+            if (!empty($cleanRef)) {
+                $orderMeta['trx_id'] = $cleanRef;
+                $orderMeta['reference'] = $cleanRef;
+                $orderMeta['espay_reference'] = $cleanRef;
+            }
+
             $order->payment_status = 2; // Paid
             $order->status = Order::STATUS_PROCESSING;
+            $order->editor = 'inquiry payment';
+            $order->meta = $orderMeta;
             $order->save();
 
             // Update status Settlement jika ada

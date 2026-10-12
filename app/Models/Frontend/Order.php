@@ -149,8 +149,12 @@ class Order extends Model
         });
 
         static::updating(function ($model) {
-            $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
-            $model->editor = $username;
+            if ($model->isDirty('payment_status') && !$model->isDirty('editor')) {
+                $model->editor = 'inquiry payment';
+            } elseif (!$model->isDirty('editor')) {
+                $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
+                $model->editor = $username;
+            }
             $model->updated_at = now();
 
             if ((int) $model->jde_push_status === 2 && empty($model->jde_push_date)) {
@@ -236,13 +240,19 @@ class Order extends Model
 
     public function paymentMethodRelation(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method', 'code');
+        return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method', 'id');
     }
 
     public function getPaymentMethodNameAttribute(): string
     {
-        $pm = \App\Models\PaymentMethod::where('code', $this->payment_method)->first()
-            ?? \App\Models\PaymentMethod::find($this->payment_method);
+        $pm = null;
+        if (\Illuminate\Support\Str::isUuid((string)$this->payment_method)) {
+            $pm = \App\Models\PaymentMethod::find($this->payment_method);
+        }
+        if (!$pm) {
+            $pm = \App\Models\PaymentMethod::where('code', $this->payment_method)->first()
+                ?? \App\Models\PaymentMethod::find($this->payment_method);
+        }
         if ($pm && !empty($pm->name)) {
             return $pm->name;
         }

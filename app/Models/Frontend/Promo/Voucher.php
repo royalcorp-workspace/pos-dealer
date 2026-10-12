@@ -129,10 +129,91 @@ class Voucher extends Model
         ];
     }
 
-    public function canBeUsedBy(?string $userId): bool
+    public function isEmailExistingCustomer(?string $email): bool
+    {
+        if (empty($email)) {
+            return false;
+        }
+
+        $email = strtolower(trim($email));
+
+        return \App\Models\Frontend\Order::withoutGlobalScopes()
+            ->where('status', '!=', \App\Models\Frontend\Order::STATUS_CANCELLED)
+            ->where('deleted', false)
+            ->where(function ($q) use ($email) {
+                $q->whereHas('customer', function ($cq) use ($email) {
+                    $cq->whereRaw('LOWER(email) = ?', [$email]);
+                })
+                ->orWhereRaw('LOWER(creator) = ?', [$email])
+                ->orWhereRaw("LOWER(meta->'customer'->>'email') = ?", [$email]);
+            })
+            ->exists();
+    }
+
+    public function hasBeenUsedByEmail(?string $email): bool
+    {
+        if (empty($email)) {
+            return false;
+        }
+
+        $email = strtolower(trim($email));
+
+        return \App\Models\Frontend\Order::withoutGlobalScopes()
+            ->where('status', '!=', \App\Models\Frontend\Order::STATUS_CANCELLED)
+            ->where('deleted', false)
+            ->where(function ($q) use ($email) {
+                $q->whereHas('customer', function ($cq) use ($email) {
+                    $cq->whereRaw('LOWER(email) = ?', [$email]);
+                })
+                ->orWhereRaw('LOWER(creator) = ?', [$email])
+                ->orWhereRaw("LOWER(meta->'customer'->>'email') = ?", [$email]);
+            })
+            ->where(function ($q) {
+                $q->where('voucher_id', $this->id)
+                  ->orWhereExists(function ($uq) {
+                      $uq->select(DB::raw(1))
+                         ->from('voucher_usages')
+                         ->where('voucher_usages.voucher_id', $this->id)
+                         ->where(function ($oq) {
+                             $oq->whereRaw('CAST(orders.id AS VARCHAR) = voucher_usages.order_id')
+                                ->orWhereRaw('orders.order_number = voucher_usages.order_id');
+                         });
+                  })
+                  ->orWhereRaw("meta->>'voucher_code' = ?", [$this->code])
+                  ->orWhereRaw("meta->'voucher_codes' ?? ?", [$this->code]);
+            })
+            ->exists();
+    }
+
+    public function canBeUsedBy(?string $userId, ?string $customerEmail = null): bool
     {
         if (!$this->isValid()) return false;
-        if ($this->valid_for_new_customer && $userId) return false;
+
+        if (!empty($customerEmail)) {
+            if ($this->hasBeenUsedByEmail($customerEmail)) {
+                return false;
+            }
+            if ($this->valid_for_new_customer && $this->isEmailExistingCustomer($customerEmail)) {
+                return false;
+            }
+        }
+
+        if ($this->valid_for_new_customer && $userId) {
+            [$uIds, $cIds] = $this->resolveUserIdentifiers($userId);
+            $hasPreviousOrder = \App\Models\Frontend\Order::withoutGlobalScopes()
+                ->where('status', '!=', \App\Models\Frontend\Order::STATUS_CANCELLED)
+                ->where('deleted', false)
+                ->where(function ($q) use ($cIds, $userId) {
+                    if (!empty($cIds)) {
+                        $q->whereIn('customer_id', $cIds);
+                    }
+                    if ($userId) {
+                        $q->orWhere('creator', $userId);
+                    }
+                })
+                ->exists();
+            if ($hasPreviousOrder) return false;
+        }
 
         [$userIds, $customerIds] = $this->resolveUserIdentifiers($userId);
         $allIdentities = array_values(array_unique(array_merge($userIds, $customerIds)));
