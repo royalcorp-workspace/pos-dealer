@@ -1792,6 +1792,7 @@ class CheckoutController extends Controller
         $isTypeQris = ($paymentType === 4);
         $isTypeCreditCard = ($paymentType === 5);
         $isTypeDebitCard = ($paymentType === 6);
+        $isSnapPayment = ($isTypeQris || $isTypeCreditCard || $isTypeDebitCard);
 
         $isEspay = $paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay';
         if ($isEspay) {
@@ -1807,21 +1808,44 @@ class CheckoutController extends Controller
             $reqProductCode = $request->input('product_code');
             $reqBankCode = $request->input('bank_code');
 
-            $resolvedProductCode = !empty($reqProductCode) 
-                ? $reqProductCode 
-                : \App\Models\PaymentMethod::resolveEspayProductCode(
-                    codeOrBank: $paymentMethod,
-                    type: $categoryType ?? $paymentMethodModel?->type,
-                    paymentMethod: $paymentMethodModel
-                );
+            if ($isTypeQris) {
+                $resolvedProductCode = !empty($paymentMethodModel?->bank_info['product_code']) 
+                    ? $paymentMethodModel->bank_info['product_code'] 
+                    : ($reqProductCode ?: 'QRISPLUS');
+                $resolvedBankCode = !empty($paymentMethodModel?->bank_info['bank_code']) 
+                    ? $paymentMethodModel->bank_info['bank_code'] 
+                    : ($reqBankCode ?: '008');
+            } elseif ($isTypeCreditCard) {
+                $resolvedProductCode = !empty($paymentMethodModel?->bank_info['product_code']) 
+                    ? $paymentMethodModel->bank_info['product_code'] 
+                    : ($reqProductCode ?: 'CREDITCARD');
+                $resolvedBankCode = !empty($paymentMethodModel?->bank_info['bank_code']) 
+                    ? $paymentMethodModel->bank_info['bank_code'] 
+                    : ($reqBankCode ?: '008');
+            } elseif ($isTypeDebitCard) {
+                $resolvedProductCode = !empty($paymentMethodModel?->bank_info['product_code']) 
+                    ? $paymentMethodModel->bank_info['product_code'] 
+                    : ($reqProductCode ?: 'CREDITCARD');
+                $resolvedBankCode = !empty($paymentMethodModel?->bank_info['bank_code']) 
+                    ? $paymentMethodModel->bank_info['bank_code'] 
+                    : ($reqBankCode ?: '008');
+            } else {
+                $resolvedProductCode = !empty($reqProductCode) 
+                    ? $reqProductCode 
+                    : \App\Models\PaymentMethod::resolveEspayProductCode(
+                        codeOrBank: $paymentMethod,
+                        type: $categoryType ?? $paymentMethodModel?->type,
+                        paymentMethod: $paymentMethodModel
+                    );
 
-            $resolvedBankCode = !empty($reqBankCode) 
-                ? $reqBankCode 
-                : \App\Models\PaymentMethod::resolveEspayBankCode(
-                    codeOrBank: $paymentMethod,
-                    type: $categoryType ?? $paymentMethodModel?->type,
-                    paymentMethod: $paymentMethodModel
-                );
+                $resolvedBankCode = !empty($reqBankCode) 
+                    ? $reqBankCode 
+                    : \App\Models\PaymentMethod::resolveEspayBankCode(
+                        codeOrBank: $paymentMethod,
+                        type: $categoryType ?? $paymentMethodModel?->type,
+                        paymentMethod: $paymentMethodModel
+                    );
+            }
 
             // Special explicit overrides for clearing codes (misal 014: BCA VA vs GoPay Jump App)
             $upperMethod = strtoupper($paymentMethod);
@@ -1918,279 +1942,37 @@ class CheckoutController extends Controller
             // Jika kredensial Espay tidak diset di .env, gunakan integrasi native IMG backend secara mandiri
             if (empty($signatureKey) || empty($commCode)) {
                 $generateNativePayment();
-            } elseif ($isTypeQris) {
+            } elseif ($isSnapPayment) {
                 // =========================================================================
-                // SNAP QRIS MPM Integration (Direct API SNAP)
-                // Menghindari bentrok bank_code 008 (Mandiri VA)
+                // ESPAY SNAP (Embed Kit) - QRIS (type 4), Credit Card (type 5), Debit Card (type 6)
+                // Membuka modal iframe langsung ke channel pembayaran terpilih tanpa dropdown pilihan
                 // =========================================================================
-                $snapQrUrl = preg_replace('#/rest/.*$#', '', $espayBaseUrl) . '/api/v1.0/qr/qr-mpm-generate';
-                $partnerReferenceNo = str_replace(['-', '.'], '', $order->order_number);
-                $qrisProductCode = 'SALDOMUQR';
-                if (!empty($paymentMethodModel?->bank_info['product_code']) && !in_array(strtoupper((string)$paymentMethodModel->bank_info['product_code']), ['QRISPLUS', 'QRIS'])) {
-                    $qrisProductCode = $paymentMethodModel->bank_info['product_code'];
-                }
-                $formattedAmount = number_format((float)$order->total, 2, '.', '');
-                $validityPeriod = now()->addDay()->toIso8601String();
+                $settlement = \App\Models\Settlement::updateOrCreate(
+                    ['reference_id' => $order->order_number],
+                    [
+                        'gross_amount' => $amount,
+                        'fee_amount' => $charge,
+                        'net_amount' => $order->total,
+                        'status' => 'pending',
+                        'notes' => "Payment via {$paymentMethod} (Espay Snap)"
+                    ]
+                );
 
-                $qrisPayload = [
-                    'partnerReferenceNo' => $partnerReferenceNo,
-                    'merchantId' => $commCode,
-                    'amount' => [
-                        'value' => $formattedAmount,
-                        'currency' => 'IDR',
-                    ],
-                    'additionalInfo' => [
-                        'productCode' => $qrisProductCode,
-                    ],
-                    'validityPeriod' => $validityPeriod,
-                ];
+                $updatedMeta = array_merge($order->meta ?? [], [
+                    'reference' => $order->order_number,
+                    'espay_reference' => $order->order_number,
+                    'product_code' => $resolvedProductCode,
+                    'bank_code' => $resolvedBankCode,
+                ]);
+                // Hapus va_number agar QRIS / Kartu Kredit / Debit tidak memiliki nomor Virtual Account palsu
+                unset($updatedMeta['va_number']);
 
-                $xTimestamp = now()->toIso8601String();
-                $xExternalId = date('YmdHis') . rand(1000, 9999);
-                $jsonBody = json_encode($qrisPayload, JSON_UNESCAPED_SLASHES);
-                $bodyHash = strtolower(hash('sha256', $jsonBody));
-                $stringToSign = "POST:/api/v1.0/qr/qr-mpm-generate:{$bodyHash}:{$xTimestamp}";
+                $order->update([
+                    'settlement_id' => $settlement->id,
+                    'meta' => $updatedMeta,
+                ]);
 
-                $xSignature = '';
-                if (!empty(config('espay.private_key'))) {
-                    $privateKey = openssl_pkey_get_private(config('espay.private_key'));
-                    if ($privateKey) {
-                        openssl_sign($stringToSign, $binarySignature, $privateKey, OPENSSL_ALGO_SHA256);
-                        $xSignature = base64_encode($binarySignature);
-                    }
-                }
-                if (empty($xSignature)) {
-                    $xSignature = base64_encode(hash_hmac('sha512', $stringToSign, $signatureKey, true));
-                }
-
-                $qrisHeaders = [
-                    'Content-Type' => 'application/json',
-                    'X-TIMESTAMP' => $xTimestamp,
-                    'X-SIGNATURE' => $xSignature,
-                    'X-EXTERNAL-ID' => $xExternalId,
-                    'X-PARTNER-ID' => $commCode,
-                    'CHANNEL-ID' => 'ESPAY',
-                ];
-
-                try {
-                    \Illuminate\Support\Facades\Log::channel('espay')->info("Espay SNAP QRIS MPM Request\nURL: {$snapQrUrl}\nOrder: {$order->order_number}\nPayload: " . json_encode($qrisPayload, JSON_PRETTY_PRINT));
-
-                    $response = \Illuminate\Support\Facades\Http::timeout(30)->withHeaders($qrisHeaders)->post($snapQrUrl, $qrisPayload);
-                    $paymentData = $response->json();
-
-                    $logData = [
-                        'http_status' => $response->status(),
-                        'raw_body' => $response->body(),
-                        'parsed_json' => $paymentData,
-                    ];
-
-                    $isSuccess = $response->successful() && (
-                        in_array($paymentData['responseCode'] ?? '', ['2004700', '2000000']) 
-                        || ($paymentData['error_code'] ?? '') === '0000'
-                    );
-
-                    if ($isSuccess) {
-                        $settlement = \App\Models\Settlement::updateOrCreate(
-                            ['reference_id' => $order->order_number],
-                            [
-                                'gross_amount' => $amount,
-                                'fee_amount' => $charge,
-                                'net_amount' => $order->total,
-                                'status' => 'pending',
-                                'notes' => "Payment via QRIS"
-                            ]
-                        );
-
-                        $additionalInfo = is_array($paymentData['additionalInfo'] ?? null) ? $paymentData['additionalInfo'] : [];
-                        $trxId = $additionalInfo['referenceNo'] 
-                            ?? ($paymentData['referenceNo'] 
-                            ?? ($paymentData['trx_id'] ?? null));
-
-                        if (empty($trxId) && !empty($paymentData['qrUrl'])) {
-                            $parsedUrl = parse_url($paymentData['qrUrl']);
-                            if (!empty($parsedUrl['query'])) {
-                                parse_str($parsedUrl['query'], $queryParams);
-                                if (!empty($queryParams['trx_id'])) {
-                                    $trxId = $queryParams['trx_id'];
-                                }
-                            }
-                        }
-
-                        $qrContent = $paymentData['qrContent'] ?? ($paymentData['qr_string'] ?? null);
-                        $qrImage = $paymentData['qrImage'] ?? null;
-                        $qrUrl = $paymentData['qrUrl'] ?? null;
-                        $qrCode = $qrImage ?: ($qrUrl ?: ($paymentData['qr_code'] ?? null));
-
-                        $updatedMeta = array_merge($order->meta ?? [], [
-                            'trx_id' => $trxId,
-                            'reference' => $trxId,
-                            'espay_reference' => $trxId,
-                            'qr_string' => $qrContent,
-                            'qr_code' => $qrCode,
-                            'qr_url' => $qrUrl,
-                        ]);
-                        // Hapus va_number agar QRIS bersih dari nomor Virtual Account
-                        unset($updatedMeta['va_number']);
-
-                        $order->update([
-                            'settlement_id' => $settlement->id,
-                            'meta' => $updatedMeta,
-                        ]);
-
-                        \Illuminate\Support\Facades\Log::channel('espay')->info("Espay SNAP QRIS MPM Success\nOrder ID: {$order->order_number}\nTRX ID: {$trxId}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
-                    } else {
-                        \Illuminate\Support\Facades\Log::channel('espay')->error("Espay SNAP QRIS MPM Failed\nOrder ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
-                        $errMsg = $paymentData['responseMessage'] ?? ($paymentData['error_message'] ?? 'Layanan QRIS tidak dapat diakses saat ini.');
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Gagal memproses QRIS Espay: ' . $errMsg
-                        ], 400);
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay SNAP QRIS Exception ({$e->getMessage()}) for Order {$order->order_number}");
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Terjadi kendala saat menghubungi gateway QRIS: ' . $e->getMessage()
-                    ], 500);
-                }
-            } elseif ($isTypeDebitCard) {
-                // =========================================================================
-                // Direct Debit Integration
-                // Sesuai Spesifikasi Request Direct Debit Espay
-                // =========================================================================
-                $debitUrl = preg_replace('#/rest/.*$#', '', $espayBaseUrl) . '/apidirectdebit/v1.0/debit/registration-account-binding';
-                $cleanOrderRef = preg_replace('/[^\d]/', '', $order->order_number);
-                if (strlen($cleanOrderRef) < 8) {
-                    $cleanOrderRef = date('YmdHis') . rand(1000, 9999);
-                }
-                $partnerReferenceNo = $cleanOrderRef;
-
-                $debitPhone = $order->customer->phone ?? ($customerData['phone'] ?? '087888888888');
-                $authCode = $request->input('auth_code', 'YT1Ex4UGXzAcxw5Ve8l4QNLH2GmGPN');
-                $debitProductCode = $paymentMethodModel?->bank_info['product_code'] ?? 'DANAMONDIRECTDEBIT';
-                $accountToken = $request->input('account_token', 'ESP' . date('ymdHis') . Str::random(16));
-                $custAccountNo = $request->input('customer_account_number') ?? ($request->input('account_number') ?? substr($cleanOrderRef, -12));
-                $custName = $order->customer->name ?? ($customerData['name'] ?? 'Customer');
-                $formattedAmount = number_format((float)$order->total, 2, '.', '');
-
-                $debitPayload = [
-                    'partnerReferenceNo' => $partnerReferenceNo,
-                    'merchantId' => $commCode,
-                    'phoneNo' => $debitPhone,
-                    'authCode' => $authCode,
-                    'additionalInfo' => [
-                        'productCode' => $debitProductCode,
-                        'accountToken' => $accountToken,
-                        'ktpFile' => $request->input('ktp_file', ''),
-                        'npwpFile' => $request->input('npwp_file', ''),
-                        'pdfFile' => $request->input('pdf_file', ''),
-                        'amount' => [
-                            'value' => $formattedAmount,
-                            'currency' => 'IDR',
-                        ],
-                        'customerAccountNumber' => $custAccountNo,
-                        'customerName' => $custName,
-                        'debitType' => $request->input('debit_type', 'V'),
-                    ],
-                ];
-
-                $xTimestamp = now()->toIso8601String();
-                $xExternalId = date('YmdHis') . rand(1000, 9999);
-                $jsonBody = json_encode($debitPayload, JSON_UNESCAPED_SLASHES);
-                $bodyHash = strtolower(hash('sha256', $jsonBody));
-                $stringToSign = "POST:/apidirectdebit/v1.0/debit/registration-account-binding:{$bodyHash}:{$xTimestamp}";
-
-                $xSignature = '';
-                if (!empty(config('espay.private_key'))) {
-                    $privateKey = openssl_pkey_get_private(config('espay.private_key'));
-                    if ($privateKey) {
-                        openssl_sign($stringToSign, $binarySignature, $privateKey, OPENSSL_ALGO_SHA256);
-                        $xSignature = base64_encode($binarySignature);
-                    }
-                }
-                if (empty($xSignature)) {
-                    $xSignature = base64_encode(hash_hmac('sha512', $stringToSign, $signatureKey, true));
-                }
-
-                $debitHeaders = [
-                    'Content-Type' => 'application/json',
-                    'X-TIMESTAMP' => $xTimestamp,
-                    'X-SIGNATURE' => $xSignature,
-                    'X-EXTERNAL-ID' => $xExternalId,
-                    'X-PARTNER-ID' => $commCode,
-                    'CHANNEL-ID' => 'ESPAY',
-                ];
-
-                try {
-                    \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Direct Debit Request\nURL: {$debitUrl}\nOrder: {$order->order_number}\nPayload: " . json_encode($debitPayload, JSON_PRETTY_PRINT));
-
-                    $response = \Illuminate\Support\Facades\Http::timeout(30)->withHeaders($debitHeaders)->post($debitUrl, $debitPayload);
-                    $paymentData = $response->json();
-
-                    $logData = [
-                        'http_status' => $response->status(),
-                        'raw_body' => $response->body(),
-                        'parsed_json' => $paymentData,
-                    ];
-
-                    $isSuccess = $response->successful() && (
-                        in_array($paymentData['responseCode'] ?? '', ['2005400', '2005500', '2000000']) 
-                        || ($paymentData['error_code'] ?? '') === '0000'
-                    );
-
-                    if ($isSuccess) {
-                        $settlement = \App\Models\Settlement::updateOrCreate(
-                            ['reference_id' => $order->order_number],
-                            [
-                                'gross_amount' => $amount,
-                                'fee_amount' => $charge,
-                                'net_amount' => $order->total,
-                                'status' => 'pending',
-                                'notes' => "Payment via Direct Debit"
-                            ]
-                        );
-
-                        $additionalInfo = is_array($paymentData['additionalInfo'] ?? null) ? $paymentData['additionalInfo'] : [];
-                        $trxId = $additionalInfo['referenceNo'] 
-                            ?? ($paymentData['referenceNo'] 
-                            ?? ($paymentData['trx_id'] ?? null));
-
-                        $paymentUrl = $paymentData['webRedirectUrl'] 
-                            ?? ($paymentData['payment_url'] 
-                            ?? ($paymentData['redirect_url'] ?? null));
-
-                        $updatedMeta = array_merge($order->meta ?? [], [
-                            'trx_id' => $trxId,
-                            'reference' => $trxId,
-                            'espay_reference' => $trxId,
-                        ]);
-                        if (!empty($paymentUrl)) {
-                            $updatedMeta['payment_url'] = $paymentUrl;
-                        }
-                        // Hapus va_number agar Debit Card bersih dari nomor Virtual Account
-                        unset($updatedMeta['va_number']);
-
-                        $order->update([
-                            'settlement_id' => $settlement->id,
-                            'meta' => $updatedMeta,
-                        ]);
-
-                        \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Direct Debit Success\nOrder ID: {$order->order_number}\nTRX ID: {$trxId}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
-                    } else {
-                        \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Direct Debit Failed\nOrder ID: {$order->order_number}\nData: " . json_encode($logData, JSON_PRETTY_PRINT));
-                        $errMsg = $paymentData['responseMessage'] ?? ($paymentData['error_message'] ?? 'Layanan Direct Debit tidak dapat diakses saat ini.');
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Gagal memproses Direct Debit Espay: ' . $errMsg
-                        ], 400);
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::channel('espay')->error("Espay Direct Debit Exception ({$e->getMessage()}) for Order {$order->order_number}");
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Terjadi kendala saat menghubungi gateway Direct Debit: ' . $e->getMessage()
-                    ], 500);
-                }
+                \Illuminate\Support\Facades\Log::channel('espay')->info("Espay Snap payment initialized for Order {$order->order_number} ({$paymentMethod}) with Product: {$resolvedProductCode}, Bank: {$resolvedBankCode}");
             } else {
                 // =========================================================================
                 // Standard Virtual Account & SendInvoice Integration (TETAP UTUH)
@@ -2323,6 +2105,48 @@ class CheckoutController extends Controller
         $redirectUrl = $thankYouUrl;
         if (($isTypeCreditCard || $isTypeDebitCard) && !empty($order->meta['payment_url'])) {
             $redirectUrl = $order->meta['payment_url'];
+        }
+
+        if ($isSnapPayment && $isEspay) {
+            $apiKey = config('espay.api_key');
+            $commCode = config('espay.merchant_key') ?: ($paymentMethodModel?->bank_info['merchant_key'] ?? null);
+            $paymentId = $order->order_number;
+            $sig = sha1($paymentId . '590' . $apiKey);
+
+            $kitDomain = preg_replace('#/(public|plugin)/.*$#', '', config('espay.js_url', 'https://sandbox-kit.espay.id'));
+            $kitDomain = rtrim($kitDomain, '/');
+
+            $iframeUrl = "{$kitDomain}/index/order/?url=" . urlencode($thankYouUrl)
+                . "&key={$apiKey}"
+                . "&paymentId=" . urlencode($paymentId)
+                . "&paymentAmount=" . round((float) $order->total)
+                . "&signature={$sig}"
+                . "&commCode={$commCode}"
+                . "&bankCode={$resolvedBankCode}"
+                . "&productCode={$resolvedProductCode}";
+
+            return response()->json([
+                'success' => true,
+                'open_iframe' => true,
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'trx_id' => $order->meta['trx_id'] ?? $order->order_number,
+                'redirect_url' => $thankYouUrl,
+                'iframe_url' => $iframeUrl,
+                'espay_kit' => [
+                    'key' => $apiKey,
+                    'paymentId' => $paymentId,
+                    'backUrl' => $thankYouUrl,
+                    'url' => $thankYouUrl,
+                    'commCode' => $commCode,
+                    'bankCode' => $resolvedBankCode,
+                    'productCode' => $resolvedProductCode,
+                    'bankProduct' => $resolvedProductCode,
+                    'signature' => $sig,
+                    'amount' => (string) round((float) $order->total),
+                    'paymentAmount' => (string) round((float) $order->total),
+                ]
+            ]);
         }
 
         return response()->json([

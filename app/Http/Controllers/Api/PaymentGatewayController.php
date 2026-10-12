@@ -134,6 +134,12 @@ class PaymentGatewayController extends Controller
         
         // Cari order berdasarkan order_number karena Espay menerima order_number
         $order = \App\Models\Frontend\Order::with('customer')->where('order_number', $orderId)->first();
+        if (!$order) {
+            $cleanId = str_replace(['.', '-'], '', (string)$orderId);
+            $order = \App\Models\Frontend\Order::with('customer')
+                ->whereRaw("REPLACE(REPLACE(order_number, '.', ''), '-', '') = ?", [$cleanId])
+                ->first();
+        }
         
         if (!$order) {
             \Illuminate\Support\Facades\Log::channel('espay')->warning('Espay Inquiry Order Not Found', ['order_id' => $orderId]);
@@ -195,7 +201,19 @@ class PaymentGatewayController extends Controller
 
         // Update Order Status
         $order = \App\Models\Frontend\Order::where('order_number', $orderId)->first();
+        if (!$order) {
+            $cleanId = str_replace(['.', '-'], '', (string)$orderId);
+            $order = \App\Models\Frontend\Order::whereRaw("REPLACE(REPLACE(order_number, '.', ''), '-', '') = ?", [$cleanId])->first();
+        }
+
         if ($order) {
+            $trxId = $request->input('reconcile_id') ?? ($request->input('trx_id') ?? ($request->input('reference_no') ?? null));
+            $orderMeta = $order->meta ?? [];
+            if (!empty($trxId)) {
+                $orderMeta['trx_id'] = $trxId;
+                $orderMeta['espay_reference'] = $trxId;
+            }
+
             // Check if not already paid
             if ($order->payment_status !== 2) {
                 // payment_status 2 = Terbayar/Menunggu Verifikasi
@@ -203,6 +221,7 @@ class PaymentGatewayController extends Controller
                 $order->update([
                     'payment_status' => 2,
                     'status' => \App\Models\Frontend\Order::STATUS_PROCESSING,
+                    'meta' => $orderMeta,
                 ]);
 
                 if ($order->settlement_id) {

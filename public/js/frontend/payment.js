@@ -143,24 +143,18 @@ window.processPayment = function () {
                     manualRedirectBtn.href = targetUrl;
                 }
 
-                var iframeUrl = '';
-                if (typeof SGOSignature !== 'undefined' && typeof SGOSignature.getIframeURL === 'function') {
-                    try {
-                        iframeUrl = SGOSignature.getIframeURL(data.espay_kit);
-                    } catch (e) {
-                        console.error('SGOSignature getIframeURL error:', e);
-                    }
-                }
-
-                if (!iframeUrl) {
-                    var domain = "https://sandbox-kit.espay.id";
+                var iframeUrl = data.iframe_url || '';
+                if (!iframeUrl && data.espay_kit) {
+                    var domain = (data.espay_kit.domain || 'https://sandbox-kit.espay.id').replace(/\/+$/, '');
                     var sig = data.espay_kit.signature || '';
                     var key = data.espay_kit.key || '';
-                    var pId = data.espay_kit.paymentId || '';
-                    var bUrl = encodeURIComponent(data.espay_kit.backUrl || thankYouUrl);
-                    var bCode = data.espay_kit.bankCode || '';
-                    var prCode = data.espay_kit.productCode || '';
-                    iframeUrl = domain + "/plugin/merchantkey/?signature=" + sig + "&domain=" + domain + "&key=" + key + "&paymentId=" + pId + "&backUrl=" + bUrl + "&bankCode=" + bCode + "&productCode=" + prCode;
+                    var pId = encodeURIComponent(data.espay_kit.paymentId || '');
+                    var bUrl = encodeURIComponent(data.espay_kit.backUrl || targetUrl);
+                    var bCode = encodeURIComponent(data.espay_kit.bankCode || '');
+                    var prCode = encodeURIComponent(data.espay_kit.productCode || '');
+                    var cCode = encodeURIComponent(data.espay_kit.commCode || '');
+                    var amt = encodeURIComponent(data.espay_kit.amount || '');
+                    iframeUrl = domain + "/index/order/?url=" + bUrl + "&key=" + key + "&paymentId=" + pId + "&paymentAmount=" + amt + "&signature=" + sig + "&commCode=" + cCode + "&bankCode=" + bCode + "&productCode=" + prCode;
                 }
 
                 if (modal && iframe) {
