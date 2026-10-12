@@ -333,12 +333,15 @@ class CheckoutController extends Controller
             if (!empty($couriers->first()) && isset($courierPrices[$couriers->first()->code]['price'])) {
                 $defaultShippingCost = (float) ($courierPrices[$couriers->first()->code]['price'] ?? 0);
             }
-            $voucherCalc = $this->calculateVoucherDiscount($selectedVoucherCodes, $cart, $cartTotal, $defaultShippingCost);
+            $indexCustomerEmail = session()->get('is_logged_in') 
+                ? (session()->get('user')['email'] ?? (session()->get('user')['username'] ?? null))
+                : session()->get('checkout_form_data.email');
+            $voucherCalc = $this->calculateVoucherDiscount($selectedVoucherCodes, $cart, $cartTotal, $defaultShippingCost, $indexCustomerEmail);
             $selectedVoucherDiscount = (float) ($voucherCalc['discount'] ?? 0);
             $productVoucherDiscount = (float) ($voucherCalc['product_voucher_discount'] ?? 0);
             $shippingVoucherDiscount = (float) ($voucherCalc['shipping_voucher_discount'] ?? 0);
             $selectedVoucher = [
-                'code' => $voucherCalc['primary']?->code ?? ($selectedVoucherCodes[0] ?? ''),
+                'code' => ($voucherCalc['primary'] ?? null)?->code ?? ($selectedVoucherCodes[0] ?? ''),
                 'discount' => $selectedVoucherDiscount,
                 'product_discount' => $productVoucherDiscount,
                 'shipping_discount' => $shippingVoucherDiscount,
@@ -567,10 +570,28 @@ class CheckoutController extends Controller
         $productVoucherDiscount = 0;
         $shippingVoucherDiscount = 0;
         $voucher = null;
+        $customerEmail = strtolower(trim((string)$request->email));
         $appliedVouchers = [];
         $voucherCodes = $this->parseVoucherCodes($request);
         if ($voucherCodes) {
-            $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCost);
+            // Validasi email pengguna baru & batas penggunaan voucher ketika di guest mode atau email sudah pernah pakai
+            foreach ($voucherCodes as $vCode) {
+                $checkVoucher = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($vCode))])->first();
+                if ($checkVoucher) {
+                    if ($checkVoucher->hasBeenUsedByEmail($customerEmail)) {
+                        return redirect()->route('checkout')
+                            ->withErrors(['voucher_code' => "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$checkVoucher->code} sebelumnya."])
+                            ->withInput();
+                    }
+                    if ($checkVoucher->valid_for_new_customer && $checkVoucher->isEmailExistingCustomer($customerEmail)) {
+                        return redirect()->route('checkout')
+                            ->withErrors(['voucher_code' => "Peringatan: Voucher {$checkVoucher->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya."])
+                            ->withInput();
+                    }
+                }
+            }
+
+            $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCost, $customerEmail);
             $voucherDiscount = $voucherResult['discount'];
             $productVoucherDiscount = $voucherResult['product_voucher_discount'] ?? 0;
             $shippingVoucherDiscount = $voucherResult['shipping_voucher_discount'] ?? 0;
@@ -1439,8 +1460,9 @@ class CheckoutController extends Controller
                         'shipping_service_name' => $shippingCalc['service_name'] ?? null,
                         'shipping_service_code' => $shippingCalc['service_code'] ?? null,
                         'courier_service_type' => $shippingCalc['service_code'] ?? null,
+                        'payment_method_id' => $paymentMethodModel?->id,
                         'payment_method_name' => $paymentMethodModel?->name,
-                        'payment_method_code' => $paymentMethod,
+                        'payment_method_code' => $paymentMethodModel?->code ?? $paymentMethod,
                         'items' => !empty($itemsForOrderData) ? $itemsForOrderData : array_values($cart),
                         'applied_vouchers' => $appliedVouchers,
                         'voucher_codes' => $bufferMeta['voucher_codes'] ?? ($sessionOrderData['voucher_codes'] ?? []),
@@ -1495,6 +1517,32 @@ class CheckoutController extends Controller
                 );
                 $orderTotal = ($orderSubtotal - $orderDiscount + $orderShippingCost - $orderShippingSubsidy) + $charge;
 
+                $customerEmail = strtolower(trim((string)($customer?->email ?? ($customerData['email'] ?? ($orderMeta['customer']['email'] ?? '')))));
+                if (empty($customerEmail)) {
+                    $customerEmail = session()->get('user.email') ?? (session()->get('user.username') ?? 'customer@mail.com');
+                }
+
+                // Validasi ulang voucher terhadap email pengguna baru & batas penggunaan
+                if (!empty($appliedVouchers)) {
+                    foreach ($appliedVouchers as $av) {
+                        $vModel = $av['voucher'] ?? null;
+                        if ($vModel) {
+                            if ($vModel->hasBeenUsedByEmail($customerEmail)) {
+                                return response()->json([
+                                    'success' => false,
+                                    'message' => "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$vModel->code} sebelumnya."
+                                ], 422);
+                            }
+                            if ($vModel->valid_for_new_customer && $vModel->isEmailExistingCustomer($customerEmail)) {
+                                return response()->json([
+                                    'success' => false,
+                                    'message' => "Peringatan: Voucher {$vModel->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya."
+                                ], 422);
+                            }
+                        }
+                    }
+                }
+
                 $order = Order::create([
                     'id' => Str::uuid()->toString(),
                     'order_number' => $orderNumber,
@@ -1504,7 +1552,7 @@ class CheckoutController extends Controller
                     'customer_id' => $customer->id,
                     'courier_id' => $buffer?->courier_id ?? ($sessionOrderData['courier_id'] ?? null),
                     'status' => Order::STATUS_PENDING_APPROVAL,
-                    'payment_method' => $paymentMethod,
+                    'payment_method' => $paymentMethodModel?->id ?? $paymentMethod,
                     'payment_status' => 1,
                     'subtotal' => $orderSubtotal,
                     'tax' => 0,
@@ -1518,8 +1566,8 @@ class CheckoutController extends Controller
                     'shipping_addresses_id' => $actualShippingAddressesId,
                     'transaction_fee' => $charge,
                     'meta' => $orderMeta,
-                    'creator' => session()->get('user.username') ?? session()->get('user.name') ?? ($customer ? $customer->name : 'Customer Web'),
-                    'editor' => session()->get('user.username') ?? session()->get('user.name') ?? ($customer ? $customer->name : 'Customer Web'),
+                    'creator' => $customerEmail,
+                    'editor' => $customerEmail,
                 ]);
 
                 // 3b. Create initial Delivery record in deliveries table
@@ -1772,9 +1820,12 @@ class CheckoutController extends Controller
                 }
             }
 
-            $order->payment_method = $paymentMethod;
+            $order->payment_method = $paymentMethodModel?->id ?? $paymentMethod;
             $order->transaction_fee = $charge;
             $order->total = ((float)$order->subtotal - (float)$order->discount + (float)$order->shipping_cost - (float)($order->shipping_cost_subsidy ?? 0)) + $charge;
+            $meta['payment_method_id'] = $paymentMethodModel?->id;
+            $meta['payment_method_code'] = $paymentMethodModel?->code ?? $paymentMethod;
+            $meta['payment_method_name'] = $paymentMethodModel?->name ?? ($meta['payment_method_name'] ?? null);
             $order->meta = $meta;
             $order->save();
 
@@ -2414,7 +2465,11 @@ class CheckoutController extends Controller
 
     public function thankYou(Request $request)
     {
-        $orderIdFromUrl = $request->query('order_id');
+        $orderIdFromUrl = $request->query('order_id')
+            ?? $request->query('orderId')
+            ?? $request->query('orderID')
+            ?? $request->query('id')
+            ?? $request->query('reference');
         $orderId = $orderIdFromUrl ?: session('thankyou_order_id');
         $order = null;
         
@@ -2558,7 +2613,7 @@ class CheckoutController extends Controller
         return array_values(array_unique(array_filter(array_map('strtoupper', (array) $codes))));
     }
 
-    private function calculateVoucherDiscount(array $codes, array $cart, float $cartTotal, ?float $shippingCost): array
+    private function calculateVoucherDiscount(array $codes, array $cart, float $cartTotal, ?float $shippingCost, ?string $customerEmail = null): array
     {
         $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
         $vouchers = Voucher::active()
@@ -2580,7 +2635,7 @@ class CheckoutController extends Controller
         $productVoucherDiscount = 0.0;
         $shippingVoucherDiscount = 0.0;
         foreach ($orderedVouchers as $voucher) {
-            if (!$voucher->canBeUsedBy($userId)) {
+            if (!$voucher->canBeUsedBy($userId, $customerEmail)) {
                 continue;
             }
 
@@ -3306,10 +3361,36 @@ class CheckoutController extends Controller
         $cart = $buffer ? $this->getBufferCartArray($buffer) : [];
         $cartTotal = (float) collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
 
+        $customerEmail = strtolower(trim((string)$request->input('email')));
+        if (empty($customerEmail) && session()->get('is_logged_in')) {
+            $customerEmail = session()->get('user.email') ?? (session()->get('user.username') ?? null);
+        }
+        if (empty($customerEmail)) {
+            $checkoutFormData = session()->get('checkout_form_data', []);
+            $customerEmail = $checkoutFormData['email'] ?? null;
+        }
+
+        $warningMessage = null;
+        if (!empty($customerEmail) && !empty($codes)) {
+            foreach ($codes as $vCode) {
+                $checkV = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($vCode))])->first();
+                if ($checkV) {
+                    if ($checkV->hasBeenUsedByEmail($customerEmail)) {
+                        $warningMessage = "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$checkV->code} sebelumnya.";
+                        break;
+                    }
+                    if ($checkV->valid_for_new_customer && $checkV->isEmailExistingCustomer($customerEmail)) {
+                        $warningMessage = "Peringatan: Voucher {$checkV->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya.";
+                        break;
+                    }
+                }
+            }
+        }
+
         $shippingCost = (float) $request->input('shipping_cost', 0);
-        $voucherCalc = $this->calculateVoucherDiscount($codes, $cart, $cartTotal, $shippingCost);
+        $voucherCalc = $this->calculateVoucherDiscount($codes, $cart, $cartTotal, $shippingCost, $customerEmail);
         $selectedVoucher = [
-            'code' => $voucherCalc['primary']?->code ?? ($codes[0] ?? ''),
+            'code' => ($voucherCalc['primary'] ?? null)?->code ?? ($codes[0] ?? ''),
             'discount' => (float) ($voucherCalc['discount'] ?? 0),
             'product_discount' => (float) ($voucherCalc['product_voucher_discount'] ?? 0),
             'shipping_discount' => (float) ($voucherCalc['shipping_voucher_discount'] ?? 0),
@@ -3330,6 +3411,7 @@ class CheckoutController extends Controller
             'success' => true,
             'codes' => $codes,
             'selected_voucher' => $selectedVoucher,
+            'warning_message' => $warningMessage,
         ]);
     }
 
@@ -3377,7 +3459,15 @@ class CheckoutController extends Controller
             }
         }
 
-        return $query->where('order_number', $identifier)->first();
+        $order = (clone $query)->where('order_number', $identifier)->first();
+        if ($order) {
+            return $order;
+        }
+
+        $cleanId = str_replace(['.', '-'], '', (string)$identifier);
+        return (clone $query)
+            ->whereRaw("REPLACE(REPLACE(order_number, '.', ''), '-', '') = ?", [$cleanId])
+            ->first();
     }
 
     /**

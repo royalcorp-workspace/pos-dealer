@@ -96,7 +96,7 @@ class PaymentGatewayController extends Controller
                 $payment = [
                     'id' => Str::uuid(),
                     'order_id' => $orderId,
-                    'payment_method' => $pmModel?->code ?? $espayBankCode,
+                    'payment_method' => $pmModel?->id ?? ($pmModel?->code ?? $espayBankCode),
                     'amount' => $amount,
                     'status' => 'pending',
                     'reference' => $paymentData['reference'] ?? 'PAY-' . date('Ymd') . '-' . rand(1000, 9999),
@@ -212,6 +212,10 @@ class PaymentGatewayController extends Controller
             if (!empty($trxId)) {
                 $orderMeta['trx_id'] = $trxId;
                 $orderMeta['espay_reference'] = $trxId;
+                $orderMeta['reference'] = $trxId;
+            }
+            if ($request->filled('va_number')) {
+                $orderMeta['va_number'] = $request->input('va_number');
             }
 
             // Check if not already paid
@@ -221,6 +225,7 @@ class PaymentGatewayController extends Controller
                 $order->update([
                     'payment_status' => 2,
                     'status' => \App\Models\Frontend\Order::STATUS_PROCESSING,
+                    'editor' => 'inquiry payment',
                     'meta' => $orderMeta,
                 ]);
 

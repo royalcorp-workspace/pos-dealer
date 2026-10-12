@@ -784,6 +784,7 @@
                                     'eligibleSubtotal' => (float) $v->getEligibleSubtotal($cart),
                                     'scope' => (int) $v->scope,
                                     'allowStacking' => $v->allow_stacking ? 1 : 0,
+                                    'validForNewCustomer' => (bool) $v->valid_for_new_customer,
                                     'isShipping' => ((int) $v->type === 3),
                                     'products' => $v->products ? $v->products->pluck('name')->toArray() : [],
                                 ]];

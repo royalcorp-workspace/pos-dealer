@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function syncVouchersWithServer(codes, shippingCost) {
         var token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
             || document.querySelector('input[name="_token"]')?.value || '';
+        var emailInput = document.getElementById('email');
+        var customerEmail = emailInput ? emailInput.value.trim() : '';
+
         fetch('/checkout/sync-vouchers', {
             method: 'POST',
             credentials: 'same-origin',
@@ -89,9 +92,27 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({
                 voucher_codes: codes,
-                shipping_cost: shippingCost !== undefined ? shippingCost : (currentShippingCost || 0)
+                shipping_cost: shippingCost !== undefined ? shippingCost : (currentShippingCost || 0),
+                email: customerEmail
             })
-        }).catch(function(err) {
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data && data.warning_message) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Peringatan Voucher',
+                        text: data.warning_message,
+                        confirmButtonColor: '#1e3a8a',
+                        confirmButtonText: 'Mengerti'
+                    });
+                } else if (typeof window.alert === 'function') {
+                    window.alert(data.warning_message);
+                }
+            }
+        })
+        .catch(function(err) {
             console.warn('Sync vouchers error:', err);
         });
     }
@@ -813,6 +834,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (feedback) feedback.innerHTML = '<span class="text-gray-500">Memvalidasi...</span>';
 
+        var emailInput = document.getElementById('email');
+        var customerEmail = emailInput ? emailInput.value.trim() : '';
+
         fetch('/voucher/validate', {
             method: 'POST',
             headers: {
@@ -824,7 +848,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 code: code,
                 cart_total: Math.max(0, subtotal - promoDiscount - productDiscount),
                 product_ids: productIds,
-                category_ids: categoryIds
+                category_ids: categoryIds,
+                email: customerEmail
             })
         })
         .then(function(response) { return response.json(); })
@@ -901,6 +926,18 @@ document.addEventListener('DOMContentLoaded', function () {
                             customClass: {
                                 popup: 'rounded-2xl shadow-xl'
                             }
+                        });
+                    } else if (typeof window.alert === 'function') {
+                        window.alert(data.message);
+                    }
+                } else if (data.message && (data.message.toLowerCase().includes('peringatan') || data.message.toLowerCase().includes('khusus'))) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Peringatan Voucher',
+                            text: data.message,
+                            confirmButtonColor: '#1e3a8a',
+                            confirmButtonText: 'Mengerti'
                         });
                     } else if (typeof window.alert === 'function') {
                         window.alert(data.message);

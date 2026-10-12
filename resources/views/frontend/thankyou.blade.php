@@ -172,6 +172,12 @@
 @endpush
 
 @section('content')
+    <script>
+        // Frame breakout jika halaman Thank You dimuat di dalam iframe modal pembayaran Espay Snap
+        if (window.self !== window.top) {
+            window.top.location.href = window.location.href;
+        }
+    </script>
     <div class="container mx-auto px-4 md:px-6 py-8 md:py-12 min-h-[70vh] font-sans">
         
         <!-- Progress / Step Indicator Wizard (No-Print) -->

@@ -93,6 +93,7 @@ Route::get('/payment', [CheckoutController::class, 'payment'])->name('payment');
 Route::post('/payment/process', [CheckoutController::class, 'processPayment'])->name('payment.process');
 
 Route::get('/thankyou', [CheckoutController::class, 'thankYou'])->name('thankyou');
+Route::get('/thank-you', [CheckoutController::class, 'thankYou'])->name('thank-you');
 Route::get('/track-order', [CheckoutController::class, 'trackOrder'])->name('track-order');
 Route::post('/track-order', [CheckoutController::class, 'processTrackOrder'])->name('track-order.process');
 Route::get('/track-order/{order_id}', [CheckoutController::class, 'trackOrderDetail'])->name('track-order.detail');

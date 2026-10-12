@@ -37,8 +37,32 @@ class VoucherController extends Controller
         $user = session()->get('user');
         $userId = $user['id'] ?? $user['sub'] ?? null;
 
+        $customerEmail = $request->input('email');
+        if (empty($customerEmail) && session()->get('is_logged_in')) {
+            $customerEmail = session()->get('user.email') ?? (session()->get('user.username') ?? null);
+        }
+        if (empty($customerEmail)) {
+            $checkoutFormData = session()->get('checkout_form_data', []);
+            $customerEmail = $checkoutFormData['email'] ?? null;
+        }
+
+        if (!empty($customerEmail)) {
+            if ($voucher->hasBeenUsedByEmail($customerEmail)) {
+                return response()->json([
+                    'valid' => false,
+                    'message' => "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher ini sebelumnya.",
+                ]);
+            }
+            if ($voucher->valid_for_new_customer && $voucher->isEmailExistingCustomer($customerEmail)) {
+                return response()->json([
+                    'valid' => false,
+                    'message' => "Peringatan: Voucher ini khusus untuk pengguna baru. Email {$customerEmail} sudah pernah melakukan transaksi sebelumnya.",
+                ]);
+            }
+        }
+
         // Check if customer can use this voucher (validity, user limits, scope 2, scope 7, claimable, follow)
-        if (!$voucher->canBeUsedBy($userId)) {
+        if (!$voucher->canBeUsedBy($userId, $customerEmail)) {
             if ((int) $voucher->scope === 2) {
                 return response()->json([
                     'valid' => false,

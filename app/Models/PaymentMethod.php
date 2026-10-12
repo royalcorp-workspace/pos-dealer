@@ -284,6 +284,14 @@ class PaymentMethod extends Model
         }
 
         $code = trim($code);
+
+        if (\Illuminate\Support\Str::isUuid($code)) {
+            $byUuid = static::withoutGlobalScope('active')->find($code);
+            if ($byUuid) {
+                return $byUuid;
+            }
+        }
+
         $upper = strtoupper($code);
 
         // Khusus GoPay E-Wallet Jump App lookup (Type 3)
