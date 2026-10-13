@@ -189,7 +189,34 @@
                 'Accept': 'application/json'
             },
             body: JSON.stringify({ voucher_codes: codes })
-        }).catch(function(err) {});
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data && data.removed_codes && data.removed_codes.length > 0) {
+                var removedUpper = data.removed_codes.map(function(c) { return String(c).toUpperCase().trim(); });
+                selectedCartCoupons = selectedCartCoupons.filter(function(c) {
+                    return !removedUpper.includes(String(c.code).toUpperCase().trim());
+                });
+                if (selectedCartCoupons.length === 0) {
+                    selectedCartCoupon = null;
+                    localStorage.removeItem('selectedCartCoupon');
+                    localStorage.removeItem('selectedCartCoupons');
+                } else {
+                    selectedCartCoupon = selectedCartCoupons[0];
+                    localStorage.setItem('selectedCartCoupons', JSON.stringify(selectedCartCoupons));
+                    localStorage.setItem('selectedCartCoupon', JSON.stringify(selectedCartCoupons[0]));
+                }
+                $$('.coupon-option').forEach(function(item) {
+                    var isSelected = selectedCartCoupons.some(function(c) { return c.code === item.dataset.code; });
+                    item.classList.toggle('border-brand-gold', isSelected);
+                    item.classList.toggle('bg-brand-light', isSelected);
+                    var label = item.querySelector('.coupon-option-label');
+                    if (label) label.textContent = isSelected ? 'Dipilih' : 'Pilih';
+                });
+                applySelectedCoupon();
+            }
+        })
+        .catch(function(err) {});
     }
 
     window.deselectCartCoupon = function () {

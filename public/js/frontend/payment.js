@@ -158,12 +158,63 @@ window.processPayment = function () {
                 }
 
                 if (modal && iframe) {
+                    if (window.snapLoadTimeout) {
+                        clearTimeout(window.snapLoadTimeout);
+                    }
+                    window.snapLoadSuccess = false;
+
                     if (loader) {
                         loader.style.opacity = '1';
                         loader.classList.remove('hidden');
                     }
 
+                    function handleSnapFailure(errMsg) {
+                        if (window.snapLoadTimeout) {
+                            clearTimeout(window.snapLoadTimeout);
+                            window.snapLoadTimeout = null;
+                        }
+                        if (modal) {
+                            modal.classList.add('hidden');
+                        }
+                        if (iframe) {
+                            iframe.src = '';
+                        }
+                        if (loader) {
+                            loader.style.opacity = '0';
+                            loader.classList.add('hidden');
+                        }
+                        document.body.classList.remove('overflow-hidden');
+
+                        var message = errMsg || 'Gagal memuat jendela pembayaran Snap. Silakan pilih kembali metode pembayaran Anda atau coba sesaat lagi.';
+                        window.dispatchEvent(new CustomEvent('show-toast', { detail: { type: 'error', message: message } }));
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Gagal Memuat Pembayaran',
+                                text: message,
+                                confirmButtonColor: '#1e3a8a',
+                                confirmButtonText: 'Kembali ke Pembayaran'
+                            });
+                        }
+                    }
+
+                    // Set timeout 25 seconds for iframe loading
+                    window.snapLoadTimeout = setTimeout(function () {
+                        if (!window.snapLoadSuccess) {
+                            handleSnapFailure('Waktu memuat jendela pembayaran habis. Silakan pilih kembali metode pembayaran Anda.');
+                        }
+                    }, 25000);
+
+                    iframe.onerror = function () {
+                        handleSnapFailure('Terjadi kendala saat memuat saluran pembayaran. Silakan pilih metode lain atau coba sesaat lagi.');
+                    };
+
                     iframe.onload = function () {
+                        window.snapLoadSuccess = true;
+                        if (window.snapLoadTimeout) {
+                            clearTimeout(window.snapLoadTimeout);
+                            window.snapLoadTimeout = null;
+                        }
                         if (loader) {
                             loader.style.opacity = '0';
                             setTimeout(function () {
@@ -532,23 +583,60 @@ document.addEventListener('DOMContentLoaded', function() {
                 ? manualRedirectBtn.href 
                 : (container ? container.dataset.routeThankyou : '/thankyou');
 
+            var modal = document.getElementById('espay-snap-modal');
+            var iframe = document.getElementById('sgoplus-iframe');
+            var loader = document.getElementById('espay-iframe-loader');
+
+            function closeModalAndStay() {
+                if (window.snapLoadTimeout) {
+                    clearTimeout(window.snapLoadTimeout);
+                    window.snapLoadTimeout = null;
+                }
+                if (modal) modal.classList.add('hidden');
+                if (iframe) iframe.src = '';
+                if (loader) {
+                    loader.style.opacity = '0';
+                    loader.classList.add('hidden');
+                }
+                document.body.classList.remove('overflow-hidden');
+            }
+
+            // Jika Snap gagal dimuat atau belum selesai dimuat, langsung tutup dan tetap di halaman pembayaran!
+            if (!window.snapLoadSuccess) {
+                closeModalAndStay();
+                window.dispatchEvent(new CustomEvent('show-toast', { 
+                    detail: { type: 'info', message: 'Jendela pembayaran ditutup. Anda dapat mencoba kembali atau memilih metode pembayaran lain.' } 
+                }));
+                return;
+            }
+
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     title: 'Tutup Jendela Pembayaran?',
-                    text: 'Pesanan Anda telah disimpan di sistem. Anda dapat melihat instruksi dan memeriksa status pembayaran di halaman rincian pesanan.',
+                    text: 'Apakah Anda ingin kembali ke pilihan pembayaran atau melihat rincian pesanan?',
                     icon: 'question',
                     showCancelButton: true,
+                    showDenyButton: true,
                     confirmButtonColor: '#1e3a8a',
+                    denyButtonColor: '#d97706',
                     cancelButtonColor: '#6b7280',
-                    confirmButtonText: 'Ya, Lihat Rincian Pesanan',
-                    cancelButtonText: 'Lanjutkan Bayar'
+                    confirmButtonText: 'Kembali ke Pembayaran',
+                    denyButtonText: 'Lihat Rincian Pesanan',
+                    cancelButtonText: 'Batal'
                 }).then(function (result) {
                     if (result.isConfirmed) {
+                        closeModalAndStay();
+                        window.dispatchEvent(new CustomEvent('show-toast', { 
+                            detail: { type: 'info', message: 'Anda kembali ke pilihan metode pembayaran.' } 
+                        }));
+                    } else if (result.isDenied) {
                         window.location.href = targetUrl;
                     }
                 });
             } else {
-                if (confirm('Pesanan Anda sudah tersimpan. Buka rincian pesanan?')) {
+                if (confirm('Tutup dan kembali ke pilihan pembayaran? Tekan Cancel untuk melihat rincian pesanan.')) {
+                    closeModalAndStay();
+                } else {
                     window.location.href = targetUrl;
                 }
             }
@@ -558,8 +646,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle messages from Espay Snap Iframe
     window.addEventListener('message', function (event) {
         if (!event.data) return;
+        // Verify origin if provided to prevent stray messages from extensions or tools
+        if (event.origin && !event.origin.includes('espay.id') && !event.origin.includes(window.location.hostname)) {
+            return;
+        }
         try {
             var msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (!msg || typeof msg !== 'object') return;
             if (msg.status === 'success' || msg.status === 'paid' || msg.action === 'close' || msg.type === 'close') {
                 var manualRedirectBtn = document.getElementById('espay-manual-redirect-btn');
                 var container = document.getElementById('payment-container');

@@ -269,8 +269,14 @@
                                     <p class="text-[11px] sm:text-xs text-gray-500">Selesaikan pembayaran sebelum batas waktu agar pesanan tidak otomatis dibatalkan.</p>
                                 </div>
                             </div>
-                            <div class="self-end sm:self-center font-mono font-black text-lg sm:text-xl text-red-600 bg-white px-3 py-1.5 rounded-xl shadow-2xs border border-red-200 tracking-widest shrink-0" id="thankyou-countdown" data-remaining="{{ $remainingSeconds }}" data-created="{{ $paymentStartedAt->toIso8601String() }}">
-                                {{ $initialCountdownText }}
+                            <div class="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+                                <div class="font-mono font-black text-lg sm:text-xl text-red-600 bg-white px-3 py-1.5 rounded-xl shadow-2xs border border-red-200 tracking-widest" id="thankyou-countdown" data-remaining="{{ $remainingSeconds }}" data-created="{{ $paymentStartedAt->toIso8601String() }}">
+                                    {{ $initialCountdownText }}
+                                </div>
+                                <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="px-3.5 py-2 bg-brand-dark hover:bg-brand-darker text-brand-gold rounded-xl font-bold text-xs shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-credit-card text-xs"></i>
+                                    <span>Bayar Sekarang</span>
+                                </a>
                             </div>
                         </div>
                     @elseif($isPaid)
@@ -612,6 +618,13 @@
                                         <a href="{{ $paymentUrl }}" target="_blank" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm">
                                             <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
                                             <span>Buka Halaman Pembayaran Kartu</span>
+                                        </a>
+                                    </div>
+                                @elseif(!$isPaid && $status == 1)
+                                    <div class="pt-3 border-t border-gray-100 text-center">
+                                        <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm">
+                                            <i class="fa-solid fa-credit-card text-xs"></i>
+                                            <span>Lanjutkan Pembayaran Kartu Kredit</span>
                                         </a>
                                     </div>
                                 @endif
@@ -1124,6 +1137,13 @@
 
                     <!-- Quick Action Buttons -->
                     <div class="mt-6 pt-5 border-t border-gray-100 space-y-3 no-print">
+                        @if(!$isPaid && $status == 1)
+                            <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full py-3.5 text-center text-white bg-brand-dark hover:bg-brand-darker rounded-xl font-bold text-xs uppercase tracking-wider transition-all block shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer">
+                                <i class="fa-solid fa-credit-card"></i>
+                                <span>Lanjutkan Pembayaran / Ganti Saluran</span>
+                            </a>
+                        @endif
+
                         @if(session()->get('is_logged_in'))
                             <a href="{{ route('dashboard', ['tab' => 'orders']) }}" class="w-full py-3 text-center text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-xs transition-all block">
                                 <i class="fa-solid fa-receipt mr-1"></i> Lihat Riwayat Pesanan

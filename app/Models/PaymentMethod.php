@@ -280,6 +280,9 @@ class PaymentMethod extends Model
     public static function findByCodeOrBank(?string $code, ?int $type = null): ?self
     {
         if (empty($code)) {
+            if ($type) {
+                return static::withoutGlobalScope('active')->where('type', $type)->first();
+            }
             return null;
         }
 
@@ -337,6 +340,26 @@ class PaymentMethod extends Model
                 ->first();
             if ($qris) {
                 return $qris;
+            }
+        }
+
+        // Khusus Kartu Kredit (Type 5)
+        if ($type === 5 || in_array($upper, ['CREDITCARD', 'CREDIT_CARD', 'CREDIT CARD', 'CC', 'CREDIT'])) {
+            $cc = static::withoutGlobalScope('active')
+                ->where('type', 5)
+                ->first();
+            if ($cc) {
+                return $cc;
+            }
+        }
+
+        // Khusus Kartu Debit (Type 6)
+        if ($type === 6 || in_array($upper, ['DEBITCARD', 'DEBIT_CARD', 'DEBIT CARD', 'DEBIT'])) {
+            $dc = static::withoutGlobalScope('active')
+                ->where('type', 6)
+                ->first();
+            if ($dc) {
+                return $dc;
             }
         }
 

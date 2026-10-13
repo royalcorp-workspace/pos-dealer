@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function syncVouchersWithServer(codes, shippingCost) {
         var token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
             || document.querySelector('input[name="_token"]')?.value || '';
-        var emailInput = document.getElementById('email');
+        var emailInput = document.getElementById('email') || document.querySelector('input[name="email"]');
         var customerEmail = emailInput ? emailInput.value.trim() : '';
 
         fetch('/checkout/sync-vouchers', {
@@ -98,6 +98,48 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .then(function(res) { return res.json(); })
         .then(function(data) {
+            if (data && data.removed_codes && data.removed_codes.length > 0) {
+                var removedUpper = data.removed_codes.map(function(c) { return String(c).toUpperCase().trim(); });
+                // 1. Remove invalid codes immediately from selectedCoupons
+                selectedCoupons = selectedCoupons.filter(function(c) {
+                    return !removedUpper.includes(String(c).toUpperCase().trim());
+                });
+
+                // 2. Remove from manualCouponsData cache
+                removedUpper.forEach(function(code) {
+                    delete manualCouponsData[code];
+                });
+
+                // 3. Reset card and option buttons in UI
+                document.querySelectorAll('.coupon-card, .coupon-option').forEach(function(button) {
+                    var bCode = button.dataset.code ? button.dataset.code.trim().toUpperCase() : '';
+                    if (removedUpper.includes(bCode)) {
+                        button.classList.remove('border-brand-gold', 'bg-brand-light');
+                        var label = button.querySelector('.select-coupon-label') || button.querySelector('.coupon-option-label');
+                        if (label) label.textContent = 'Pilih';
+                    }
+                });
+
+                // 4. Update localStorage immediately so cart drawer & checkout stay clean
+                saveSelectedCouponsToLocalStorage(selectedCoupons);
+
+                // 5. Update server discount baselines if provided
+                if (data.selected_voucher) {
+                    serverProductVoucherDiscount = Number(data.selected_voucher.product_discount || 0);
+                    serverShippingVoucherDiscount = Number(data.selected_voucher.shipping_discount || 0);
+                    var pVInput = document.getElementById('checkout-product-voucher-discount');
+                    if (pVInput) pVInput.dataset.value = serverProductVoucherDiscount;
+                    var sVInput = document.getElementById('checkout-shipping-voucher-discount');
+                    if (sVInput) sVInput.dataset.value = serverShippingVoucherDiscount;
+                    var vDInput = document.getElementById('checkout-voucher-discount');
+                    if (vDInput) vDInput.dataset.value = data.selected_voucher.discount || 0;
+                }
+
+                // 6. Refresh display and calculations (without triggering another sync)
+                updateSelectedCouponDisplay(false);
+                updateTotal();
+            }
+
             if (data && data.warning_message) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
@@ -637,7 +679,8 @@ document.addEventListener('DOMContentLoaded', function () {
         updateTotal();
     };
 
-    function updateSelectedCouponDisplay() {
+    function updateSelectedCouponDisplay(shouldSync) {
+        if (shouldSync === undefined) shouldSync = true;
         var voucherCodeEl = document.getElementById('voucher-code');
         var voucherCodesEl = document.getElementById('voucher-codes');
         var voucherRow = document.getElementById('checkout-voucher-row');
@@ -647,7 +690,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (voucherCodesEl) voucherCodesEl.value = selectedCoupons.join(',');
         if (selectedCoupons.length === 0) {
             saveSelectedCouponsToLocalStorage([]);
-            syncVouchersWithServer([], currentShippingCost);
+            if (shouldSync) {
+                syncVouchersWithServer([], currentShippingCost);
+            }
             selectedCouponDiscount = 0;
             selectedProductVoucherDiscount = 0;
             selectedShippingVoucherDiscount = 0;
@@ -656,9 +701,13 @@ document.addEventListener('DOMContentLoaded', function () {
             if (voucherRow) voucherRow.style.display = 'none';
             var shippingVoucherRow = document.getElementById('checkout-shipping-voucher-row');
             if (shippingVoucherRow) shippingVoucherRow.style.display = 'none';
+            var bonusDisplay = document.getElementById('bonus-products-display');
+            if (bonusDisplay) bonusDisplay.innerHTML = '';
         } else {
             saveSelectedCouponsToLocalStorage(selectedCoupons);
-            syncVouchersWithServer(selectedCoupons, currentShippingCost);
+            if (shouldSync) {
+                syncVouchersWithServer(selectedCoupons, currentShippingCost);
+            }
 
             var totalProductDiscount = 0;
             var totalShippingDiscount = 0;
@@ -740,7 +789,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (selectedText) selectedText.innerHTML = 'Kupon dipilih: <strong class="text-brand-dark">' + selectedCoupons.join(', ') + '</strong>';
             
             var bonusDisplay = document.getElementById('bonus-products-display');
-            if (bonusDisplay && bonusHtml) bonusDisplay.innerHTML = bonusHtml;
+            if (bonusDisplay) bonusDisplay.innerHTML = bonusHtml;
 
             // Product Voucher row: only display single product voucher code (never include shipping voucher)
             var productVoucherCodes = selectedCoupons.filter(function(code) { return !checkCouponIsShipping(code); });
@@ -943,6 +992,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         window.alert(data.message);
                     }
                 }
+                var upperCode = code.trim().toUpperCase();
+                if (selectedCoupons.includes(upperCode)) {
+                    selectedCoupons = selectedCoupons.filter(function(c) { return c !== upperCode; });
+                    delete manualCouponsData[upperCode];
+                    saveSelectedCouponsToLocalStorage(selectedCoupons);
+                    updateSelectedCouponDisplay(true);
+                    updateTotal();
+                }
             }
         })
         .catch(function() {
@@ -965,6 +1022,22 @@ document.addEventListener('DOMContentLoaded', function () {
         currentShippingCost = 0;
         updateShippingUI('', 0, null);
         updateTotal();
+    }
+
+    var emailInputEl = document.getElementById('email') || document.querySelector('input[name="email"]');
+    if (emailInputEl) {
+        var prevValidatedEmail = emailInputEl.value.trim().toLowerCase();
+        var revalidateVouchersOnEmail = function () {
+            var currEmail = emailInputEl.value.trim().toLowerCase();
+            if (currEmail && currEmail !== prevValidatedEmail) {
+                prevValidatedEmail = currEmail;
+                if (selectedCoupons.length > 0) {
+                    syncVouchersWithServer(selectedCoupons, currentShippingCost);
+                }
+            }
+        };
+        emailInputEl.addEventListener('blur', revalidateVouchersOnEmail);
+        emailInputEl.addEventListener('change', revalidateVouchersOnEmail);
     }
 });
 

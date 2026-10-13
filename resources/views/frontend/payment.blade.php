@@ -300,7 +300,7 @@
                             <div class="flex-1">
                                 <h4 class="font-bold text-red-900 text-sm mb-0.5">Metode Pembayaran Belum Dipilih</h4>
                                 <p class="text-xs text-red-700 leading-relaxed">
-                                    Silakan pilih salah satu metode pembayaran di bawah ini (Transfer Bank / Virtual Account / E-Wallet / QRIS / Kartu Debit / Kartu Kredit) sebelum melanjutkan ke proses pembayaran.
+                                    Silakan pilih salah satu metode pembayaran di bawah ini (Transfer Bank / Virtual Account / E-Wallet / QRIS / Kartu Kredit) sebelum melanjutkan ke proses pembayaran.
                                 </p>
                             </div>
                         </div>
