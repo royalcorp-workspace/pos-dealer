@@ -94,6 +94,143 @@ function checkSelection() {
 
 let selectedAttributes = {};
 
+function isSizeGroup(groupName) {
+    if (!groupName) return false;
+    const lower = String(groupName).trim().toLowerCase();
+    if (lower.includes('ukuran') || lower.includes('size') || lower.includes('dimensi')) return true;
+    if (window.sizeTitle && lower === String(window.sizeTitle).trim().toLowerCase()) return true;
+    return false;
+}
+
+function normalizeAttrVal(val) {
+    if (val === undefined || val === null) return '';
+    return String(val).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function updateSizeOptionsAvailability() {
+    const containers = document.querySelectorAll('.attribute-group-container');
+    if (!containers || containers.length === 0 || !window.productVariants || window.productVariants.length === 0) return;
+
+    let sizeContainer = null;
+    let sizeGroupName = null;
+
+    containers.forEach(c => {
+        const group = c.dataset.attributeGroup;
+        if (isSizeGroup(group)) {
+            sizeContainer = c;
+            sizeGroupName = group;
+        }
+    });
+
+    if (!sizeContainer || !sizeGroupName) return;
+
+    // Collect currently selected non-size attributes
+    const nonSizeSelections = {};
+    for (const [k, v] of Object.entries(selectedAttributes)) {
+        if (!isSizeGroup(k) && v) {
+            nonSizeSelections[k] = v;
+        }
+    }
+    const hasNonSizeSelections = Object.keys(nonSizeSelections).length > 0;
+
+    const sizeButtons = sizeContainer.querySelectorAll('.attribute-btn');
+    sizeButtons.forEach(btn => {
+        const sizeVal = btn.dataset.attributeValue;
+        if (!sizeVal) return;
+        const normBtnVal = normalizeAttrVal(sizeVal);
+
+        // Find variants matching this size
+        const matchingVariants = window.productVariants.filter(v => {
+            if (!v.attributes) return false;
+
+            let vSize = v.attributes[sizeGroupName];
+            if (vSize === undefined) vSize = v.attributes['Ukuran'];
+            if (vSize === undefined) vSize = v.attributes['size'];
+            if (vSize === undefined) vSize = v.attributes['dimensi'];
+            if (vSize === undefined && window.sizeTitle) vSize = v.attributes[window.sizeTitle];
+
+            if (!vSize || normalizeAttrVal(vSize) !== normBtnVal) {
+                return false;
+            }
+
+            // If non-size attributes are selected, variant must also match all of them
+            if (hasNonSizeSelections) {
+                for (const [k, vVal] of Object.entries(nonSizeSelections)) {
+                    let attrVal = v.attributes[k];
+                    if (attrVal === undefined) attrVal = v.attributes[k.toLowerCase()];
+                    if (attrVal === undefined && window.completenessTitle && (k.toLowerCase().includes('kelengkapan') || k.toLowerCase().includes('feel') || k.toLowerCase().includes('opsi'))) {
+                        attrVal = v.attributes[window.completenessTitle];
+                    }
+                    if (attrVal === undefined || normalizeAttrVal(attrVal) !== normalizeAttrVal(vVal)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        });
+
+        // Determine stock availability:
+        // If variants match this combination, check if any has stock > 0
+        const isAvailable = matchingVariants.length > 0 && matchingVariants.some(v => (parseInt(v.stock_quantity) || 0) > 0);
+
+        const badge = btn.querySelector('.attr-stock-badge');
+        const optText = btn.querySelector('.attr-option-text');
+        const circle = btn.querySelector('.card-radio-circle');
+
+        if (!isAvailable) {
+            btn.disabled = true;
+            btn.classList.add('opacity-40', 'cursor-not-allowed', 'bg-gray-50', 'border-dashed', 'border-gray-200');
+            btn.classList.remove('cursor-pointer', 'bg-white', 'border-brand-dark', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/60', 'text-brand-dark', 'shadow-xs', 'hover:border-brand-gold/70', 'hover:shadow-2xs');
+
+            if (optText) {
+                optText.classList.add('line-through', 'text-gray-400');
+            }
+            if (badge) {
+                badge.classList.remove('hidden');
+            }
+            if (circle) {
+                circle.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white');
+                circle.classList.add('border-gray-300');
+                circle.innerHTML = '';
+            }
+
+            // If this size was currently selected, deselect it
+            if (selectedAttributes[sizeGroupName] && normalizeAttrVal(selectedAttributes[sizeGroupName]) === normBtnVal) {
+                delete selectedAttributes[sizeGroupName];
+                const groupBadge = sizeContainer.querySelector('.selected-attr-badge');
+                if (groupBadge) groupBadge.textContent = '';
+
+                const variantInput = document.getElementById('variant-id-input');
+                if (variantInput) variantInput.value = '';
+            }
+        } else {
+            btn.disabled = false;
+            btn.classList.remove('opacity-40', 'cursor-not-allowed', 'bg-gray-50', 'border-dashed');
+
+            const isSelected = selectedAttributes[sizeGroupName] && normalizeAttrVal(selectedAttributes[sizeGroupName]) === normBtnVal;
+            if (!isSelected) {
+                btn.classList.remove('border-brand-dark', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/60', 'text-brand-dark', 'shadow-xs');
+                btn.classList.add('cursor-pointer', 'bg-white', 'border-gray-200', 'hover:border-brand-gold/70', 'hover:shadow-2xs');
+                if (circle) {
+                    circle.classList.remove('border-brand-dark', 'bg-brand-dark', 'text-white');
+                    circle.classList.add('border-gray-300');
+                    circle.innerHTML = '';
+                }
+            }
+
+            if (optText) {
+                optText.classList.remove('line-through', 'text-gray-400');
+            }
+            if (badge) {
+                badge.classList.add('hidden');
+            }
+        }
+    });
+}
+window.isSizeGroup = isSizeGroup;
+window.updateSizeOptionsAvailability = updateSizeOptionsAvailability;
+
 function selectAttribute(el) {
     if (!el || el.disabled) return;
 
@@ -143,6 +280,7 @@ function selectAttribute(el) {
         }
     }
     
+    updateSizeOptionsAvailability();
     findMatchingVariant();
 }
 
@@ -762,6 +900,9 @@ document.addEventListener('DOMContentLoaded', function() {
         b.textContent = '';
     });
 
+    // Update size options availability based on stock
+    updateSizeOptionsAvailability();
+
     // Auto-select if only 1 option exists and activate add to cart button
     autoSelectSingleOptions();
 });
@@ -770,17 +911,33 @@ function autoSelectSingleOptions() {
     // 1. Check attribute groups
     const attrGroups = document.querySelectorAll('.attribute-group-container');
     if (attrGroups.length > 0) {
+        // Auto-select non-size attribute groups first if only 1 option exists
         attrGroups.forEach(group => {
-            const btns = group.querySelectorAll('.attribute-btn:not(:disabled)');
-            if (btns.length === 1) {
-                selectAttribute(btns[0]);
+            if (!isSizeGroup(group.dataset.attributeGroup)) {
+                const btns = group.querySelectorAll('.attribute-btn:not(:disabled)');
+                if (btns.length === 1) {
+                    selectAttribute(btns[0]);
+                }
+            }
+        });
+
+        // Re-evaluate size options availability after non-size selections
+        updateSizeOptionsAvailability();
+
+        // Auto-select size attribute group if only 1 enabled option exists
+        attrGroups.forEach(group => {
+            if (isSizeGroup(group.dataset.attributeGroup)) {
+                const btns = group.querySelectorAll('.attribute-btn:not(:disabled)');
+                if (btns.length === 1) {
+                    selectAttribute(btns[0]);
+                }
             }
         });
 
         // If there's only 1 product variant defined in window.productVariants
         if (window.productVariants && window.productVariants.length === 1) {
             const singleV = window.productVariants[0];
-            if (singleV && singleV.attributes) {
+            if (singleV && (parseInt(singleV.stock_quantity) || 0) > 0 && singleV.attributes) {
                 for (const [groupName, attrVal] of Object.entries(singleV.attributes)) {
                     const btn = document.querySelector(`.attribute-btn[data-attribute-group="${groupName}"][data-attribute-value="${attrVal}"]:not(:disabled)`) ||
                                 document.querySelector(`.attribute-btn[data-attribute-value="${attrVal}"]:not(:disabled)`);

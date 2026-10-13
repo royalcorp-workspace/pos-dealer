@@ -136,6 +136,40 @@ class CheckoutController extends Controller
                 Session::put('selected_voucher_codes', $selectedVoucherCodes);
             }
         }
+
+        $initCheckEmail = session()->get('is_logged_in')
+            ? (session()->get('user')['email'] ?? (session()->get('user')['username'] ?? null))
+            : session()->get('checkout_form_data.email');
+        if (!empty($initCheckEmail)) {
+            $initCheckEmail = strtolower(trim((string)$initCheckEmail));
+        }
+
+        if (!empty($selectedVoucherCodes) && !empty($initCheckEmail)) {
+            $validCodes = [];
+            foreach ($selectedVoucherCodes as $code) {
+                $checkV = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($code))])->first();
+                if ($checkV) {
+                    if ($checkV->hasBeenUsedByEmail($initCheckEmail)) {
+                        continue;
+                    }
+                    if ($checkV->valid_for_new_customer && $checkV->isEmailExistingCustomer($initCheckEmail)) {
+                        continue;
+                    }
+                    $validCodes[] = strtoupper(trim($code));
+                }
+            }
+            if (count($validCodes) !== count($selectedVoucherCodes)) {
+                $selectedVoucherCodes = $validCodes;
+                Session::put('selected_voucher_codes', $selectedVoucherCodes);
+                if ($buffer) {
+                    $meta = $buffer->meta ?? [];
+                    $meta['voucher_codes'] = $selectedVoucherCodes;
+                    $meta['voucher_code'] = implode(',', $selectedVoucherCodes);
+                    $buffer->update(['meta' => $meta]);
+                }
+            }
+        }
+
         $selectedVouchers = \App\Models\Frontend\Promo\Voucher::active()
             ->whereIn(\Illuminate\Support\Facades\DB::raw('UPPER(code)'), array_map('strtoupper', $selectedVoucherCodes))
             ->with(['categories', 'products', 'brands', 'customerGroups'])
@@ -575,20 +609,38 @@ class CheckoutController extends Controller
         $voucherCodes = $this->parseVoucherCodes($request);
         if ($voucherCodes) {
             // Validasi email pengguna baru & batas penggunaan voucher ketika di guest mode atau email sudah pernah pakai
+            $validCodes = [];
+            $hasInvalid = false;
+            $invalidMessages = [];
             foreach ($voucherCodes as $vCode) {
                 $checkVoucher = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($vCode))])->first();
                 if ($checkVoucher) {
                     if ($checkVoucher->hasBeenUsedByEmail($customerEmail)) {
-                        return redirect()->route('checkout')
-                            ->withErrors(['voucher_code' => "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$checkVoucher->code} sebelumnya."])
-                            ->withInput();
+                        $hasInvalid = true;
+                        $invalidMessages[] = "Email {$customerEmail} sudah pernah menggunakan voucher {$checkVoucher->code} sebelumnya.";
+                        continue;
                     }
                     if ($checkVoucher->valid_for_new_customer && $checkVoucher->isEmailExistingCustomer($customerEmail)) {
-                        return redirect()->route('checkout')
-                            ->withErrors(['voucher_code' => "Peringatan: Voucher {$checkVoucher->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya."])
-                            ->withInput();
+                        $hasInvalid = true;
+                        $invalidMessages[] = "Voucher {$checkVoucher->code} khusus untuk pengguna baru (email {$customerEmail} sudah pernah bertransaksi).";
+                        continue;
                     }
                 }
+                $validCodes[] = strtoupper(trim($vCode));
+            }
+
+            if ($hasInvalid) {
+                // Hapus voucher yang invalid dari session dan buffer otomatis
+                Session::put('selected_voucher_codes', $validCodes);
+                if ($buffer) {
+                    $meta = $buffer->meta ?? [];
+                    $meta['voucher_codes'] = $validCodes;
+                    $meta['voucher_code'] = implode(',', $validCodes);
+                    $buffer->update(['meta' => $meta]);
+                }
+                return redirect()->route('checkout')
+                    ->withErrors(['voucher_code' => implode(' ', $invalidMessages) . ' Voucher telah otomatis dihapus dari pesanan Anda. Silakan lanjutkan transaksi.'])
+                    ->withInput();
             }
 
             $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCost, $customerEmail);
@@ -895,11 +947,6 @@ class CheckoutController extends Controller
 
         // If buffer is empty/missing, check if there is an existing UNPAID order to resume payment
         if ((empty($cart) || !$buffer) && $existingOrder && (int)$existingOrder->payment_status === 1 && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
-            // If order already has an initiated payment / settlement, navigating back to payment should redirect to thankyou page!
-            if (!empty($existingOrder->settlement_id) || \App\Models\Settlement::where('reference_id', $existingOrder->order_number)->exists() || session()->get('thankyou_order_id') === $existingOrder->id) {
-                return redirect()->route('thankyou', ['order_id' => $existingOrder->id]);
-            }
-
             $orderData = $this->formatOrderDataFromModel($existingOrder);
             session()->put('order_data', $orderData);
             session()->put('last_created_order_id', $existingOrder->id);
@@ -1007,9 +1054,9 @@ class CheckoutController extends Controller
             elseif ($type === 5 || str_contains($rawCode, 'CREDIT') || str_contains($rawName, 'CREDIT')) {
                 $channelKey = 'credit_card';
             }
-            // 4. Kartu Debit (Type 6)
+            // 4. Kartu Debit (Type 6) - disembunyikan sementara sesuai request
             elseif ($type === 6 || str_contains($rawCode, 'DEBIT') || str_contains($rawName, 'DEBIT')) {
-                $channelKey = 'debit_card';
+                continue;
             }
             // 5. E-Wallet GoPay (Type 3 atau nama/kode GOPAY)
             elseif (str_contains($rawCode, 'GOPAY') || str_contains($rawName, 'GOPAY') || ($type === 3 && $rawCode === '014')) {
@@ -1242,14 +1289,6 @@ class CheckoutController extends Controller
             ]);
         }
 
-        // If order already has an initiated payment / settlement, redirect to thankyou immediately
-        if ($existingOrder && (!empty($existingOrder->settlement_id) || \App\Models\Settlement::where('reference_id', $existingOrder->order_number)->exists() || session()->get('thankyou_order_id') === $existingOrder->id)) {
-            return response()->json([
-                'success' => true,
-                'redirect_url' => route('thankyou', ['order_id' => $existingOrder->id]),
-                'message' => 'Pesanan ini sudah berhasil dibuat. Mengalihkan ke rincian pembayaran...'
-            ]);
-        }
 
         // Recover cart from buffer meta or session order_data if buffer_items table was cleared or detached
         if (empty($cart) && !$existingOrder) {
@@ -1527,16 +1566,25 @@ class CheckoutController extends Controller
                     foreach ($appliedVouchers as $av) {
                         $vModel = $av['voucher'] ?? null;
                         if ($vModel) {
-                            if ($vModel->hasBeenUsedByEmail($customerEmail)) {
+                            $isUsed = $vModel->hasBeenUsedByEmail($customerEmail);
+                            $isNotNew = $vModel->valid_for_new_customer && $vModel->isEmailExistingCustomer($customerEmail);
+                            if ($isUsed || $isNotNew) {
+                                Session::forget(['selected_voucher_codes', 'selected_voucher']);
+                                if ($buffer) {
+                                    $meta = $buffer->meta ?? [];
+                                    $meta['voucher_codes'] = [];
+                                    $meta['voucher_code'] = '';
+                                    $meta['voucher_discount'] = 0;
+                                    $meta['product_voucher_discount'] = 0;
+                                    $meta['shipping_voucher_discount'] = 0;
+                                    $buffer->update(['meta' => $meta]);
+                                }
+                                $msg = $isUsed
+                                    ? "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$vModel->code} sebelumnya. Voucher telah dihapus otomatis."
+                                    : "Peringatan: Voucher {$vModel->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya. Voucher telah dihapus otomatis.";
                                 return response()->json([
                                     'success' => false,
-                                    'message' => "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$vModel->code} sebelumnya."
-                                ], 422);
-                            }
-                            if ($vModel->valid_for_new_customer && $vModel->isEmailExistingCustomer($customerEmail)) {
-                                return response()->json([
-                                    'success' => false,
-                                    'message' => "Peringatan: Voucher {$vModel->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya."
+                                    'message' => $msg,
                                 ], 422);
                             }
                         }
@@ -1845,7 +1893,8 @@ class CheckoutController extends Controller
         $isTypeDebitCard = ($paymentType === 6);
         $isSnapPayment = ($isTypeQris || $isTypeCreditCard || $isTypeDebitCard);
 
-        $isEspay = $paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay';
+        $isEspay = ($paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay')
+            || (!empty(config('espay.merchant_key')) && $isSnapPayment);
         if ($isEspay) {
             $amount = number_format((float)($order->total), 2, '.', '');
             $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
@@ -2538,16 +2587,22 @@ class CheckoutController extends Controller
         }
 
         $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
+        $customerEmail = session()->get('is_logged_in')
+            ? (session()->get('user')['email'] ?? (session()->get('user')['username'] ?? null))
+            : session()->get('checkout_form_data.email');
+        if (!empty($customerEmail)) {
+            $customerEmail = strtolower(trim((string)$customerEmail));
+        }
 
         return Voucher::active()
             ->where('show_on_web', true)
             ->with(['categories', 'products', 'brands', 'customerGroups'])
             ->get()
-            ->filter(function ($voucher) use ($cart, $userId) {
+            ->filter(function ($voucher) use ($cart, $userId, $customerEmail) {
                 return $voucher->appliesToCart($cart, $userId);
             })
-            ->map(function ($voucher) use ($cart, $userId) {
-                $voucher->is_usable = $voucher->canBeUsedBy($userId);
+            ->map(function ($voucher) use ($cart, $userId, $customerEmail) {
+                $voucher->is_usable = $voucher->canBeUsedBy($userId, $customerEmail);
                 $voucher->eligible_subtotal = $voucher->getEligibleSubtotal($cart);
                 return $voucher;
             })
@@ -3371,21 +3426,41 @@ class CheckoutController extends Controller
         }
 
         $warningMessage = null;
-        if (!empty($customerEmail) && !empty($codes)) {
+        $removedCodes = [];
+        $validCodes = [];
+        if (!empty($codes)) {
+            $warningMessages = [];
             foreach ($codes as $vCode) {
                 $checkV = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($vCode))])->first();
-                if ($checkV) {
+                if (!$checkV) {
+                    $removedCodes[] = strtoupper(trim($vCode));
+                    $warningMessages[] = "Voucher {$vCode} sudah tidak aktif atau tidak ditemukan.";
+                    continue;
+                }
+
+                if (!empty($customerEmail)) {
                     if ($checkV->hasBeenUsedByEmail($customerEmail)) {
-                        $warningMessage = "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$checkV->code} sebelumnya.";
-                        break;
+                        $removedCodes[] = strtoupper(trim($vCode));
+                        $warningMessages[] = "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$checkV->code} sebelumnya.";
+                        continue;
                     }
                     if ($checkV->valid_for_new_customer && $checkV->isEmailExistingCustomer($customerEmail)) {
-                        $warningMessage = "Peringatan: Voucher {$checkV->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya.";
-                        break;
+                        $removedCodes[] = strtoupper(trim($vCode));
+                        $warningMessages[] = "Peringatan: Voucher {$checkV->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya.";
+                        continue;
                     }
                 }
+
+                $validCodes[] = strtoupper(trim($vCode));
+            }
+
+            if (!empty($removedCodes)) {
+                $codes = $validCodes;
+                $warningMessage = implode("\n", $warningMessages);
             }
         }
+
+        Session::put('selected_voucher_codes', $codes);
 
         $shippingCost = (float) $request->input('shipping_cost', 0);
         $voucherCalc = $this->calculateVoucherDiscount($codes, $cart, $cartTotal, $shippingCost, $customerEmail);
@@ -3410,6 +3485,7 @@ class CheckoutController extends Controller
         return response()->json([
             'success' => true,
             'codes' => $codes,
+            'removed_codes' => $removedCodes,
             'selected_voucher' => $selectedVoucher,
             'warning_message' => $warningMessage,
         ]);

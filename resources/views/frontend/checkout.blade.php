@@ -422,7 +422,7 @@
                                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
                                     <i class="fa-regular fa-envelope text-brand-gold"></i> Email <span class="text-red-500">*</span>
                                 </label>
-                                <input type="email" name="email" value="{{ $defaultEmail }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="email@example.com">
+                                <input type="email" name="email" id="email" value="{{ $defaultEmail }}" required class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="email@example.com">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center gap-1.5">
