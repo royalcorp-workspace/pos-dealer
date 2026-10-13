@@ -140,16 +140,54 @@ class OrderTrackingController extends Controller
             ?? 'Kurir Pengiriman';
 
         if ($logs->isNotEmpty()) {
+            $statusLabels = [
+                'allocated' => 'Kurir Telah Ditugaskan',
+                'picking_up' => 'Kurir Sedang Menjemput Paket',
+                'picked' => 'Paket Telah Dijemput Kurir',
+                'dropping_off' => 'Paket Menuju Alamat Penerima',
+                'in_transit' => 'Dalam Perjalanan Pengiriman',
+                'on_process' => 'Sedang Diproses Pengiriman',
+                'shipped' => 'Pesanan Telah Dikirim',
+                'delivered' => 'Paket Diterima',
+                'returned' => 'Paket Dikembalikan',
+                'return_in_transit' => 'Paket Dalam Pengembalian',
+                'cancelled' => 'Pengiriman Dibatalkan',
+                'rejected' => 'Pengiriman Ditolak',
+            ];
+
             $events = new Collection();
             foreach ($logs as $log) {
                 $rawPayload = is_string($log->payload) ? json_decode($log->payload, true) : (array) $log->payload;
                 $date = $log->created_at ? \Carbon\Carbon::parse($log->created_at) : now();
 
+                $statusKey = strtolower(trim((string) ($log->status ?? '')));
+                $friendlyStatus = $statusLabels[$statusKey] ?? null;
+
+                $isGenericNote = empty($log->note) || in_array(strtolower(trim((string) $log->note)), [
+                    'pesanan diproses kurir',
+                    'pesanan sedang diproses',
+                    'pesanan diproses',
+                    'status updated',
+                    'allocated',
+                    'picking_up',
+                    'picked',
+                ], true);
+
+                $displayTitle = (!$isGenericNote && !empty($log->note))
+                    ? $log->note
+                    : ($friendlyStatus ?? ($log->note ?: ('Status: ' . ($log->status ?? $log->event))));
+
+                $displayStatus = $friendlyStatus ?? ($log->status ?? $log->event ?? 'In Transit');
+
+                $displayDesc = (!$isGenericNote && !empty($log->note))
+                    ? $log->note
+                    : ($friendlyStatus ? ($friendlyStatus . ($log->location ? ' di ' . $log->location : '')) : ($log->note ?? 'Pembaruan dari ekspedisi.'));
+
                 $events->push((object) [
-                    'status' => $log->status ?? $log->event ?? 'In Transit',
-                    'title' => $log->note ?? ('Status: ' . ($log->status ?? $log->event)),
+                    'status' => $displayStatus,
+                    'title' => $displayTitle,
                     'location' => $log->location ?? '-',
-                    'description' => $log->note ?? 'Pembaruan dari ekspedisi.',
+                    'description' => $displayDesc,
                     'date' => $date,
                     'event' => $log->event,
                     'waybill_id' => $log->waybill_id,
