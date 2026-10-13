@@ -273,7 +273,7 @@
                                 <div class="font-mono font-black text-lg sm:text-xl text-red-600 bg-white px-3 py-1.5 rounded-xl shadow-2xs border border-red-200 tracking-widest" id="thankyou-countdown" data-remaining="{{ $remainingSeconds }}" data-created="{{ $paymentStartedAt->toIso8601String() }}">
                                     {{ $initialCountdownText }}
                                 </div>
-                                <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="px-3.5 py-2 bg-brand-dark hover:bg-brand-darker text-brand-gold rounded-xl font-bold text-xs shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer">
+                                <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="px-3.5 py-2 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl font-bold text-xs shadow-sm hover:shadow-md transition-all inline-flex items-center gap-2 cursor-pointer">
                                     <i class="fa-solid fa-credit-card text-xs"></i>
                                     <span>Bayar Sekarang</span>
                                 </a>
@@ -436,42 +436,20 @@
                         <div class="p-6 sm:p-7 bg-rose-50/50 border-b border-rose-100">
                             <div class="flex items-center justify-between gap-3 mb-4">
                                 <div class="flex items-center gap-2.5">
-                                    <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center text-sm">
+                                    <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center text-sm shadow-2xs">
                                         <i class="fa-solid fa-qrcode"></i>
                                     </div>
                                     <div>
-                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran QRIS Interaktif</h4>
-                                        <p class="text-xs text-gray-500">Scan QRIS menggunakan BCA, Mandiri, GoPay, OVO, ShopeePay, atau aplikasi banking apa saja</p>
+                                        <h4 class="font-bold text-brand-dark text-sm sm:text-base">Pembayaran QRIS</h4>
+                                        <p class="text-xs text-gray-500">BCA, Mandiri, BRI, BNI, GoPay, OVO, ShopeePay, DANA & m-Banking</p>
                                     </div>
                                 </div>
-                                <span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full">QRIS Interaktif</span>
+                                <span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2.5 py-0.5 rounded-full">QRIS</span>
                             </div>
 
-                            <div class="bg-white rounded-2xl p-5 border border-rose-100 shadow-2xs space-y-5">
-                                <div class="flex flex-col items-center justify-center text-center">
-                                    <div class="p-4 bg-white rounded-2xl border-2 border-dashed border-rose-300 shadow-md inline-block max-w-[260px] sm:max-w-[280px]">
-                                        @if(!empty($qrCode))
-                                            <img id="qris-image-element" src="{{ str_starts_with($qrCode, 'http') || str_starts_with($qrCode, 'data:') ? $qrCode : 'data:image/png;base64,' . $qrCode }}" alt="QRIS QR Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
-                                        @else
-                                            @php
-                                                $qrisPayload = !empty($qrString) ? $qrString : (!empty($paymentUrl) ? $paymentUrl : 'ID.CO.QRIS.IMG.' . $orderId . '.' . round($total));
-                                            @endphp
-                                            <img id="qris-image-element" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={{ urlencode($qrisPayload) }}" alt="QRIS Code" class="w-56 h-56 object-contain rounded-lg mx-auto">
-                                        @endif
-                                    </div>
-                                    <div class="mt-3.5 flex items-center justify-center gap-2">
-                                        <button type="button" id="btn-download-qris" onclick="downloadQrisImage('{{ $orderId }}')" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer">
-                                            <i class="fa-solid fa-download text-xs"></i>
-                                            <span>Unduh QRIS</span>
-                                        </button>
-                                    </div>
-                                    <p class="text-xs font-bold text-gray-700 mt-2.5 flex items-center gap-1.5">
-                                        <i class="fa-solid fa-camera text-rose-600"></i> Buka aplikasi e-wallet atau m-Banking Anda & Scan kode di atas
-                                    </p>
-                                </div>
-
+                            <div class="bg-white rounded-2xl p-5 border border-rose-100 shadow-2xs space-y-4">
                                 @if(!empty($trxId))
-                                    <div class="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 p-3 bg-rose-50/50 rounded-xl border border-rose-100">
+                                    <div class="flex items-center justify-between gap-2 p-3 bg-rose-50/50 rounded-xl border border-rose-100">
                                         <div>
                                             <span class="text-[11px] text-gray-500 font-semibold block">ID Transaksi (TRX ID):</span>
                                             <span class="font-mono font-bold text-rose-900 text-xs sm:text-sm tracking-wider select-all" id="qris-trx-id">{{ $trxId }}</span>
@@ -482,7 +460,7 @@
                                     </div>
                                 @endif
 
-                                <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                                <div class="flex items-center justify-between pt-2 border-t border-gray-100">
                                     <div>
                                         <span class="text-xs text-gray-500 font-semibold block">Total yang Harus Dibayar:</span>
                                         <span class="text-[11px] text-gray-400">Tepat hingga nominal akhir</span>
@@ -494,6 +472,15 @@
                                         </button>
                                     </div>
                                 </div>
+
+                                @if(!$isPaid && $status == 1)
+                                    <div class="pt-3 border-t border-gray-100 text-center">
+                                        <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                            <i class="fa-solid fa-credit-card text-xs"></i>
+                                            <span>Lanjutkan Pembayaran</span>
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
 
                             <div class="mt-4 pt-4 border-t border-rose-100 no-print">
@@ -502,10 +489,9 @@
                                 </h5>
                                 <div class="bg-white rounded-xl border border-rose-100 p-3.5 text-xs text-gray-600 space-y-1.5">
                                     <p>1. Buka aplikasi m-Banking atau e-Wallet pilihan Anda (BCA Mobile, Livin' Mandiri, BRImo, GoPay, OVO, ShopeePay, DANA, dll).</p>
-                                    <p>2. Pilih menu <strong>Scan / Bayar / QRIS</strong>.</p>
-                                    <p>3. Arahkan kamera ke QR Code di atas atau upload tangkapan layar kode QR.</p>
-                                    <p>4. Periksa kecocokan nama merchant dan total tagihan <strong>Rp {{ number_format($total, 0, ',', '.') }}</strong>, lalu konfirmasi pembayaran.</p>
-                                    <p>5. Pembayaran akan terverifikasi secara otomatis oleh sistem kami.</p>
+                                    <p>2. Buka menu <strong>Scan / Bayar / QRIS</strong> pada aplikasi.</p>
+                                    <p>3. Pastikan nominal pembayaran sesuai <strong>Rp {{ number_format($total, 0, ',', '.') }}</strong>, lalu konfirmasi pembayaran.</p>
+                                    <p>4. Transaksi akan otomatis terverifikasi begitu pembayaran berhasil.</p>
                                 </div>
                             </div>
                         </div>
@@ -1138,20 +1124,21 @@
                     <!-- Quick Action Buttons -->
                     <div class="mt-6 pt-5 border-t border-gray-100 space-y-3 no-print">
                         @if(!$isPaid && $status == 1)
-                            <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full py-3.5 text-center text-white bg-brand-dark hover:bg-brand-darker rounded-xl font-bold text-xs uppercase tracking-wider transition-all block shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer">
-                                <i class="fa-solid fa-credit-card"></i>
-                                <span>Lanjutkan Pembayaran / Ganti Saluran</span>
+                            <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full py-3 px-4 text-center rounded-xl font-bold text-xs sm:text-sm bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                                <i class="fa-solid fa-credit-card text-xs"></i>
+                                <span>Lanjutkan Pembayaran</span>
                             </a>
                         @endif
 
                         @if(session()->get('is_logged_in'))
-                            <a href="{{ route('dashboard', ['tab' => 'orders']) }}" class="w-full py-3 text-center text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-xs transition-all block">
-                                <i class="fa-solid fa-receipt mr-1"></i> Lihat Riwayat Pesanan
+                            <a href="{{ route('dashboard', ['tab' => 'orders']) }}" class="w-full py-2.5 px-4 text-center text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs transition-all shadow-2xs hover:shadow-sm flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-receipt text-gray-400 text-xs"></i>
+                                <span>Lihat Riwayat Pesanan</span>
                             </a>
                         @endif
 
-                        <a href="{{ route('home') }}" class="w-full py-2.5 text-center text-gray-500 hover:text-brand-dark text-xs font-semibold block transition-colors">
-                            <i class="fa-solid fa-arrow-left mr-1 text-[10px]"></i> Belanja Produk Lainnya
+                        <a href="{{ route('home') }}" class="w-full py-2 text-center text-gray-500 hover:text-brand-dark text-xs font-semibold block transition-colors">
+                            <i class="fa-solid fa-arrow-left mr-1.5 text-[10px]"></i> Belanja Produk Lainnya
                         </a>
                     </div>
 
