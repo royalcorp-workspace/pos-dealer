@@ -1239,6 +1239,46 @@ class CheckoutController extends Controller
 
         $paymentMethods = array_values($uniqueMethods);
 
+        $selectedPaymentMethodCode = null;
+        if ($existingOrder) {
+            $targetCode = $existingOrder->meta['payment_method_code'] 
+                ?? (is_string($existingOrder->payment_method) && !\Illuminate\Support\Str::isUuid($existingOrder->payment_method) ? $existingOrder->payment_method : null);
+            $targetId = $existingOrder->meta['payment_method_id'] 
+                ?? (\Illuminate\Support\Str::isUuid((string)$existingOrder->payment_method) ? $existingOrder->payment_method : null);
+
+            $orderPmModel = ($targetId ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($targetId) : null)
+                ?? ($targetCode ? \App\Models\PaymentMethod::findByCodeOrBank($targetCode) : null);
+
+            foreach ($paymentMethods as $pmItem) {
+                if (!empty($targetCode) && (strcasecmp($pmItem['code'], $targetCode) === 0 || strcasecmp($pmItem['db_code'] ?? '', $targetCode) === 0)) {
+                    $selectedPaymentMethodCode = $pmItem['code'];
+                    break;
+                }
+                if ($orderPmModel) {
+                    if (!empty($pmItem['db_code']) && strcasecmp($pmItem['db_code'], $orderPmModel->code) === 0) {
+                        $selectedPaymentMethodCode = $pmItem['code'];
+                        break;
+                    }
+                    if ((int)$pmItem['type_id'] === (int)$orderPmModel->type && (int)$orderPmModel->type === 4) {
+                        $selectedPaymentMethodCode = $pmItem['code'];
+                        break;
+                    }
+                    if ((int)$pmItem['type_id'] === (int)$orderPmModel->type && (int)$orderPmModel->type === 1) {
+                        $selectedPaymentMethodCode = $pmItem['code'];
+                        break;
+                    }
+                    if ((int)$pmItem['type_id'] === (int)$orderPmModel->type && (int)$orderPmModel->type === 5) {
+                        $selectedPaymentMethodCode = $pmItem['code'];
+                        break;
+                    }
+                    if ((int)$pmItem['type_id'] === (int)$orderPmModel->type && (int)$orderPmModel->type === 3 && !empty($pmItem['bank_code']) && $pmItem['bank_code'] === ($orderPmModel->bank_info['bank_code'] ?? '')) {
+                        $selectedPaymentMethodCode = $pmItem['code'];
+                        break;
+                    }
+                }
+            }
+        }
+
         $user = session()->get('user', []);
         $userId = $user['id'] ?? $user['sub'] ?? null;
         $address = null;
@@ -1247,7 +1287,7 @@ class CheckoutController extends Controller
         }
         $shippingAddress = $orderData['shipping_address'] ?? null;
 
-        return view('frontend.payment', compact('orderData', 'paymentMethods', 'address', 'shippingAddress'));
+        return view('frontend.payment', compact('orderData', 'paymentMethods', 'address', 'shippingAddress', 'selectedPaymentMethodCode'));
     }
 
     public function processPayment(Request $request)
@@ -1848,7 +1888,12 @@ class CheckoutController extends Controller
 
             $meta = $order->meta ?? [];
 
-            // 6. Handle Bank Transfer
+            $paymentType = (int) ($paymentMethodModel?->type ?? $categoryType ?? 0);
+            $isTypeQris = ($paymentType === 4);
+            $isTypeCreditCard = ($paymentType === 5);
+            $isTypeDebitCard = ($paymentType === 6);
+            $isSnapPayment = ($isTypeQris || $isTypeCreditCard || $isTypeDebitCard);
+
             if ($isBankTransfer) {
                 if ($request->hasFile('payment_proof')) {
                     try {
@@ -1866,6 +1911,18 @@ class CheckoutController extends Controller
                     $meta['payment_proof'] = $request->input('payment_proof');
                     $order->payment_status = 2;
                 }
+            } else {
+                unset($meta['payment_proof']);
+            }
+
+            if (!$isTypeQris) {
+                unset($meta['qr_string'], $meta['qr_code'], $meta['qr_url']);
+            }
+            if ($paymentType !== 2) {
+                unset($meta['va_number'], $meta['va_expired']);
+            }
+            if ($isBankTransfer) {
+                unset($meta['trx_id'], $meta['reference'], $meta['espay_reference'], $meta['payment_url']);
             }
 
             $order->payment_method = $paymentMethodModel?->id ?? $paymentMethod;
@@ -1886,12 +1943,6 @@ class CheckoutController extends Controller
                 'message' => 'Terjadi kesalahan saat memproses pesanan: ' . $e->getMessage()
             ], 500);
         }
-
-        $paymentType = (int) ($paymentMethodModel?->type ?? $categoryType ?? 0);
-        $isTypeQris = ($paymentType === 4);
-        $isTypeCreditCard = ($paymentType === 5);
-        $isTypeDebitCard = ($paymentType === 6);
-        $isSnapPayment = ($isTypeQris || $isTypeCreditCard || $isTypeDebitCard);
 
         $isEspay = ($paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay')
             || (!empty(config('espay.merchant_key')) && $isSnapPayment);
@@ -2021,14 +2072,18 @@ class CheckoutController extends Controller
                 if ($generatedVa) {
                     $updatedMeta['va_number'] = $generatedVa;
                 } else {
-                    unset($updatedMeta['va_number']);
+                    unset($updatedMeta['va_number'], $updatedMeta['va_expired']);
                 }
 
                 if ($qrisString) {
                     $updatedMeta['qr_string'] = $qrisString;
+                } else {
+                    unset($updatedMeta['qr_string']);
                 }
                 if ($qrCode) {
                     $updatedMeta['qr_code'] = $qrCode;
+                } else {
+                    unset($updatedMeta['qr_code'], $updatedMeta['qr_url']);
                 }
 
                 $order->update([
@@ -2064,8 +2119,10 @@ class CheckoutController extends Controller
                     'product_code' => $resolvedProductCode,
                     'bank_code' => $resolvedBankCode,
                 ]);
-                // Hapus va_number agar QRIS / Kartu Kredit / Debit tidak memiliki nomor Virtual Account palsu
-                unset($updatedMeta['va_number']);
+                unset($updatedMeta['va_number'], $updatedMeta['va_expired']);
+                if (!$isTypeQris) {
+                    unset($updatedMeta['qr_string'], $updatedMeta['qr_code'], $updatedMeta['qr_url']);
+                }
 
                 $order->update([
                     'settlement_id' => $settlement->id,
@@ -2142,8 +2199,9 @@ class CheckoutController extends Controller
                             'espay_reference' => $espayRef,
                         ]);
 
+                        unset($updatedMeta['qr_string'], $updatedMeta['qr_code'], $updatedMeta['qr_url']);
                         if ($isTypeCreditCard) {
-                            unset($updatedMeta['va_number']);
+                            unset($updatedMeta['va_number'], $updatedMeta['va_expired']);
                         } elseif (!empty($paymentData['va_number'])) {
                             $updatedMeta['va_number'] = $paymentData['va_number'];
                         }
@@ -3599,6 +3657,10 @@ class CheckoutController extends Controller
             'voucher_id' => $order->voucher_id,
             'voucher_ids' => $order->voucher_id ? [$order->voucher_id] : [],
             'items' => $items,
+            'payment_method' => $order->payment_method,
+            'payment_method_code' => $order->meta['payment_method_code'] ?? null,
+            'payment_method_name' => $order->meta['payment_method_name'] ?? null,
+            'payment_method_id' => $order->meta['payment_method_id'] ?? null,
             'created_at' => $order->created_at ? $order->created_at->toIso8601String() : now()->toIso8601String(),
         ];
     }

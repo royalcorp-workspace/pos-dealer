@@ -307,7 +307,7 @@
                     </div>
 
                     <!-- 1. Trigger Card: Belum Dipilih -->
-                    <div id="payment-method-trigger-card" onclick="openPaymentMethodModal()" class="group bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 border-2 border-dashed border-brand-gold/60 hover:border-brand-gold rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 hover:shadow-md flex items-center justify-between gap-4">
+                    <div id="payment-method-trigger-card" onclick="openPaymentMethodModal()" class="group bg-gradient-to-r from-amber-50/40 via-white to-amber-50/20 border-2 border-dashed border-brand-gold/60 hover:border-brand-gold rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 hover:shadow-md flex items-center justify-between gap-4 {{ !empty($selectedPaymentMethodCode) ? 'hidden' : '' }}">
                         <div class="flex items-center gap-3.5 sm:gap-4 min-w-0">
                             <div class="w-12 h-12 rounded-2xl bg-brand-gold/15 text-brand-gold-dark flex items-center justify-center text-xl shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
                                 <i class="fa-solid fa-wallet"></i>
@@ -329,7 +329,7 @@
                     </div>
 
                     <!-- 2. Selected Card: Sudah Dipilih -->
-                    <div id="payment-method-selected-card" onclick="openPaymentMethodModal()" class="hidden bg-white border-2 border-brand-gold rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md flex items-center justify-between gap-4">
+                    <div id="payment-method-selected-card" onclick="openPaymentMethodModal()" class="{{ empty($selectedPaymentMethodCode) ? 'hidden' : '' }} bg-white border-2 border-brand-gold rounded-2xl p-5 sm:p-6 cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md flex items-center justify-between gap-4">
                         <div class="flex items-center gap-3.5 sm:gap-4 min-w-0 flex-1">
                             <div id="selected-method-logo-display" class="w-14 h-10 sm:w-16 sm:h-11 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-2xs">
                                 <!-- Dynamic logo inserted -->
@@ -415,6 +415,7 @@
                                                 @endphp
                                                 <div onclick="selectPaymentMethodOption('{{ $method['code'] }}')" class="payment-method-card bg-white border border-gray-200 hover:border-brand-gold rounded-2xl p-3 sm:p-3.5 cursor-pointer transition-all duration-200 hover:shadow-xs flex items-center justify-between gap-3 group relative select-none" data-method-code="{{ $method['code'] }}">
                                                     <input type="radio" id="payment_method_{{ $method['code'] }}" name="payment_method" value="{{ $method['code'] }}" 
+                                                        {{ (!empty($selectedPaymentMethodCode) && $selectedPaymentMethodCode === $method['code']) ? 'checked' : '' }}
                                                         data-is-manual="{{ $isManual ? '1' : '0' }}"
                                                         data-banks='@json($method["bank_info"] ?? [])'
                                                         data-has-charge="{{ ($method['has_charge'] ?? false) ? '1' : '0' }}"

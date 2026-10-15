@@ -124,7 +124,6 @@ function updateSizeOptionsAvailability() {
 
     if (!sizeContainer || !sizeGroupName) return;
 
-    // Collect currently selected non-size attributes
     const nonSizeSelections = {};
     for (const [k, v] of Object.entries(selectedAttributes)) {
         if (!isSizeGroup(k) && v) {
@@ -139,7 +138,6 @@ function updateSizeOptionsAvailability() {
         if (!sizeVal) return;
         const normBtnVal = normalizeAttrVal(sizeVal);
 
-        // Find variants matching this size
         const matchingVariants = window.productVariants.filter(v => {
             if (!v.attributes) return false;
 
@@ -170,8 +168,6 @@ function updateSizeOptionsAvailability() {
             return true;
         });
 
-        // Determine stock availability:
-        // If variants match this combination, check if any has stock > 0
         const isAvailable = matchingVariants.length > 0 && matchingVariants.some(v => (parseInt(v.stock_quantity) || 0) > 0);
 
         const badge = btn.querySelector('.attr-stock-badge');
@@ -195,7 +191,6 @@ function updateSizeOptionsAvailability() {
                 circle.innerHTML = '';
             }
 
-            // If this size was currently selected, deselect it
             if (selectedAttributes[sizeGroupName] && normalizeAttrVal(selectedAttributes[sizeGroupName]) === normBtnVal) {
                 delete selectedAttributes[sizeGroupName];
                 const groupBadge = sizeContainer.querySelector('.selected-attr-badge');
@@ -240,7 +235,6 @@ function selectAttribute(el) {
     const container = el.closest('.attribute-group-container');
     if (!container) return;
 
-    // Deselect siblings in the same attribute group
     container.querySelectorAll('.attribute-btn').forEach(btn => {
         btn.classList.remove('border-brand-dark', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/60', 'text-brand-dark', 'shadow-xs');
         btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
@@ -252,7 +246,6 @@ function selectAttribute(el) {
         }
     });
 
-    // Select the clicked attribute button
     el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
     el.classList.add('border-brand-dark', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/60', 'text-brand-dark', 'shadow-xs');
     const circle = el.querySelector('.card-radio-circle');
@@ -262,7 +255,6 @@ function selectAttribute(el) {
         circle.innerHTML = '<i class="fa-solid fa-check text-[9px]"></i>';
     }
 
-    // Update group badge text
     const badge = container.querySelector('.selected-attr-badge');
     if (badge) {
         badge.textContent = value;
@@ -393,7 +385,6 @@ function findMatchingVariant() {
             
             applyVariantPrice(matchedVariant);
 
-            // Update live stock indicator
             const stockQty = matchedVariant.stock_quantity !== undefined ? matchedVariant.stock_quantity : 0;
             const stockText = document.getElementById('product-stock-text');
             const stockPill = document.getElementById('product-stock-badge-pill');
@@ -531,7 +522,6 @@ function selectVariant(el) {
 window.selectVariantCard = function(el) {
     if (!el || el.disabled) return;
 
-    // Deselect all variant cards
     document.querySelectorAll('.variant-card-btn').forEach(btn => {
         btn.classList.remove('border-brand-dark', 'ring-2', 'ring-brand-gold/60', 'bg-brand-light/30', 'shadow-md');
         if (!btn.disabled) {
@@ -545,7 +535,6 @@ window.selectVariantCard = function(el) {
         }
     });
 
-    // Activate selected card
     el.classList.remove('bg-white', 'border-gray-200');
     el.classList.add('border-brand-dark', 'ring-2', 'ring-brand-gold/60', 'bg-brand-light/30', 'shadow-md');
     const activeCircle = el.querySelector('.card-radio-circle');
@@ -600,7 +589,6 @@ window.selectVariantCard = function(el) {
         }
     }
 
-    // Update Live Stock Status Badge
     const stock = vObj && vObj.stock_quantity !== undefined ? parseInt(vObj.stock_quantity) : parseInt(el.dataset.variantStock ?? 0);
     const pill = document.getElementById('product-stock-badge-pill');
     const dotCore = document.getElementById('product-stock-core');
@@ -690,7 +678,6 @@ window.selectVariantFromDropdown = function(selectEl) {
         }
     }
 
-    // Update Live Stock Status Badge
     const stock = vObj && vObj.stock_quantity !== undefined ? parseInt(vObj.stock_quantity) : parseInt(selectedOption.dataset.variantStock ?? 0);
     const pill = document.getElementById('product-stock-badge-pill');
     const dotCore = document.getElementById('product-stock-core');
@@ -730,7 +717,6 @@ function selectColor(el) {
     const colorId = el.dataset.colorId;
     const colorName = el.dataset.colorName;
 
-    // Deselect other color buttons
     document.querySelectorAll('[data-color-id]').forEach(btn => {
         btn.classList.remove('border-brand-dark', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/60', 'text-brand-dark', 'shadow-xs');
         btn.classList.add('border-gray-200', 'bg-white', 'text-gray-700');
@@ -742,7 +728,6 @@ function selectColor(el) {
         }
     });
 
-    // Select clicked color button
     el.classList.remove('border-gray-200', 'bg-white', 'text-gray-700');
     el.classList.add('border-brand-dark', 'bg-brand-light/30', 'ring-2', 'ring-brand-gold/60', 'text-brand-dark', 'shadow-xs');
     const circle = el.querySelector('.card-radio-circle');
@@ -752,7 +737,6 @@ function selectColor(el) {
         circle.innerHTML = '<i class="fa-solid fa-check text-[9px]"></i>';
     }
 
-    // Update selected color badge text
     const badge = document.getElementById('selected-color-badge');
     if (badge) {
         badge.textContent = colorName;
@@ -870,7 +854,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Ensure nothing is checked by default on page load / refresh
     selectedAttributes = {};
     const variantInput = document.getElementById('variant-id-input');
     if (variantInput) variantInput.value = '';
@@ -900,18 +883,13 @@ document.addEventListener('DOMContentLoaded', function() {
         b.textContent = '';
     });
 
-    // Update size options availability based on stock
     updateSizeOptionsAvailability();
-
-    // Auto-select if only 1 option exists and activate add to cart button
     autoSelectSingleOptions();
 });
 
 function autoSelectSingleOptions() {
-    // 1. Check attribute groups
     const attrGroups = document.querySelectorAll('.attribute-group-container');
     if (attrGroups.length > 0) {
-        // Auto-select non-size attribute groups first if only 1 option exists
         attrGroups.forEach(group => {
             if (!isSizeGroup(group.dataset.attributeGroup)) {
                 const btns = group.querySelectorAll('.attribute-btn:not(:disabled)');
@@ -921,10 +899,8 @@ function autoSelectSingleOptions() {
             }
         });
 
-        // Re-evaluate size options availability after non-size selections
         updateSizeOptionsAvailability();
 
-        // Auto-select size attribute group if only 1 enabled option exists
         attrGroups.forEach(group => {
             if (isSizeGroup(group.dataset.attributeGroup)) {
                 const btns = group.querySelectorAll('.attribute-btn:not(:disabled)');
@@ -934,7 +910,6 @@ function autoSelectSingleOptions() {
             }
         });
 
-        // If there's only 1 product variant defined in window.productVariants
         if (window.productVariants && window.productVariants.length === 1) {
             const singleV = window.productVariants[0];
             if (singleV && (parseInt(singleV.stock_quantity) || 0) > 0 && singleV.attributes) {
@@ -948,19 +923,16 @@ function autoSelectSingleOptions() {
             }
         }
     } else {
-        // 2. Variant cards fallback
         const variantCards = document.querySelectorAll('.variant-card-btn:not(:disabled)');
         if (variantCards.length === 1) {
             selectVariantCard(variantCards[0]);
         }
 
-        // 3. Legacy variant buttons
         const legacyBtns = document.querySelectorAll('.legacy-variant-btn:not(:disabled)');
         if (legacyBtns.length === 1) {
             selectVariant(legacyBtns[0]);
         }
 
-        // 4. Dropdown fallback
         const vSelect = document.getElementById('variant-select-dropdown');
         if (vSelect) {
             const validOptions = Array.from(vSelect.options).filter(opt => opt.value !== '');
@@ -971,13 +943,11 @@ function autoSelectSingleOptions() {
         }
     }
 
-    // 5. Colors: auto-select if only 1 color exists
     const colorBtns = document.querySelectorAll('[data-color-id]:not(:disabled)');
     if (colorBtns.length === 1) {
         selectColor(colorBtns[0]);
     }
 
-    // 6. If productVariants has 1 variant and no groups/cards were detected but variantInput exists
     const variantInput = document.getElementById('variant-id-input');
     if (variantInput && !variantInput.value && window.productVariants && window.productVariants.length === 1) {
         const onlyV = window.productVariants[0];
@@ -987,7 +957,6 @@ function autoSelectSingleOptions() {
         }
     }
 
-    // Update selection state and activate add to cart button
     checkSelection();
 }
 
