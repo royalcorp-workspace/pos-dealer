@@ -5,7 +5,6 @@ window.addEventListener('pageshow', function (event) {
     }
 });
 
-// Modal Dialog Controls for Payment Method Selection
 window.openPaymentMethodModal = function () {
     var modal = document.getElementById('payment-method-modal');
     if (modal) {
@@ -50,12 +49,10 @@ window.processPayment = function () {
             detail: { type: 'warning', message: 'Silakan pilih metode pembayaran terlebih dahulu.' } 
         }));
         
-        // Open modal popup automatically so user can pick
         window.openPaymentMethodModal();
         return;
     }
 
-    // Clear validation if method is selected
     if (validationAlert) validationAlert.classList.add('hidden');
     if (triggerCard) triggerCard.classList.remove('ring-2', 'ring-red-400', 'border-red-400');
 
@@ -198,7 +195,6 @@ window.processPayment = function () {
                         }
                     }
 
-                    // Set timeout 25 seconds for iframe loading
                     window.snapLoadTimeout = setTimeout(function () {
                         if (!window.snapLoadSuccess) {
                             handleSnapFailure('Waktu memuat jendela pembayaran habis. Silakan pilih kembali metode pembayaran Anda.');
@@ -301,14 +297,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var chargeAmountLabel = document.getElementById('charge-amount');
     var finalTotalLabel = document.getElementById('final-total');
 
-    // Close modal on escape key
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             window.closePaymentMethodModal();
         }
     });
 
-    // Close modal on backdrop click
     var methodModal = document.getElementById('payment-method-modal');
     if (methodModal) {
         methodModal.addEventListener('click', function(e) {
@@ -321,7 +315,6 @@ document.addEventListener('DOMContentLoaded', function() {
     function toggleDetails() {
         var selected = document.querySelector('input[name="payment_method"]:checked');
 
-        // Update modal option cards visual
         document.querySelectorAll('.payment-method-card').forEach(function(card) {
             var input = card.querySelector('input[name="payment_method"]');
             var indicator = card.querySelector('.method-radio-indicator');
@@ -346,7 +339,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Update Selected Card on main page
         if (selected) {
             var parentCard = selected.closest('.payment-method-card');
             var logoBadge = parentCard ? parentCard.querySelector('.method-logo-badge') : null;
@@ -377,7 +369,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selectedCard) selectedCard.classList.add('hidden');
         }
 
-        // 1. Kalkulasi Charge/Biaya Admin
         if (selected && finalTotalLabel) {
             var baseTotal = parseFloat(finalTotalLabel.getAttribute('data-base-total') || '0');
             var hasCharge = selected.getAttribute('data-has-charge') === '1';
@@ -386,9 +377,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var charge = 0;
             if (hasCharge && chargeValue > 0) {
-                if (chargeType === 1) { // Percentage
+                if (chargeType === 1) {
                     charge = (baseTotal * chargeValue) / 100;
-                } else { // Fixed
+                } else {
                     charge = chargeValue;
                 }
             }
@@ -417,13 +408,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (selectedChargeDisplay) selectedChargeDisplay.classList.add('hidden');
         }
         
-        // 2. Tampilkan Instruksi Transfer Manual (jika dipilih)
         if (selected && selected.getAttribute('data-is-manual') === '1') {
             var banksData = [];
             try {
                 banksData = JSON.parse(selected.getAttribute('data-banks') || '[]');
             } catch (e) {
-                // ignore
             }
             
             if (!Array.isArray(banksData) || banksData.length === 0) {
@@ -491,7 +480,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Accordion toggle click listener
     document.querySelectorAll('.payment-accordion-group').forEach(function(group) {
         var header = group.querySelector('.payment-accordion-header');
         var content = group.querySelector('.payment-accordion-content');
@@ -511,7 +499,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Auto-open first accordion if no radio is selected yet
     var checkedInit = document.querySelector('input[name="payment_method"]:checked');
     if (!checkedInit) {
         var firstGroup = document.querySelector('.payment-accordion-group');
@@ -523,11 +510,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Trigger initially in case of preselected radio button
     toggleDetails();
 });
 
-// Initialize countdown timer
 document.addEventListener('DOMContentLoaded', function() {
     var countdownEl = document.getElementById('payment-countdown');
     if (!countdownEl) return;
@@ -535,7 +520,6 @@ document.addEventListener('DOMContentLoaded', function() {
     var createdStr = countdownEl.getAttribute('data-created');
     if (!createdStr) return;
     
-    // Set expiration to 24 hours after creation
     var createdAt = new Date(createdStr).getTime();
     var expireAt = createdAt + (24 * 60 * 60 * 1000);
     
@@ -547,7 +531,6 @@ document.addEventListener('DOMContentLoaded', function() {
             countdownEl.innerHTML = "00:00:00";
             countdownEl.classList.add('text-gray-400');
             countdownEl.classList.remove('text-red-600');
-            // Show expired message or disable payment button if needed
             var btns = document.querySelectorAll('button[onclick="processPayment()"]');
             btns.forEach(function(btn) {
                 btn.disabled = true;
@@ -572,7 +555,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(updateTimer, 1000);
 });
 
-// Espay Snap Modal Listeners
 document.addEventListener('DOMContentLoaded', function() {
     var closeEspayModalBtn = document.getElementById('close-espay-modal-btn');
     if (closeEspayModalBtn) {
@@ -643,7 +625,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Handle messages from Espay Snap Iframe
     window.addEventListener('message', function (event) {
         if (!event.data) return;
         // Verify origin if provided to prevent stray messages from extensions or tools
@@ -662,7 +643,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.href = targetUrl;
             }
         } catch (e) {
-            // Not JSON or non-object message, safely ignore
         }
     });
 });

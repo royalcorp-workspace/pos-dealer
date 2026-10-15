@@ -259,7 +259,6 @@
         const isNewShipping = isShippingCouponType(button.dataset.discountType);
         const minPurchase = parseFloat(button.dataset.minPurchase) || 0;
 
-        // Check if already selected -> toggle off
         const existingIdx = selectedCartCoupons.findIndex(function (c) { return c.code === code; });
         if (existingIdx !== -1) {
             selectedCartCoupons.splice(existingIdx, 1);
@@ -573,7 +572,6 @@
         currentCartTotal = getLatestCartTotal();
         window.currentCartTotal = currentCartTotal;
 
-        // Clear stale voucher if cart is empty
         if (currentCartTotal <= 0) {
             localStorage.removeItem('selectedCartCoupon');
             localStorage.removeItem('selectedCartCoupons');

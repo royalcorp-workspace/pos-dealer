@@ -100,17 +100,14 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function(data) {
             if (data && data.removed_codes && data.removed_codes.length > 0) {
                 var removedUpper = data.removed_codes.map(function(c) { return String(c).toUpperCase().trim(); });
-                // 1. Remove invalid codes immediately from selectedCoupons
                 selectedCoupons = selectedCoupons.filter(function(c) {
                     return !removedUpper.includes(String(c).toUpperCase().trim());
                 });
 
-                // 2. Remove from manualCouponsData cache
                 removedUpper.forEach(function(code) {
                     delete manualCouponsData[code];
                 });
 
-                // 3. Reset card and option buttons in UI
                 document.querySelectorAll('.coupon-card, .coupon-option').forEach(function(button) {
                     var bCode = button.dataset.code ? button.dataset.code.trim().toUpperCase() : '';
                     if (removedUpper.includes(bCode)) {
@@ -120,10 +117,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 });
 
-                // 4. Update localStorage immediately so cart drawer & checkout stay clean
                 saveSelectedCouponsToLocalStorage(selectedCoupons);
 
-                // 5. Update server discount baselines if provided
                 if (data.selected_voucher) {
                     serverProductVoucherDiscount = Number(data.selected_voucher.product_discount || 0);
                     serverShippingVoucherDiscount = Number(data.selected_voucher.shipping_discount || 0);
@@ -135,7 +130,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (vDInput) vDInput.dataset.value = data.selected_voucher.discount || 0;
                 }
 
-                // 6. Refresh display and calculations (without triggering another sync)
                 updateSelectedCouponDisplay(false);
                 updateTotal();
             }
@@ -392,7 +386,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             }
                         }
 
-                        // Update modern accordion card UI
                         var courierCard = document.getElementById('courier-label-' + cCode);
                         var courierRadio = document.getElementById('courier_radio_' + cCode);
                         if (courierCard && courierRadio) {
@@ -445,7 +438,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     });
 
-                    // Sync group selected badge
                     syncCourierAccordionVisuals();
 
                     if (selectedCourierData && selectedCourierData.is_available === false) {
@@ -501,7 +493,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // Sync individual item selection highlights
         document.querySelectorAll('.courier-option-label').forEach(function (label) {
             var radio = label.querySelector('input[name="courier_radio"]');
             var indicator = label.querySelector('.radio-indicator');
@@ -531,9 +522,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Courier Accordion Header Toggle & Radio Click Bindings
     function initCourierAccordionListeners() {
-        // Toggle Accordion Group
         document.querySelectorAll('.courier-accordion-header').forEach(function (header) {
             header.addEventListener('click', function () {
                 var group = this.closest('.courier-accordion-group');
@@ -549,14 +538,12 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
 
-        // Radio click event
         document.querySelectorAll('input[name="courier_radio"]').forEach(function (radio) {
             radio.addEventListener('change', function () {
                 if (this.disabled) return;
                 var val = this.value;
                 if (courierSelect) {
                     courierSelect.value = val;
-                    // Trigger change so all calculations and validations fire
                     fetchAndUpdateShippingCost();
                 }
                 syncCourierAccordionVisuals();

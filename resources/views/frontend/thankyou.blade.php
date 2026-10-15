@@ -4,12 +4,14 @@
 
 @php
     $orderId = $order?->order_number ?? 'ORD.' . date('Ymd') . '.0001';
-    $rawPmCode = $order?->payment_method ?? '-';
-    $pmModel = \App\Models\PaymentMethod::where('code', $rawPmCode)->first()
-        ?? \App\Models\PaymentMethod::find($rawPmCode);
-    $paymentMethod = $order?->payment_method_name 
-        ?? $pmModel?->name 
-        ?? ($order?->meta['payment_method_name'] ?? null);
+    $rawPmCode = $order?->meta['payment_method_code'] ?? $order?->payment_method ?? '-';
+    $pmModel = (\Illuminate\Support\Str::isUuid((string)$order?->payment_method) ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($order->payment_method) : null)
+        ?? (!empty($order?->meta['payment_method_id']) && \Illuminate\Support\Str::isUuid((string)$order->meta['payment_method_id']) ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($order->meta['payment_method_id']) : null)
+        ?? \App\Models\PaymentMethod::findByCodeOrBank($rawPmCode)
+        ?? \App\Models\PaymentMethod::where('code', $rawPmCode)->first();
+    $paymentMethod = $pmModel?->name 
+        ?? ($order?->meta['payment_method_name'] ?? null)
+        ?? $order?->payment_method_name;
     if (empty($paymentMethod)) {
         $lowerPm = strtolower((string)$rawPmCode);
         if (in_array($lowerPm, ['transfer_manual', 'trf', 'manual'], true)) {
@@ -374,13 +376,17 @@
 
                     <!-- Payment Details (QRIS, VA, or Manual Transfer) -->
                     @php
-                        $pmModel = \App\Models\PaymentMethod::findByCodeOrBank($rawPmCode) 
-                            ?? \App\Models\PaymentMethod::where('code', $paymentMethod)->first();
-                        
+                        if (!$pmModel) {
+                            $pmModel = (\Illuminate\Support\Str::isUuid((string)$order?->payment_method) ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($order->payment_method) : null)
+                                ?? (!empty($order?->meta['payment_method_id']) && \Illuminate\Support\Str::isUuid((string)$order->meta['payment_method_id']) ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($order->meta['payment_method_id']) : null)
+                                ?? \App\Models\PaymentMethod::findByCodeOrBank($rawPmCode)
+                                ?? \App\Models\PaymentMethod::where('code', $rawPmCode)->first();
+                        }
+
                         $isQris = ($pmModel && ((int)$pmModel->type === 4 || $pmModel->isTypeQris())) 
                             || str_contains(strtolower((string)$rawPmCode), 'qris') 
                             || str_contains(strtolower((string)$paymentMethod), 'qris')
-                            || !empty($order->meta['qr_code']) || !empty($order->meta['qr_string']);
+                            || (!$pmModel && (!empty($order->meta['qr_code']) || !empty($order->meta['qr_string'])));
 
                         $isDebitCard = ($pmModel && ((int)$pmModel->type === 6 || $pmModel->isTypeDebitCard())) 
                             || str_contains(strtolower((string)$rawPmCode), 'debit') 
@@ -401,7 +407,7 @@
                             $pmModel->isTypeBankTransfer() 
                             || (int)$pmModel->type === 1 
                             || strtolower((string)$pmModel->provider) !== 'espay'
-                        )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true));
+                        )) || in_array(strtolower((string)$rawPmCode), ['transfer_manual', 'trf', 'manual'], true) || in_array(strtolower((string)$paymentMethod), ['transfer_manual', 'trf', 'manual', 'transfer bank manual'], true));
 
                         $banks = $pmModel && !empty($pmModel->bank_info) ? $pmModel->bank_info : [];
                     @endphp
@@ -670,6 +676,15 @@
                                         </button>
                                     </div>
                                 </div>
+
+                                @if(!$isPaid && $status == 1)
+                                    <div class="pt-3 border-t border-gray-100 text-center">
+                                        <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                            <i class="fa-solid fa-credit-card text-xs"></i>
+                                            <span>Lanjutkan Pembayaran</span>
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
 
                             @php
@@ -788,6 +803,15 @@
                                     <p>Setelah melakukan transfer, silakan simpan bukti transfer Anda. Anda dapat mengonfirmasikannya langsung via Live Chat ke tim Customer Support kami.</p>
                                 </div>
                             @endif
+
+                            @if(!$isPaid && $status == 1)
+                                <div class="mt-4 pt-3 border-t border-amber-200 text-center">
+                                    <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                        <i class="fa-solid fa-credit-card text-xs"></i>
+                                        <span>Lanjutkan Pembayaran</span>
+                                    </a>
+                                </div>
+                            @endif
                         </div>
                     @endif
                 </div>
@@ -880,7 +904,6 @@
                     @php
                         $orderMeta = is_array($order?->meta) ? $order->meta : (json_decode($order?->meta ?? '[]', true) ?: []);
                         
-                        // Subtotal Produk Asli
                         $originalCartTotal = (float) ($orderMeta['original_cart_total'] ?? 0);
                         if ($originalCartTotal <= 0) {
                             $originalCartTotal = (float) collect($items)->sum(function($it) {
@@ -893,14 +916,12 @@
                             $originalCartTotal = (float) ($order?->subtotal ?? 0);
                         }
 
-                        // Diskon Promo & Volume
                         $priceProductSettingDiscount = (float) ($orderMeta['price_product_setting_discount'] ?? 0);
                         $staticPromoDiscount = (float) ($orderMeta['total_static_discount'] ?? 0);
                         if ($staticPromoDiscount <= 0 && !empty($orderMeta['promo_discount'])) {
                             $staticPromoDiscount = max(0, (float) $orderMeta['promo_discount'] - $priceProductSettingDiscount);
                         }
                         
-                        // Voucher Diskon Produk & Subsidi Ongkir
                         $shippingSubsidy = 0.0;
                         if (!empty($orderMeta['shipping_voucher_discount']) && (float)$orderMeta['shipping_voucher_discount'] > 0) {
                             $shippingSubsidy = (float)$orderMeta['shipping_voucher_discount'];
@@ -1255,93 +1276,6 @@
         }
         document.body.removeChild(textArea);
     }
-
-    window.downloadQrisImage = function(orderId) {
-        var img = document.getElementById('qris-image-element');
-        var btn = document.getElementById('btn-download-qris');
-        if (!img || !img.src) return;
-
-        var filename = 'QRIS-' + (orderId || 'IMG') + '.png';
-
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Mengunduh...</span>';
-        }
-
-        function restoreBtn() {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i> <span>Berhasil Diunduh!</span>';
-                btn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
-                btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
-                setTimeout(function() {
-                    btn.innerHTML = '<i class="fa-solid fa-download text-xs"></i> <span>Unduh QRIS</span>';
-                    btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
-                    btn.classList.add('bg-rose-600', 'hover:bg-rose-700');
-                }, 3000);
-            }
-        }
-
-        // 1. Data URI download (instant)
-        if (img.src.startsWith('data:')) {
-            var a = document.createElement('a');
-            a.href = img.src;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            restoreBtn();
-            window.dispatchEvent(new CustomEvent('show-toast', { 
-                detail: { type: 'success', message: 'Gambar QRIS berhasil diunduh ke perangkat Anda!' } 
-            }));
-            return;
-        }
-
-        // 2. Fetch as blob
-        fetch(img.src)
-            .then(function(res) {
-                if (!res.ok) throw new Error('Network response was not ok');
-                return res.blob();
-            })
-            .then(function(blob) {
-                var blobUrl = window.URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = blobUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(blobUrl);
-                restoreBtn();
-                window.dispatchEvent(new CustomEvent('show-toast', { 
-                    detail: { type: 'success', message: 'Gambar QRIS berhasil diunduh ke perangkat Anda!' } 
-                }));
-            })
-            .catch(function() {
-                // 3. Fallback: canvas drawing
-                try {
-                    var canvas = document.createElement('canvas');
-                    canvas.width = img.naturalWidth || 300;
-                    canvas.height = img.naturalHeight || 300;
-                    var ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    var dataUrl = canvas.toDataURL('image/png');
-                    var a = document.createElement('a');
-                    a.href = dataUrl;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    restoreBtn();
-                    window.dispatchEvent(new CustomEvent('show-toast', { 
-                        detail: { type: 'success', message: 'Gambar QRIS berhasil diunduh ke perangkat Anda!' } 
-                    }));
-                } catch(e) {
-                    window.open(img.src, '_blank');
-                    restoreBtn();
-                }
-            });
-    };
 </script>
 
 <script>
