@@ -10,8 +10,11 @@ class InventoryService
     public static function getWebImgChannelId(): string
     {
         $channelId = DB::table('store_channel')
-            ->where('code', 'WEB_IMG')
-            ->orWhere('name', 'Web IMG')
+            ->where(function ($q) {
+                $q->whereIn('code', ['WEB_IMG', 'ONLINE_RETAIL'])
+                  ->orWhereIn('name', ['Web IMG', 'Online Retail']);
+            })
+            ->where('deleted', false)
             ->value('id');
 
         if ($channelId) {
@@ -19,11 +22,11 @@ class InventoryService
         }
 
         // Fallback or create
-        $storeId = DB::table('stores')->where('code', 'ONLINE_RETAIL')->value('id');
+        $storeId = DB::table('store')->where('code', 'ONLINE_RETAIL')->value('id');
         if (!$storeId) {
             $storeGroupId = DB::table('store_group')->value('id');
             $storeId = Str::uuid()->toString();
-            DB::table('stores')->insert([
+            DB::table('store')->insert([
                 'id' => $storeId,
                 'store_group_id' => $storeGroupId,
                 'code' => 'ONLINE_RETAIL',
