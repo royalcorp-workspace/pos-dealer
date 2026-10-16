@@ -19,6 +19,7 @@ class Address extends Model
     protected $table = 'addresses';
 
     protected $fillable = [
+        'customer_id',
         'user_id',
         'sub_district_id',
         'city_id',
@@ -50,7 +51,7 @@ class Address extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'user_id', 'user_id');
+        return $this->belongsTo(Customer::class, 'customer_id', 'id');
     }
 
     public function city(): BelongsTo
