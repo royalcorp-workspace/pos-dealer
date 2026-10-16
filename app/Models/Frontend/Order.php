@@ -202,6 +202,23 @@ class Order extends Model
                         'editor' => $username,
                     ]);
                 }
+
+                // Real-time push ke JDE ketika pesanan lunas & status >= Processing (Status 3)
+                $statusBecameProcessing = $model->wasChanged('status') && (int) $model->status >= self::STATUS_PROCESSING;
+                $paymentBecamePaid = $model->wasChanged('payment_status') && ((int) $model->payment_status === 2 || (int) $model->payment_status === 1);
+                $isPaid = (int) $model->payment_status === 2 || (int) $model->payment_status === 1;
+                $isProcessingOrAbove = (int) $model->status >= self::STATUS_PROCESSING;
+                $isNotCancelled = !in_array((int) $model->status, [self::STATUS_DRAFT, self::STATUS_CANCELLED, self::STATUS_RETURNED], true);
+                $isNotAlreadySuccess = (int) $model->jde_push_status !== 2;
+
+                if (($statusBecameProcessing || $paymentBecamePaid) && $isPaid && $isProcessingOrAbove && $isNotCancelled && $isNotAlreadySuccess) {
+                    try {
+                        $cmsUrl = rtrim((string) config('services.cms.url', env('CMS_INTERNAL_URL', 'http://172.17.0.1:82')), '/');
+                        \Illuminate\Support\Facades\Http::timeout(5)->post("{$cmsUrl}/api/v1/orders/{$model->id}/push-jde");
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("Trigger JDE push to CMS from pos-dealer failed for order {$model->id}: " . $e->getMessage());
+                    }
+                }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Failed logging order update: ' . $e->getMessage());
             }
@@ -243,25 +260,46 @@ class Order extends Model
         return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method', 'id');
     }
 
+    public function paymentMethod(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\PaymentMethod::class, 'payment_method', 'id')->withoutGlobalScope('active');
+    }
+
     public function getPaymentMethodNameAttribute(): string
     {
-        $pm = null;
-        if (\Illuminate\Support\Str::isUuid((string)$this->payment_method)) {
-            $pm = \App\Models\PaymentMethod::find($this->payment_method);
-        }
-        if (!$pm) {
-            $pm = \App\Models\PaymentMethod::where('code', $this->payment_method)->first()
-                ?? \App\Models\PaymentMethod::find($this->payment_method);
-        }
-        if ($pm && !empty($pm->name)) {
-            return $pm->name;
-        }
-
         if (!empty($this->meta['payment_method_name'])) {
-            return $this->meta['payment_method_name'];
+            return (string) $this->meta['payment_method_name'];
         }
 
-        $code = strtolower((string)$this->payment_method);
+        if ($this->relationLoaded('paymentMethod') && $this->paymentMethod) {
+            return (string) $this->paymentMethod->name;
+        }
+
+        $raw = (string) ($this->payment_method ?? '');
+        if (empty($raw)) {
+            return 'N/A';
+        }
+
+        if (\Illuminate\Support\Str::isUuid($raw)) {
+            $pm = \App\Models\PaymentMethod::withoutGlobalScope('active')->find($raw);
+            if ($pm && !empty($pm->name)) {
+                return (string) $pm->name;
+            }
+        }
+
+        if (!empty($this->meta['payment_method_id']) && \Illuminate\Support\Str::isUuid((string)$this->meta['payment_method_id'])) {
+            $pm = \App\Models\PaymentMethod::withoutGlobalScope('active')->find($this->meta['payment_method_id']);
+            if ($pm && !empty($pm->name)) {
+                return (string) $pm->name;
+            }
+        }
+
+        $pmByCode = \App\Models\PaymentMethod::findByCodeOrBank($raw);
+        if ($pmByCode && !empty($pmByCode->name)) {
+            return (string) $pmByCode->name;
+        }
+
+        $code = strtolower((string)($this->meta['payment_method_code'] ?? $raw));
         if (in_array($code, ['transfer_manual', 'trf', 'manual'], true)) {
             return 'Transfer Bank Manual';
         }
@@ -302,7 +340,44 @@ class Order extends Model
             return 'Kartu Kredit / Debit';
         }
 
-        return ucwords(str_replace(['_', '-'], ' ', (string)$this->payment_method));
+        if (!\Illuminate\Support\Str::isUuid($raw)) {
+            return ucwords(str_replace(['_', '-'], ' ', $raw));
+        }
+
+        return 'Metode Pembayaran';
+    }
+
+    public function getPaymentMethodCodeAttribute(): string
+    {
+        if (!empty($this->meta['payment_method_code'])) {
+            return (string) $this->meta['payment_method_code'];
+        }
+
+        if ($this->relationLoaded('paymentMethod') && $this->paymentMethod) {
+            return (string) $this->paymentMethod->code;
+        }
+
+        $raw = (string) ($this->payment_method ?? '');
+        if (\Illuminate\Support\Str::isUuid($raw)) {
+            $pm = \App\Models\PaymentMethod::withoutGlobalScope('active')->find($raw);
+            if ($pm && !empty($pm->code)) {
+                return (string) $pm->code;
+            }
+        }
+
+        return $raw;
+    }
+
+    public function isManualTransfer(): bool
+    {
+        $code = strtolower($this->payment_method_code);
+        $raw = strtolower((string)($this->payment_method ?? ''));
+        return str_contains($code, 'transfer_manual')
+            || str_contains($code, 'manual')
+            || str_contains($raw, 'transfer_manual')
+            || str_contains($raw, 'manual')
+            || strtolower($this->payment_method_name) === 'transfer bank manual'
+            || strtolower($this->payment_method_name) === 'bank transfers';
     }
 
     public function items(): HasMany

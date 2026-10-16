@@ -82,4 +82,8 @@ return [
         'origin_contact_phone' => env('BITESHIP_ORIGIN_CONTACT_PHONE', '081112345678'),
     ],
 
+    'cms' => [
+        'url' => env('CMS_INTERNAL_URL', 'http://172.17.0.1:82'),
+    ],
+
 ];
