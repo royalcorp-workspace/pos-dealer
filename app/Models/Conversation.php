@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -9,6 +11,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class Conversation extends Model
 {
+    use HasSchemaTable;
+
     use HasFactory, HasUuids;
 
     protected $fillable = [

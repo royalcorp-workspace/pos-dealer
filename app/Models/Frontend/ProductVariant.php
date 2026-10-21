@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProductVariant extends Model
 {
+    use HasSchemaTable;
+
     protected $keyType = 'string';
     public $incrementing = false;
 

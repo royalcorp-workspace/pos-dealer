@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Promo;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -12,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class Voucher extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'vouchers';

@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Frontend\Order;
 
 class Supplier extends Model
 {
+    use HasSchemaTable;
+
     protected $keyType = 'string';
     public $incrementing = false;
 

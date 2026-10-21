@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Shipping;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Location\SubDistrict;
 use App\Models\Frontend\Shipping\Courier;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -12,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ShippingAddress extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'shipping_addresses';

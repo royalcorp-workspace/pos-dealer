@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Customer;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Customer\Address;
 use App\Models\Frontend\Order\Order;
 use App\Models\User;
@@ -14,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'customers';

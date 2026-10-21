@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Order;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Customer\Customer;
 use App\Models\Frontend\Order\OrderItem;
 use App\Models\Payment;
@@ -14,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'orders';

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Buffer;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\ProductsCatalog\Product;
 use App\Models\Frontend\ProductsCatalog\ProductVariant;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BufferItem extends Model
 {
+    use HasSchemaTable;
+
     protected $keyType = 'string';
     public $incrementing = false;
 

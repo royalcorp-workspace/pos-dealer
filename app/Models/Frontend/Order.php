@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,6 +16,8 @@ use App\Models\Payment;
 
 class Order extends Model
 {
+    use HasSchemaTable;
+
     protected $table = 'orders';
     protected $keyType = 'string';
     public $incrementing = false;

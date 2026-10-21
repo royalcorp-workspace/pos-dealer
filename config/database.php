@@ -95,7 +95,8 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public',
+            'schema' => env('DB_SCHEMA', 'public'),
+            'search_path' => env('DB_SEARCH_PATH', 'public, finish_goods, sales, customer, shipping, inventory, promo, store, content, user_managements'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 

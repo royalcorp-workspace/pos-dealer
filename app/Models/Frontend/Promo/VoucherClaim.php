@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Promo;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Customer\Customer;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VoucherClaim extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'voucher_claims';

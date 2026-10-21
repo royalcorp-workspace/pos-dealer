@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Promo;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\ProductsCatalog\Product;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class PriceProductSetting extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'price_product_settings';
