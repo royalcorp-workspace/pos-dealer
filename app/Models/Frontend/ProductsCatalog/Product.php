@@ -52,7 +52,7 @@ class Product extends Model
                 })->exists();
 
             if ($hasActiveEvent) {
-                $hasStorewide = \Illuminate\Support\Facades\DB::table('price_product_settings')
+                $hasStorewide = \Illuminate\Support\Facades\DB::table('promo.price_product_settings')
                     ->where('is_active', true)
                     ->where('deleted', false)
                     ->where('scope', 1)
@@ -64,7 +64,7 @@ class Product extends Model
                     })->exists();
 
                 if (!$hasStorewide) {
-                    $hasAnyItemPromo = \Illuminate\Support\Facades\DB::table('price_product_setting_items')
+                    $hasAnyItemPromo = \Illuminate\Support\Facades\DB::table('promo.price_product_setting_items')
                         ->where('deleted', false)
                         ->exists();
                     if ($hasAnyItemPromo) {

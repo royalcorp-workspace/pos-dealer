@@ -19,7 +19,8 @@ class Wishlist extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $table = 'wishlists';
+    protected $table = 'customer.wishlists';
+    protected string $schema = 'customer';
 
     protected $fillable = [
         'user_id',

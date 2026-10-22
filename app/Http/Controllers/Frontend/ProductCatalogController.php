@@ -124,11 +124,11 @@ class ProductCatalogController extends Controller
                 COALESCE(
                     (SELECT 
                         CASE 
-                            WHEN ppsi.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
-                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) - CAST(ppsi.discount_value AS numeric)
+                            WHEN ppsi.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM finish_goods.product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) * (1 - CAST(ppsi.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM finish_goods.product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) - CAST(ppsi.discount_value AS numeric)
                         END
-                     FROM price_product_setting_items ppsi
-                     JOIN price_product_settings pps ON pps.id = ppsi.price_product_setting_id
+                     FROM promo.price_product_setting_items ppsi
+                     JOIN promo.price_product_settings pps ON pps.id = ppsi.price_product_setting_id
                      WHERE ppsi.product_id = products.id 
                        AND ppsi.deleted = false 
                        AND pps.is_active = true 
@@ -139,10 +139,10 @@ class ProductCatalogController extends Controller
                     ),
                     (SELECT
                         CASE 
-                            WHEN pps.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) * (1 - CAST(pps.discount_value AS numeric) / 100)
-                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) - CAST(pps.discount_value AS numeric)
+                            WHEN pps.discount_type = 1 THEN (SELECT CAST(MIN(sell_price) AS numeric) FROM finish_goods.product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) * (1 - CAST(pps.discount_value AS numeric) / 100)
+                            ELSE (SELECT CAST(MIN(sell_price) AS numeric) FROM finish_goods.product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0) - CAST(pps.discount_value AS numeric)
                         END
-                     FROM price_product_settings pps
+                     FROM promo.price_product_settings pps
                      WHERE pps.scope = 1
                        AND pps.is_active = true 
                        AND pps.deleted = false
@@ -150,7 +150,7 @@ class ProductCatalogController extends Controller
                        AND (pps.end_date IS NULL OR pps.end_date >= NOW())
                      LIMIT 1
                     ),
-                    (SELECT CAST(MIN(sell_price) AS numeric) FROM product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0)
+                    (SELECT CAST(MIN(sell_price) AS numeric) FROM finish_goods.product_variants WHERE product_id = products.id AND deleted = false AND sell_price > 0)
                 ) as promo_price
             ')
             ->with(['brand', 'category', 'images', 'variants', 'colors', 'tags']);

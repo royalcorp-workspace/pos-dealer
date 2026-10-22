@@ -20,6 +20,7 @@ trait HasSchemaTable
         'App\Models\Frontend\Promo\\' => 'promo',
 
         // Products Catalog domain
+        'App\Models\Frontend\ProductsCatalog\Wishlist' => 'customer',
         'App\Models\Frontend\ProductsCatalog\\' => 'finish_goods',
         'App\Models\Frontend\Product' => 'finish_goods',
         'App\Models\Frontend\ProductVariant' => 'finish_goods',

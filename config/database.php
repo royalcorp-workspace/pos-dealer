@@ -96,7 +96,7 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'schema' => env('DB_SCHEMA', 'public'),
-            'search_path' => env('DB_SEARCH_PATH', 'public, finish_goods, sales, customer, shipping, inventory, promo, store, content, user_managements'),
+            'search_path' => env('DB_SEARCH_PATH', 'finish_goods, sales, promo, customer, shipping, inventory, store, content, user_managements, public'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
@@ -129,7 +129,7 @@ return [
     */
 
     'migrations' => [
-        'table' => 'migrations',
+        'table' => 'public.migrations',
         'update_date_on_publish' => true,
     ],
 
