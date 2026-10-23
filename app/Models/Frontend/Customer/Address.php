@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Customer;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Customer\Customer;
 use App\Models\Frontend\Location\City;
 use App\Models\Frontend\Location\SubDistrict;
@@ -14,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Address extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'addresses';

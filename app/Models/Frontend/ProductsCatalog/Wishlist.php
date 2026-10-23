@@ -4,18 +4,23 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\ProductsCatalog;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Wishlist extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $table = 'wishlists';
+    protected $table = 'customer.wishlists';
+    protected string $schema = 'customer';
 
     protected $fillable = [
         'user_id',

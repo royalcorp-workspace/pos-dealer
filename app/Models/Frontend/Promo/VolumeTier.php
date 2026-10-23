@@ -2,11 +2,15 @@
 
 namespace App\Models\Frontend\Promo;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VolumeTier extends Model
 {
+    use HasSchemaTable;
+
     protected $table = 'price_product_setting_volume_tiers';
 
     protected $keyType = 'string';

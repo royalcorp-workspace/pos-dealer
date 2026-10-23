@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Traits\HasSchemaTable;
+
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class User extends Authenticatable
 {
+    use HasSchemaTable;
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 

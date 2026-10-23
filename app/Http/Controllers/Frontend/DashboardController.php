@@ -519,7 +519,9 @@ class DashboardController extends Controller
 
     private function getOrdersForCurrentUser(string $email, $userId = null)
     {
-        if (!Schema::hasTable('orders') || !Schema::hasTable('order_items')) {
+        $ordersTable = (new Order)->getTable();
+        $orderItemsTable = (new \App\Models\Frontend\OrderItem)->getTable();
+        if (!Schema::hasTable($ordersTable) || !Schema::hasTable($orderItemsTable)) {
             return collect();
         }
 

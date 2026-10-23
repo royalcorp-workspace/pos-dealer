@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Category extends Model
 {
+    use HasSchemaTable;
+
     protected $table = 'product_category';
 
     protected $keyType = 'string';

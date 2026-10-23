@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class RefreshToken extends Model
 {
+    use HasSchemaTable;
+
     protected $table = 'refresh_tokens';
 
     protected $keyType = 'string';

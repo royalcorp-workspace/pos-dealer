@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Order;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Customer\Customer;
 use App\Models\Frontend\Order\OrderItem;
 use App\Models\Payment;
@@ -14,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'orders';
@@ -126,12 +130,14 @@ class Order extends Model
 
         static::created(function ($model) {
             try {
+                $statusLabel = \App\Models\Reff::getShow('StatusOrder', $model->status, (string) $model->status);
+
                 \App\Models\Frontend\Order\OrderLog::create([
                     'order_id' => $model->id,
                     'action' => 'created',
                     'status_from' => null,
                     'status_to' => (string) $model->status,
-                    'notes' => 'Pesanan baru dibuat dengan status ' . $model->status,
+                    'notes' => 'Pesanan baru dibuat dengan status ' . $statusLabel,
                     'creator' => $model->creator ?: \App\Concerns\HasAuditUser::resolveCurrentUsername(),
                     'editor' => $model->editor ?: \App\Concerns\HasAuditUser::resolveCurrentUsername(),
                 ]);
@@ -159,24 +165,30 @@ class Order extends Model
                 $username = \App\Concerns\HasAuditUser::resolveCurrentUsername();
 
                 if ($model->wasChanged('status')) {
+                    $fromStatusLabel = \App\Models\Reff::getShow('StatusOrder', $model->getOriginal('status'), (string) $model->getOriginal('status'));
+                    $toStatusLabel = \App\Models\Reff::getShow('StatusOrder', $model->status, (string) $model->status);
+
                     \App\Models\Frontend\Order\OrderLog::create([
                         'order_id' => $model->id,
                         'action' => 'status_changed',
                         'status_from' => (string) $model->getOriginal('status'),
                         'status_to' => (string) $model->status,
-                        'notes' => 'Status pesanan diubah dari ' . $model->getOriginal('status') . ' ke ' . $model->status,
+                        'notes' => 'Status pesanan diubah dari ' . $fromStatusLabel . ' ke ' . $toStatusLabel,
                         'creator' => $username,
                         'editor' => $username,
                     ]);
                 }
 
                 if ($model->wasChanged('payment_status')) {
+                    $fromPayLabel = \App\Models\Reff::getShow('PaymentStatus', $model->getOriginal('payment_status'), (string) $model->getOriginal('payment_status'));
+                    $toPayLabel = \App\Models\Reff::getShow('PaymentStatus', $model->payment_status, (string) $model->payment_status);
+
                     \App\Models\Frontend\Order\OrderLog::create([
                         'order_id' => $model->id,
                         'action' => 'payment_status_changed',
                         'status_from' => (string) $model->getOriginal('payment_status'),
                         'status_to' => (string) $model->payment_status,
-                        'notes' => 'Status pembayaran diubah dari ' . $model->getOriginal('payment_status') . ' ke ' . $model->payment_status,
+                        'notes' => 'Status pembayaran diubah dari ' . $fromPayLabel . ' ke ' . $toPayLabel,
                         'creator' => $username,
                         'editor' => $username,
                     ]);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Buffer;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Customer;
 use App\Models\Frontend\Customer\Customer as FrontendCustomer;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Buffer extends Model
 {
+    use HasSchemaTable;
+
     protected $keyType = 'string';
     public $incrementing = false;
 

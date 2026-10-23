@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class Settlement extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $fillable = [

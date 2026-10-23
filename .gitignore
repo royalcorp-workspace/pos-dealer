@@ -24,3 +24,6 @@ Homestead.yaml
 Thumbs.db
 /bootstrap/cache/*.php
 .agents
+.agents/
+GEMINI.md
+AGENTS.md

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend\Location;
 
+use App\Traits\HasSchemaTable;
+
 use App\Models\Frontend\Customer\Address;
 use App\Models\Frontend\Location\City;
 use App\Models\Frontend\Location\Province;
@@ -15,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SubDistrict extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $table = 'sub_districts';

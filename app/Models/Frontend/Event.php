@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models\Frontend;
 
+use App\Traits\HasSchemaTable;
+
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Event extends Model
 {
+    use HasSchemaTable;
+
     use HasUuids;
 
     protected $keyType = 'string';
