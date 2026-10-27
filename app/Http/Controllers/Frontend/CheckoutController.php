@@ -674,7 +674,9 @@ class CheckoutController extends Controller
         $shippingCostSubsidy = 0;
         if (!empty($appliedVouchers)) {
             foreach ($appliedVouchers as $av) {
-                if ($av['voucher']->type == 3) {
+                $vRaw = $av['voucher'] ?? null;
+                $vType = is_array($vRaw) ? ($vRaw['type'] ?? null) : ($vRaw->type ?? null);
+                if ((int)$vType === 3) {
                     $shippingCostSubsidy += $av['discount'];
                 }
             }
@@ -1647,7 +1649,16 @@ class CheckoutController extends Controller
                 // Validasi ulang voucher terhadap email pengguna baru & batas penggunaan
                 if (!empty($appliedVouchers)) {
                     foreach ($appliedVouchers as $av) {
-                        $vModel = $av['voucher'] ?? null;
+                        $vRaw = $av['voucher'] ?? null;
+                        $vModel = null;
+                        if ($vRaw instanceof \App\Models\Frontend\Promo\Voucher) {
+                            $vModel = $vRaw;
+                        } elseif (is_array($vRaw) && !empty($vRaw['id'])) {
+                            $vModel = \App\Models\Frontend\Promo\Voucher::find($vRaw['id']);
+                        } elseif (is_object($vRaw) && !empty($vRaw->id)) {
+                            $vModel = \App\Models\Frontend\Promo\Voucher::find($vRaw->id);
+                        }
+
                         if ($vModel) {
                             $isUsed = $vModel->hasBeenUsedByEmail($customerEmail);
                             $isNotNew = $vModel->valid_for_new_customer && $vModel->isEmailExistingCustomer($customerEmail);
