@@ -1712,24 +1712,6 @@ class CheckoutController extends Controller
                     'editor' => $customerEmail,
                 ]);
 
-                // 3b. Create initial Delivery record in deliveries table
-                try {
-                    \App\Models\Frontend\Shipping\Delivery::create([
-                        'id' => Str::uuid()->toString(),
-                        'order_id' => $order->id,
-                        'courier_id' => $order->courier_id,
-                        'status' => 1, // pending
-                        'estimated_delivery_at' => $etaData['estimated_at'] ?? null,
-                        'estimated_delivery_min' => $etaData['min_date'] ?? null,
-                        'estimated_delivery_max' => $etaData['max_date'] ?? null,
-                        'estimated_delivery_duration' => $etaDuration,
-                        'eta_source' => $etaSource,
-                        'eta_notes' => $shippingCalc['eta_label'] ?? null,
-                    ]);
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning("Gagal membuat initial delivery record #{$order->order_number}: " . $e->getMessage());
-                }
-
                 // 4. Create OrderItems & Allocate Inventory
                 if (!empty($resolvedItems)) {
                     foreach ($resolvedItems as $resolved) {
@@ -1899,7 +1881,7 @@ class CheckoutController extends Controller
             }
 
             // Post-creation safety guarantee: ensure order has items in order_items table
-            $dbItemCount = \Illuminate\Support\Facades\DB::table('order_items')->where('order_id', $order->id)->count();
+            $dbItemCount = OrderItem::where('order_id', $order->id)->count();
             if ($dbItemCount === 0) {
                 \Illuminate\Support\Facades\Log::warning("Order #{$order->order_number} has 0 items, running emergency order item insertion");
                 $fallbackCart = !empty($cart) ? $cart : ($sessionOrderData['items'] ?? ($order->meta['items'] ?? []));
@@ -1994,8 +1976,36 @@ class CheckoutController extends Controller
             \Illuminate\Support\Facades\Log::error('Checkout processPayment error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
-                'message' => 'Terjadi kesalahan saat memproses pesanan: ' . $e->getMessage()
+                'message' => 'Terjadi kendala saat memproses pesanan Anda. Silakan coba beberapa saat lagi atau hubungi layanan pelanggan kami.'
             ], 500);
+        }
+
+        // 3b. Create initial Delivery record in deliveries table (Post-commit safe)
+        try {
+            $deliveryCourierId = null;
+            if (!empty($order->courier_id)) {
+                if (\Illuminate\Support\Str::isUuid($order->courier_id)) {
+                    $deliveryCourierId = $order->courier_id;
+                } else {
+                    $cModel = \App\Models\Frontend\Shipping\Courier::where('code', $order->courier_id)->first();
+                    $deliveryCourierId = $cModel?->id;
+                }
+            }
+
+            \App\Models\Frontend\Shipping\Delivery::create([
+                'id' => Str::uuid()->toString(),
+                'order_id' => $order->id,
+                'courier_id' => $deliveryCourierId,
+                'status' => 1, // pending
+                'estimated_delivery_at' => $etaData['estimated_at'] ?? null,
+                'estimated_delivery_min' => $etaData['min_date'] ?? null,
+                'estimated_delivery_max' => $etaData['max_date'] ?? null,
+                'estimated_delivery_duration' => $etaDuration ?? null,
+                'eta_source' => $etaSource ?? null,
+                'eta_notes' => $shippingCalc['eta_label'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Gagal membuat initial delivery record #{$order->order_number}: " . $e->getMessage());
         }
 
         $isEspay = ($paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay')
