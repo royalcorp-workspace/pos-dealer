@@ -143,24 +143,21 @@ window.processPayment = function () {
                     manualRedirectBtn.href = targetUrl;
                 }
 
-                var iframeUrl = '';
-                if (typeof SGOSignature !== 'undefined' && typeof SGOSignature.getIframeURL === 'function') {
-                    try {
-                        iframeUrl = SGOSignature.getIframeURL(data.espay_kit);
-                    } catch (e) {
-                        console.error('SGOSignature getIframeURL error:', e);
-                    }
-                }
-
-                if (!iframeUrl) {
-                    var domain = "https://sandbox-kit.espay.id";
+                // DIRECT LOCKED CHANNEL URL:
+                // Menggunakan data.iframe_url langsung agar Espay langsung membuka tampilan QRIS (QR code)
+                // atau Credit Card (form input kartu) tanpa menampilkan kembali menu pilihan channel pembayaran!
+                var iframeUrl = data.iframe_url || '';
+                if (!iframeUrl && data.espay_kit) {
+                    var domain = (data.espay_kit.domain || 'https://sandbox-kit.espay.id').replace(/\/+$/, '');
                     var sig = data.espay_kit.signature || '';
                     var key = data.espay_kit.key || '';
-                    var pId = data.espay_kit.paymentId || '';
-                    var bUrl = encodeURIComponent(data.espay_kit.backUrl || thankYouUrl);
-                    var bCode = data.espay_kit.bankCode || '';
-                    var prCode = data.espay_kit.productCode || '';
-                    iframeUrl = domain + "/plugin/merchantkey/?signature=" + sig + "&domain=" + domain + "&key=" + key + "&paymentId=" + pId + "&backUrl=" + bUrl + "&bankCode=" + bCode + "&productCode=" + prCode;
+                    var pId = encodeURIComponent(data.espay_kit.paymentId || '');
+                    var bUrl = encodeURIComponent(data.espay_kit.backUrl || targetUrl);
+                    var bCode = encodeURIComponent(data.espay_kit.bankCode || '');
+                    var prCode = encodeURIComponent(data.espay_kit.productCode || '');
+                    var cCode = encodeURIComponent(data.espay_kit.commCode || '');
+                    var amt = encodeURIComponent(data.espay_kit.amount || '');
+                    iframeUrl = domain + "/index/order/?url=" + bUrl + "&key=" + key + "&paymentId=" + pId + "&paymentAmount=" + amt + "&signature=" + sig + "&commCode=" + cCode + "&bankCode=" + bCode + "&productCode=" + prCode;
                 }
 
                 if (modal && iframe) {
@@ -577,14 +574,19 @@ document.addEventListener('DOMContentLoaded', function() {
 // ==========================================
 // VOUCHER PAYMENT HANDLING
 // ==========================================
-window.openAvailableVouchersModal = function() {
-    var modal = document.getElementById('available-vouchers-modal');
-    if (modal) modal.classList.remove('hidden');
-};
-
-window.closeAvailableVouchersModal = function() {
-    var modal = document.getElementById('available-vouchers-modal');
-    if (modal) modal.classList.add('hidden');
+window.toggleAvailableVouchersDropdown = function() {
+    var dropdown = document.getElementById('available-vouchers-dropdown');
+    var chevron = document.getElementById('available-vouchers-dropdown-chevron');
+    if (dropdown) {
+        var isHidden = dropdown.classList.contains('hidden');
+        if (isHidden) {
+            dropdown.classList.remove('hidden');
+            if (chevron) chevron.classList.add('rotate-180');
+        } else {
+            dropdown.classList.add('hidden');
+            if (chevron) chevron.classList.remove('rotate-180');
+        }
+    }
 };
 
 window.applyPaymentVoucher = async function(code) {
@@ -640,7 +642,6 @@ window.applyPaymentVoucher = async function(code) {
             if (typeof addToast === 'function') {
                 addToast('success', data.message || 'Voucher berhasil diterapkan.');
             }
-            window.closeAvailableVouchersModal();
         } else {
             var msg = data.message || 'Gagal menerapkan voucher.';
             if (feedbackEl) feedbackEl.innerHTML = '<span class="text-red-500 font-medium"><i class="fa-solid fa-circle-exclamation mr-1"></i> ' + msg + '</span>';
