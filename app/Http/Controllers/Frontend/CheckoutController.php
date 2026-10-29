@@ -1289,7 +1289,336 @@ class CheckoutController extends Controller
         }
         $shippingAddress = $orderData['shipping_address'] ?? null;
 
-        return view('frontend.payment', compact('orderData', 'paymentMethods', 'address', 'shippingAddress', 'selectedPaymentMethodCode'));
+        // Load available vouchers for this order and user
+        $customerEmail = strtolower(trim((string)($orderData['customer']['email'] ?? '')));
+        if (empty($customerEmail) && session()->get('is_logged_in')) {
+            $customerEmail = session()->get('user.email') ?? (session()->get('user.username') ?? null);
+        }
+        $cartItems = $orderData['items'] ?? $cart;
+
+        $availableVouchers = collect();
+        try {
+            $availableVouchers = Voucher::active()
+                ->where('show_on_web', true)
+                ->with(['categories', 'products', 'brands', 'customerGroups'])
+                ->get()
+                ->filter(function($coupon) use ($cartItems, $userId) {
+                    return $coupon->appliesToCart($cartItems, $userId);
+                })
+                ->map(function ($coupon) use ($cartItems, $userId, $customerEmail) {
+                    $coupon->is_usable = $coupon->canBeUsedBy($userId, $customerEmail);
+                    $coupon->eligible_subtotal = $coupon->getEligibleSubtotal($cartItems);
+                    return $coupon;
+                })
+                ->values();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Error loading available vouchers on payment page: ' . $e->getMessage());
+        }
+
+        return view('frontend.payment', compact('orderData', 'paymentMethods', 'address', 'shippingAddress', 'selectedPaymentMethodCode', 'availableVouchers'));
+    }
+
+    public function applyVoucherPayment(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $code = strtoupper(trim((string) $request->input('code')));
+        if (empty($code)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Masukkan kode voucher terlebih dahulu.',
+            ], 422);
+        }
+
+        $orderData = session()->get('order_data');
+        if (empty($orderData)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data pesanan tidak ditemukan.',
+            ], 404);
+        }
+
+        $cart = $orderData['items'] ?? [];
+        $cartTotal = (float) ($orderData['original_cart_total'] ?? 0);
+        if ($cartTotal <= 0) {
+            $cartTotal = (float) collect($cart)->sum(fn($i) => ($i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
+        }
+        $shippingCost = (float) ($orderData['shipping_cost'] ?? 0);
+
+        $customerEmail = strtolower(trim((string) ($orderData['customer']['email'] ?? '')));
+        if (empty($customerEmail) && session()->get('is_logged_in')) {
+            $customerEmail = session()->get('user.email') ?? (session()->get('user.username') ?? null);
+        }
+
+        // 1. Cari voucher
+        $voucher = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower($code)])->first();
+        if (!$voucher) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kode voucher tidak ditemukan atau sudah tidak aktif.',
+            ], 422);
+        }
+
+        $userId = session()->get('is_logged_in') 
+            ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) 
+            : null;
+
+        // 2. Validasi email & batas penggunaan
+        if (!empty($customerEmail)) {
+            if ($voucher->hasBeenUsedByEmail($customerEmail)) {
+                $limitMsg = ($voucher->usage_limit_per_user > 0) ? " ({$voucher->usage_limit_per_user}x)" : '';
+                return response()->json([
+                    'success' => false,
+                    'message' => "Peringatan: Email {$customerEmail} sudah mencapai batas penggunaan{$limitMsg} untuk voucher {$voucher->code}.",
+                ], 422);
+            }
+            if ($voucher->valid_for_new_customer && $voucher->isEmailExistingCustomer($customerEmail)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Peringatan: Voucher {$voucher->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya.",
+                ], 422);
+            }
+        }
+
+        // 3. Validasi user applicability & scope
+        if (!$voucher->canBeUsedBy($userId, $customerEmail)) {
+            $msg = 'Voucher sudah mencapai batas pemakaian atau tidak tersedia untuk akun Anda.';
+            if ((int)$voucher->scope === 2) {
+                $msg = 'Voucher ini hanya berlaku untuk pelanggan tertentu.';
+            } elseif ((int)$voucher->scope === 7) {
+                $msg = 'Voucher ini khusus untuk group customer tertentu (misal: Karyawan atau Reseller).';
+            } elseif (($voucher->visibility ?? 'public') === 'claimable') {
+                $msg = 'Voucher ini harus diklaim terlebih dahulu sebelum dapat digunakan.';
+            } elseif ($voucher->require_follow) {
+                $msg = 'Voucher ini hanya dapat digunakan oleh pengikut toko (Follow Store).';
+            }
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 422);
+        }
+
+        if (!empty($cart) && !$voucher->appliesToCart($cart, $userId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Voucher ini tidak berlaku untuk produk dalam pesanan Anda.',
+            ], 422);
+        }
+
+        $eligibleSubtotal = $voucher->getEligibleSubtotal($cart);
+        if (in_array((int)$voucher->scope, [3, 4, 5, 6], true) && $eligibleSubtotal <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Produk dalam pesanan tidak memenuhi syarat kategori/produk voucher ini.',
+            ], 422);
+        }
+
+        // 4. Minimum purchase check
+        if ($eligibleSubtotal < $voucher->min_purchase) {
+            $kurang = (float) $voucher->min_purchase - $eligibleSubtotal;
+            return response()->json([
+                'success' => false,
+                'message' => 'Minimum pembelian Rp ' . number_format((float) $voucher->min_purchase, 0, ',', '.') . ' untuk voucher ini (Kurang Rp ' . number_format($kurang, 0, ',', '.') . ').',
+            ], 422);
+        }
+
+        // 5. Check Stacking / Combination with existing vouchers
+        $currentCodes = (array) ($orderData['voucher_codes'] ?? []);
+        $currentCodes = array_values(array_unique(array_filter(array_map('strtoupper', $currentCodes))));
+
+        if (in_array($code, $currentCodes, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Voucher {$code} sudah digunakan.",
+            ], 422);
+        }
+
+        $newCodes = $currentCodes;
+        if (!$voucher->isStackable()) {
+            $newCodes = [$code];
+        } else {
+            $existingModels = Voucher::active()->whereIn('code', $currentCodes)->get();
+            $hasNonStackable = $existingModels->contains(fn($v) => !$v->isStackable());
+            if ($hasNonStackable) {
+                $newCodes = [$code];
+            } else {
+                $newCodes[] = $code;
+            }
+        }
+
+        // 6. Recalculate discounts
+        $voucherCalc = $this->calculateVoucherDiscount($newCodes, $cart, $cartTotal, $shippingCost, $customerEmail);
+        $productVoucherDiscount = (float) ($voucherCalc['product_voucher_discount'] ?? 0);
+        $shippingVoucherDiscount = (float) ($voucherCalc['shipping_voucher_discount'] ?? 0);
+        $totalVoucherDiscount = (float) ($voucherCalc['discount'] ?? 0);
+
+        $staticPromoDiscount = (float) ($orderData['total_static_discount'] ?? ($orderData['promo_discount'] ?? 0));
+        $priceSettingDiscount = (float) ($orderData['price_product_setting_discount'] ?? 0);
+        $totalDiscount = $staticPromoDiscount + $priceSettingDiscount + $productVoucherDiscount;
+        $calculatedTotal = max(0, $cartTotal - $totalDiscount) + max(0, $shippingCost - $shippingVoucherDiscount);
+
+        $formattedApplied = [];
+        foreach ($voucherCalc['vouchers'] ?? [] as $av) {
+            $vModel = $av['voucher'] ?? null;
+            $formattedApplied[] = [
+                'id' => $vModel?->id,
+                'voucher' => [
+                    'id' => $vModel?->id,
+                    'code' => $vModel?->code ?? '',
+                    'title' => $vModel?->title ?? '',
+                ],
+                'code' => $vModel?->code ?? '',
+                'title' => $vModel?->title ?? '',
+                'discount' => (float) ($av['discount'] ?? 0),
+                'is_shipping' => !empty($av['is_shipping']),
+                'discount_formatted' => 'Rp ' . number_format((float)($av['discount'] ?? 0), 0, ',', '.'),
+            ];
+        }
+
+        $orderData['applied_vouchers'] = $formattedApplied;
+        $orderData['voucher_codes'] = $newCodes;
+        $orderData['voucher_code'] = implode(',', $newCodes);
+        $orderData['product_voucher_discount'] = $productVoucherDiscount;
+        $orderData['shipping_voucher_discount'] = $shippingVoucherDiscount;
+        $orderData['voucher_discount'] = $totalVoucherDiscount;
+        $orderData['discount'] = $totalDiscount;
+        $orderData['total_discount'] = $totalDiscount;
+        $orderData['shipping_cost_subsidy'] = $shippingVoucherDiscount;
+        $orderData['total'] = $calculatedTotal;
+
+        session()->put('order_data', $orderData);
+        session()->put('selected_voucher_codes', $newCodes);
+
+        $buffer = $this->getCurrentBuffer();
+        if ($buffer) {
+            $buffer->discount = $totalDiscount;
+            $buffer->shipping_cost_subsidy = $shippingVoucherDiscount;
+            $buffer->total = $calculatedTotal;
+            $buffer->voucher_id = count($newCodes) === 1 ? ($voucherCalc['vouchers'][0]['voucher']->id ?? null) : null;
+            $buffer->voucher_nominal = $totalVoucherDiscount;
+            $meta = $buffer->meta ?? [];
+            $meta['applied_vouchers'] = $formattedApplied;
+            $meta['voucher_codes'] = $newCodes;
+            $meta['voucher_code'] = implode(',', $newCodes);
+            $meta['product_voucher_discount'] = $productVoucherDiscount;
+            $meta['shipping_voucher_discount'] = $shippingVoucherDiscount;
+            $meta['voucher_discount'] = $totalVoucherDiscount;
+            $buffer->meta = $meta;
+            $buffer->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Voucher {$voucher->code} berhasil digunakan!",
+            'voucher_codes' => $newCodes,
+            'applied_vouchers' => $formattedApplied,
+            'product_voucher_discount' => $productVoucherDiscount,
+            'shipping_voucher_discount' => $shippingVoucherDiscount,
+            'voucher_discount' => $totalVoucherDiscount,
+            'total' => $calculatedTotal,
+            'total_formatted' => 'Rp ' . number_format($calculatedTotal, 0, ',', '.'),
+            'product_voucher_formatted' => '- Rp ' . number_format($productVoucherDiscount, 0, ',', '.'),
+            'shipping_voucher_formatted' => '- Rp ' . number_format($shippingVoucherDiscount, 0, ',', '.'),
+        ]);
+    }
+
+    public function removeVoucherPayment(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $codeToRemove = strtoupper(trim((string) $request->input('code')));
+        $orderData = session()->get('order_data');
+        if (empty($orderData)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data pesanan tidak ditemukan.',
+            ], 404);
+        }
+
+        $cart = $orderData['items'] ?? [];
+        $cartTotal = (float) ($orderData['original_cart_total'] ?? 0);
+        if ($cartTotal <= 0) {
+            $cartTotal = (float) collect($cart)->sum(fn($i) => ($i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
+        }
+        $shippingCost = (float) ($orderData['shipping_cost'] ?? 0);
+        $customerEmail = strtolower(trim((string) ($orderData['customer']['email'] ?? '')));
+
+        $currentCodes = (array) ($orderData['voucher_codes'] ?? []);
+        if (!empty($codeToRemove)) {
+            $newCodes = array_values(array_filter($currentCodes, fn($c) => strtoupper($c) !== $codeToRemove));
+        } else {
+            $newCodes = [];
+        }
+
+        $voucherCalc = $this->calculateVoucherDiscount($newCodes, $cart, $cartTotal, $shippingCost, $customerEmail);
+        $productVoucherDiscount = (float) ($voucherCalc['product_voucher_discount'] ?? 0);
+        $shippingVoucherDiscount = (float) ($voucherCalc['shipping_voucher_discount'] ?? 0);
+        $totalVoucherDiscount = (float) ($voucherCalc['discount'] ?? 0);
+
+        $staticPromoDiscount = (float) ($orderData['total_static_discount'] ?? ($orderData['promo_discount'] ?? 0));
+        $priceSettingDiscount = (float) ($orderData['price_product_setting_discount'] ?? 0);
+        $totalDiscount = $staticPromoDiscount + $priceSettingDiscount + $productVoucherDiscount;
+        $calculatedTotal = max(0, $cartTotal - $totalDiscount) + max(0, $shippingCost - $shippingVoucherDiscount);
+
+        $formattedApplied = [];
+        foreach ($voucherCalc['vouchers'] ?? [] as $av) {
+            $vModel = $av['voucher'] ?? null;
+            $formattedApplied[] = [
+                'id' => $vModel?->id,
+                'voucher' => [
+                    'id' => $vModel?->id,
+                    'code' => $vModel?->code ?? '',
+                    'title' => $vModel?->title ?? '',
+                ],
+                'code' => $vModel?->code ?? '',
+                'title' => $vModel?->title ?? '',
+                'discount' => (float) ($av['discount'] ?? 0),
+                'is_shipping' => !empty($av['is_shipping']),
+                'discount_formatted' => 'Rp ' . number_format((float)($av['discount'] ?? 0), 0, ',', '.'),
+            ];
+        }
+
+        $orderData['applied_vouchers'] = $formattedApplied;
+        $orderData['voucher_codes'] = $newCodes;
+        $orderData['voucher_code'] = implode(',', $newCodes);
+        $orderData['product_voucher_discount'] = $productVoucherDiscount;
+        $orderData['shipping_voucher_discount'] = $shippingVoucherDiscount;
+        $orderData['voucher_discount'] = $totalVoucherDiscount;
+        $orderData['discount'] = $totalDiscount;
+        $orderData['total_discount'] = $totalDiscount;
+        $orderData['shipping_cost_subsidy'] = $shippingVoucherDiscount;
+        $orderData['total'] = $calculatedTotal;
+
+        session()->put('order_data', $orderData);
+        session()->put('selected_voucher_codes', $newCodes);
+
+        $buffer = $this->getCurrentBuffer();
+        if ($buffer) {
+            $buffer->discount = $totalDiscount;
+            $buffer->shipping_cost_subsidy = $shippingVoucherDiscount;
+            $buffer->total = $calculatedTotal;
+            $buffer->voucher_id = count($newCodes) === 1 ? ($voucherCalc['vouchers'][0]['voucher']->id ?? null) : null;
+            $buffer->voucher_nominal = $totalVoucherDiscount;
+            $meta = $buffer->meta ?? [];
+            $meta['applied_vouchers'] = $formattedApplied;
+            $meta['voucher_codes'] = $newCodes;
+            $meta['voucher_code'] = implode(',', $newCodes);
+            $meta['product_voucher_discount'] = $productVoucherDiscount;
+            $meta['shipping_voucher_discount'] = $shippingVoucherDiscount;
+            $meta['voucher_discount'] = $totalVoucherDiscount;
+            $buffer->meta = $meta;
+            $buffer->save();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Voucher berhasil dihapus.',
+            'voucher_codes' => $newCodes,
+            'applied_vouchers' => $formattedApplied,
+            'product_voucher_discount' => $productVoucherDiscount,
+            'shipping_voucher_discount' => $shippingVoucherDiscount,
+            'voucher_discount' => $totalVoucherDiscount,
+            'total' => $calculatedTotal,
+            'total_formatted' => 'Rp ' . number_format($calculatedTotal, 0, ',', '.'),
+            'product_voucher_formatted' => '- Rp ' . number_format($productVoucherDiscount, 0, ',', '.'),
+            'shipping_voucher_formatted' => '- Rp ' . number_format($shippingVoucherDiscount, 0, ',', '.'),
+        ]);
     }
 
     public function processPayment(Request $request)
@@ -1673,8 +2002,9 @@ class CheckoutController extends Controller
                                     $meta['shipping_voucher_discount'] = 0;
                                     $buffer->update(['meta' => $meta]);
                                 }
+                                $limitMsg = ($vModel->usage_limit_per_user > 0) ? " ({$vModel->usage_limit_per_user}x)" : '';
                                 $msg = $isUsed
-                                    ? "Peringatan: Email {$customerEmail} sudah pernah menggunakan voucher {$vModel->code} sebelumnya. Voucher telah dihapus otomatis."
+                                    ? "Peringatan: Email {$customerEmail} sudah mencapai batas penggunaan{$limitMsg} untuk voucher {$vModel->code}. Voucher telah dihapus otomatis."
                                     : "Peringatan: Voucher {$vModel->code} khusus untuk pengguna baru. Email {$customerEmail} sudah pernah bertransaksi sebelumnya. Voucher telah dihapus otomatis.";
                                 return response()->json([
                                     'success' => false,
@@ -1839,8 +2169,11 @@ class CheckoutController extends Controller
 
                 // 5. Voucher Usage
                 foreach ($appliedVouchers as $appliedVoucher) {
-                    $voucherIdToUse = $appliedVoucher['voucher']['id'] ?? ($appliedVoucher['voucher']->id ?? null);
+                    $voucherIdToUse = $appliedVoucher['voucher']['id'] ?? ($appliedVoucher['voucher']->id ?? ($appliedVoucher['id'] ?? null));
                     $appliedVoucherModel = $voucherIdToUse ? \App\Models\Frontend\Promo\Voucher::find($voucherIdToUse) : null;
+                    if (!$appliedVoucherModel && !empty($appliedVoucher['code'])) {
+                        $appliedVoucherModel = \App\Models\Frontend\Promo\Voucher::where('code', $appliedVoucher['code'])->first();
+                    }
                     if ($appliedVoucherModel) {
                         $resolvedUsageUserId = $userId ?: ($customer?->user_id ?: ($customer?->id ?: null));
                         VoucherUsage::create([

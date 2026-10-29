@@ -620,6 +620,7 @@
     data-route-cart-toggle-wishlist="{{ route('cart.toggle-wishlist') }}"
     data-route-cart-add="{{ route('cart.add') }}"
     data-route-cart-update="{{ route('cart.update', '__ID__') }}"
+    data-route-cart-remove="{{ route('cart.remove', '__ID__') }}"
     data-route-thankyou="{{ route('thankyou') }}"
     data-route-auth-google-session="{{ route('auth.google.session') }}"
     x-data="{ 

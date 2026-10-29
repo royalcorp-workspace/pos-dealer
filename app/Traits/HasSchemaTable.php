@@ -61,6 +61,8 @@ trait HasSchemaTable
         'App\Models\Frontend\TermsAndCondition' => 'content',
         'App\Models\Frontend\WarrantyClaim' => 'content',
         'App\Models\Frontend\Notification' => 'content',
+        'App\Models\Conversation' => 'content',
+        'App\Models\Message' => 'content',
 
         // User Management domain
         'App\Models\User' => 'user_managements',

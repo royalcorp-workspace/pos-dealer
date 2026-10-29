@@ -48,25 +48,6 @@
     } catch (\Throwable $e) {
         $cartCategoryIds = [];
     }
-
-    $userId = session()->get('is_logged_in') ? (session()->get('user')['id'] ?? session()->get('user')['sub'] ?? null) : null;
-    try {
-        $cartCoupons = \App\Models\Frontend\Promo\Voucher::active()
-            ->where('show_on_web', true)
-            ->with(['categories', 'products', 'brands', 'customerGroups'])
-            ->get()
-            ->filter(function($coupon) use ($cart, $userId) {
-                return $coupon->appliesToCart($cart, $userId);
-            })
-            ->map(function ($coupon) use ($cart, $userId) {
-                $coupon->is_usable = $coupon->canBeUsedBy($userId);
-                $coupon->eligible_subtotal = $coupon->getEligibleSubtotal($cart);
-                return $coupon;
-            })
-            ->values();
-    } catch (\Throwable $e) {
-        $cartCoupons = collect();
-    }
 @endphp
 
 @if(count($cart) === 0)
@@ -233,12 +214,9 @@
                                 </div>
                             @endif
                         </div>
-                        <form action="{{ route('cart.remove', $item['id']) }}" method="POST">
-                            @csrf
-                            <button type="submit" class="text-gray-400 hover:text-red-500 p-1 focus:outline-none" aria-label="Hapus item">
-                                <i class="fa-solid fa-trash-can w-4 h-4"></i>
-                            </button>
-                        </form>
+                        <button type="button" onclick="removeCartItem(this, '{{ $item['id'] }}')" class="text-gray-400 hover:text-red-500 p-1 focus:outline-none transition-colors" aria-label="Hapus item">
+                            <i class="fa-solid fa-trash-can w-4 h-4"></i>
+                        </button>
                         @if($isBundle)
                             <p class="mt-2 rounded-lg bg-brand-light p-2 text-xs text-gray-600">
                                 Simpan <strong>{{ $bundleData['bundle_name'] ?? '' }}</strong> — dapatkan {{ count($bundleData['items'] ?? []) }} produk dalam paket hemat.
@@ -286,132 +264,10 @@
     </div>
 
     <div id="cart-footer" class="shrink-0 p-4 sm:p-5 md:p-6 bg-brand-light border-t border-brand-muted space-y-3.5" data-product-ids='@json($cartProductIds ?? [])' data-category-ids='@json($cartCategoryIds ?? [])' data-cart-total="{{ $cartTotal ?? 0 }}">
-        <button
-            type="button"
-            onclick="toggleCartCouponPanel()"
-            class="w-full flex justify-between items-center bg-white p-3 md:p-4 rounded-xl border border-brand-muted hover:border-brand-gold transition-colors group shadow-sm focus:outline-none"
-            aria-label="Pilih kupon"
-        >
-            <div class="flex items-center gap-3 min-w-0">
-                <div class="w-8 h-8 rounded-full bg-brand-light text-brand-gold flex items-center justify-center flex-shrink-0">
-                    <span class="font-bold text-lg">%</span>
-                </div>
-                <div class="min-w-0 text-left">
-                    <span id="cart-coupon-trigger-title" class="block font-bold text-gray-700 group-hover:text-brand-dark truncate">Pilih Kupon yang tersedia</span>
-                    <span id="cart-coupon-trigger-code" class="block text-xs text-gray-500 truncate">Klik untuk melihat kupon aktif</span>
-                </div>
-            </div>
-            <i id="cart-coupon-icon" class="fa-solid fa-chevron-right w-4 h-4 text-gray-400 group-hover:text-brand-gold transition-transform"></i>
-        </button>
-
-        <div id="cart-coupon-panel" class="hidden space-y-2.5">
-            <div class="flex gap-2">
-                <input type="text" id="manual-cart-voucher-input" placeholder="Kode voucher" class="flex-1 px-3 py-2 border border-brand-muted rounded-xl text-sm focus:outline-none focus:border-brand-gold uppercase" maxlength="20">
-                <button type="button" onclick="validateAndApplyCartVoucher()" class="px-4 py-2 bg-brand-dark text-brand-gold rounded-xl font-bold text-xs hover:bg-brand-darker transition-colors whitespace-nowrap">Gunakan</button>
-            </div>
-            <div id="manual-cart-voucher-feedback" class="text-xs"></div>
-
-            <div class="space-y-2 max-h-44 sm:max-h-52 overflow-y-auto overscroll-contain touch-pan-y pr-1">
-                @foreach($cartCoupons as $coupon)
-                    @php
-                        $typeLabel = match($coupon->type) {
-                            1 => $coupon->value . '%',
-                            2 => 'Rp ' . number_format((float) $coupon->value, 0, ',', '.'),
-                            3 => 'Gratis Ongkir',
-                            default => 'Tidak diketahui',
-                        };
-                    @endphp
-                    @php
-                        $isUsable = $coupon->is_usable ?? true;
-                        $eligibleSub = (float) ($coupon->eligible_subtotal ?? $cartTotal);
-                        $minPurchase = (float) ($coupon->min_purchase ?? 0);
-                        $hasMinPurchase = $minPurchase > 0;
-                        $meetsMinPurchase = !$hasMinPurchase || ($eligibleSub >= $minPurchase);
-                    @endphp
-                    <button
-                         type="button"
-                         @if($isUsable)
-                             onclick="selectCartCoupon(this)"
-                             class="coupon-option w-full text-left rounded-xl border bg-white p-3 transition-all hover:border-brand-gold hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-gold"
-                         @else
-                             class="coupon-option opacity-50 bg-gray-100 border-gray-300 pointer-events-none cursor-not-allowed w-full text-left rounded-xl border p-3 transition-all focus:outline-none"
-                         @endif
-                         data-code="{{ $coupon->code }}"
-                         data-title="{{ $coupon->title }}"
-                         data-description="{{ $coupon->description }}"
-                         data-discount-type="{{ $coupon->type == 1 ? 'percentage' : ($coupon->type == 2 ? 'fixed' : 'shipping') }}"
-                         data-discount-value="{{ floatval($coupon->value) }}"
-                         data-max-discount="{{ $coupon->max_discount ?? '' }}"
-                         data-min-purchase="{{ $minPurchase }}"
-                         data-eligible-subtotal="{{ $eligibleSub }}"
-                         data-allow-stacking="{{ $coupon->allow_stacking ? 1 : 0 }}">
-                        <div class="flex items-start justify-between gap-2.5">
-                            <div class="min-w-0">
-                                <p class="font-bold text-sm text-brand-dark leading-tight">{{ $coupon->title }}</p>
-                                <p class="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{{ $coupon->description }}</p>
-                            </div>
-                            <span class="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-red-600 flex-shrink-0">{{ $typeLabel }}</span>
-                        </div>
-                        <div class="mt-2 flex flex-wrap gap-1">
-                            <span class="inline-flex items-center rounded-full bg-brand-light px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-brand-gold-dark">{{ $coupon->scopeLabel() }}</span>
-                            <span class="inline-flex items-center rounded-full {{ $coupon->allow_stacking ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500' }} px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider">{{ $coupon->allow_stacking ? 'Bisa Digabung' : 'Single' }}</span>
-                            @if($hasMinPurchase)
-                                <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 border border-amber-200/60 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider">Min. Rp {{ number_format($minPurchase, 0, ',', '.') }}</span>
-                                @if(!$meetsMinPurchase)
-                                    <span class="inline-flex items-center rounded-full bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 text-[9px] font-extrabold tracking-wider">Kurang Rp {{ number_format($minPurchase - $eligibleSub, 0, ',', '.') }}</span>
-                                @endif
-                            @endif
-                        </div>
-                        <div class="mt-2.5 flex items-center justify-between">
-                            <span class="font-mono text-xs font-bold text-brand-gold-dark">{{ $coupon->code }}</span>
-                            @if($isUsable)
-                                @if(!$meetsMinPurchase)
-                                    <span class="coupon-option-label text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                                        <i class="fa-solid fa-circle-exclamation text-[9px]"></i> Belum Cukup
-                                    </span>
-                                @else
-                                    <span class="coupon-option-label text-[11px] font-bold text-gray-400">Pilih</span>
-                                @endif
-                            @else
-                                <span class="coupon-option-label text-[10px] font-bold text-red-500 uppercase tracking-wider">Limit Habis</span>
-                            @endif
-                        </div>
-                        @if(!$isUsable)
-                            <div class="mt-1.5 text-[9px] font-bold text-red-600 uppercase tracking-wider border-t pt-1.5">
-                                Kupon sudah pernah digunakan oleh Anda
-                            </div>
-                        @endif
-                    </button>
-                @endforeach
-            </div>
-
-            <div id="cart-selected-coupon" class="hidden rounded-xl bg-white border border-brand-gold/30 p-3 text-sm text-gray-700">
-                <div class="flex justify-between items-center gap-3">
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-500">Kupon dipilih:</span>
-                            <strong id="cart-selected-title" class="text-brand-dark"></strong>
-                        </div>
-                        <div class="flex items-center gap-2 mt-0.5 text-red-600">
-                            <span class="text-xs">Hemat Hingga:</span>
-                            <strong id="cart-selected-discount"></strong>
-                        </div>
-                    </div>
-                    <button type="button" onclick="deselectCartCoupon()" class="text-xs font-bold text-red-500 hover:text-red-700 focus:outline-none px-2 py-1 rounded bg-red-50 hover:bg-red-100 transition-colors">
-                        Hapus
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="space-y-2 pt-2">
+        <div class="space-y-2 pt-1">
             <div class="flex justify-between text-sm text-gray-500">
                 <span>Subtotal</span>
                 <span id="cart-drawer-subtotal" class="font-semibold text-gray-800">Rp {{ number_format($cartTotal, 0, ',', '.') }}</span>
-            </div>
-            <div id="cart-coupon-discount-row" class="hidden flex justify-between text-sm text-gray-500">
-                <span>Diskon Kupon</span>
-                <span id="cart-coupon-discount" class="font-semibold text-red-600"></span>
             </div>
             <div class="flex justify-between text-base md:text-lg font-bold text-brand-darker border-t border-brand-muted pt-3 mt-1">
                 <span>Total</span>
