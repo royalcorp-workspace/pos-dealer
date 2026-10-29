@@ -1420,7 +1420,8 @@ class CheckoutController extends Controller
             ], 422);
         }
 
-        // 5. Check Stacking / Combination with existing vouchers
+        // 5. Smart Stacking / Combination logic:
+        // Rule: Maksimal 1 Voucher Produk (type 1 atau 2) + 1 Voucher Gratis Ongkir (type 3 dengan allow_stacking = true)
         $currentCodes = (array) ($orderData['voucher_codes'] ?? []);
         $currentCodes = array_values(array_unique(array_filter(array_map('strtoupper', $currentCodes))));
 
@@ -1431,17 +1432,47 @@ class CheckoutController extends Controller
             ], 422);
         }
 
-        $newCodes = $currentCodes;
-        if (!$voucher->isStackable()) {
-            $newCodes = [$code];
-        } else {
-            $existingModels = Voucher::active()->whereIn('code', $currentCodes)->get();
-            $hasNonStackable = $existingModels->contains(fn($v) => !$v->isStackable());
-            if ($hasNonStackable) {
-                $newCodes = [$code];
+        $isIncomingShipping = (int) $voucher->type === 3;
+        $isIncomingStackable = $isIncomingShipping && (bool) $voucher->allow_stacking;
+
+        $existingModels = Voucher::active()
+            ->whereIn('code', $currentCodes)
+            ->get();
+
+        $existingProduct = $existingModels->first(fn($v) => (int) $v->type !== 3);
+        $existingShipping = $existingModels->first(fn($v) => (int) $v->type === 3);
+
+        $newCodes = [];
+
+        if ($isIncomingShipping) {
+            if ($isIncomingStackable) {
+                // Voucher gratis ongkir stackable bisa digabung dengan voucher produk yang sudah ada
+                if ($existingProduct) {
+                    $newCodes = [$existingProduct->code, $code];
+                } else {
+                    $newCodes = [$code];
+                }
             } else {
-                $newCodes[] = $code;
+                // Voucher gratis ongkir non-stackable menggantikan seluruh voucher sebelumnya
+                $newCodes = [$code];
             }
+        } else {
+            // Voucher produk (diskon belanja):
+            // Bisa digabung jika sudah ada voucher gratis ongkir yang stackable
+            if ($existingShipping && $existingShipping->isStackable()) {
+                $newCodes = [$existingShipping->code, $code];
+            } else {
+                // Menggantikan voucher produk lama atau voucher gratis ongkir non-stackable
+                $newCodes = [$code];
+            }
+        }
+
+        $newCodes = array_values(array_unique(array_filter(array_map('strtoupper', $newCodes))));
+
+        // Validasi kombinasi akhir sesuai aturan sistem
+        $combinedModels = Voucher::active()->whereIn('code', $newCodes)->get();
+        if ($combinedModels->count() > 1 && !Voucher::validateVoucherCombination($combinedModels)) {
+            $newCodes = [$code];
         }
 
         // 6. Recalculate discounts
@@ -1449,6 +1480,14 @@ class CheckoutController extends Controller
         $productVoucherDiscount = (float) ($voucherCalc['product_voucher_discount'] ?? 0);
         $shippingVoucherDiscount = (float) ($voucherCalc['shipping_voucher_discount'] ?? 0);
         $totalVoucherDiscount = (float) ($voucherCalc['discount'] ?? 0);
+
+        // Pastikan hanya voucher yang benar-benar applied yang disimpan di newCodes
+        $actuallyAppliedCodes = collect($voucherCalc['vouchers'] ?? [])->map(function($av) {
+            return strtoupper($av['voucher']?->code ?? ($av['code'] ?? ''));
+        })->filter()->values()->all();
+        if (!empty($actuallyAppliedCodes)) {
+            $newCodes = $actuallyAppliedCodes;
+        }
 
         $staticPromoDiscount = (float) ($orderData['total_static_discount'] ?? ($orderData['promo_discount'] ?? 0));
         $priceSettingDiscount = (float) ($orderData['price_product_setting_discount'] ?? 0);
@@ -1473,9 +1512,15 @@ class CheckoutController extends Controller
             ];
         }
 
+        $primaryModel = collect($voucherCalc['vouchers'] ?? [])->first(fn($v) => empty($v['is_shipping']))['voucher'] 
+            ?? ($voucherCalc['primary'] ?? ($voucherCalc['vouchers'][0]['voucher'] ?? null));
+        $appliedVoucherIds = collect($voucherCalc['vouchers'] ?? [])->map(fn($v) => $v['voucher']?->id ?? null)->filter()->values()->all();
+
         $orderData['applied_vouchers'] = $formattedApplied;
         $orderData['voucher_codes'] = $newCodes;
         $orderData['voucher_code'] = implode(',', $newCodes);
+        $orderData['voucher_id'] = $primaryModel?->id;
+        $orderData['voucher_ids'] = $appliedVoucherIds;
         $orderData['product_voucher_discount'] = $productVoucherDiscount;
         $orderData['shipping_voucher_discount'] = $shippingVoucherDiscount;
         $orderData['voucher_discount'] = $totalVoucherDiscount;
@@ -1492,12 +1537,14 @@ class CheckoutController extends Controller
             $buffer->discount = $totalDiscount;
             $buffer->shipping_cost_subsidy = $shippingVoucherDiscount;
             $buffer->total = $calculatedTotal;
-            $buffer->voucher_id = count($newCodes) === 1 ? ($voucherCalc['vouchers'][0]['voucher']->id ?? null) : null;
+            $buffer->voucher_id = $primaryModel?->id;
             $buffer->voucher_nominal = $totalVoucherDiscount;
             $meta = $buffer->meta ?? [];
             $meta['applied_vouchers'] = $formattedApplied;
             $meta['voucher_codes'] = $newCodes;
             $meta['voucher_code'] = implode(',', $newCodes);
+            $meta['voucher_id'] = $primaryModel?->id;
+            $meta['voucher_ids'] = $appliedVoucherIds;
             $meta['product_voucher_discount'] = $productVoucherDiscount;
             $meta['shipping_voucher_discount'] = $shippingVoucherDiscount;
             $meta['voucher_discount'] = $totalVoucherDiscount;
@@ -1574,9 +1621,15 @@ class CheckoutController extends Controller
             ];
         }
 
+        $primaryModel = collect($voucherCalc['vouchers'] ?? [])->first(fn($v) => empty($v['is_shipping']))['voucher'] 
+            ?? ($voucherCalc['primary'] ?? ($voucherCalc['vouchers'][0]['voucher'] ?? null));
+        $appliedVoucherIds = collect($voucherCalc['vouchers'] ?? [])->map(fn($v) => $v['voucher']?->id ?? null)->filter()->values()->all();
+
         $orderData['applied_vouchers'] = $formattedApplied;
         $orderData['voucher_codes'] = $newCodes;
         $orderData['voucher_code'] = implode(',', $newCodes);
+        $orderData['voucher_id'] = $primaryModel?->id;
+        $orderData['voucher_ids'] = $appliedVoucherIds;
         $orderData['product_voucher_discount'] = $productVoucherDiscount;
         $orderData['shipping_voucher_discount'] = $shippingVoucherDiscount;
         $orderData['voucher_discount'] = $totalVoucherDiscount;
@@ -1593,12 +1646,14 @@ class CheckoutController extends Controller
             $buffer->discount = $totalDiscount;
             $buffer->shipping_cost_subsidy = $shippingVoucherDiscount;
             $buffer->total = $calculatedTotal;
-            $buffer->voucher_id = count($newCodes) === 1 ? ($voucherCalc['vouchers'][0]['voucher']->id ?? null) : null;
+            $buffer->voucher_id = $primaryModel?->id;
             $buffer->voucher_nominal = $totalVoucherDiscount;
             $meta = $buffer->meta ?? [];
             $meta['applied_vouchers'] = $formattedApplied;
             $meta['voucher_codes'] = $newCodes;
             $meta['voucher_code'] = implode(',', $newCodes);
+            $meta['voucher_id'] = $primaryModel?->id;
+            $meta['voucher_ids'] = $appliedVoucherIds;
             $meta['product_voucher_discount'] = $productVoucherDiscount;
             $meta['shipping_voucher_discount'] = $shippingVoucherDiscount;
             $meta['voucher_discount'] = $totalVoucherDiscount;
