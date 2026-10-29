@@ -105,7 +105,7 @@ class Voucher extends Model
         if ($this->deleted || !$this->is_active) return false;
         if ($this->start_date && $this->start_date->isFuture()) return false;
         if ($this->end_date && $this->end_date->isPast()) return false;
-        if ($this->usage_limit && $this->used_count >= $this->usage_limit) return false;
+        if (!empty($this->usage_limit) && (int)$this->usage_limit > 0 && $this->used_count >= (int)$this->usage_limit) return false;
         return true;
     }
 
@@ -160,9 +160,15 @@ class Voucher extends Model
             return false;
         }
 
+        // 0 atau null = unlimited (sesuai CMS: 0 = unlimited)
+        $limitPerUser = (int) ($this->usage_limit_per_user ?? 0);
+        if ($limitPerUser <= 0) {
+            return false;
+        }
+
         $email = strtolower(trim($email));
 
-        return \App\Models\Frontend\Order::withoutGlobalScopes()
+        $usageCount = \App\Models\Frontend\Order::withoutGlobalScopes()
             ->where('status', '!=', \App\Models\Frontend\Order::STATUS_CANCELLED)
             ->where('deleted', false)
             ->where(function ($q) use ($email) {
@@ -186,7 +192,9 @@ class Voucher extends Model
                   ->orWhereRaw("UPPER(COALESCE(meta->>'voucher_code', '')) LIKE ?", ['%' . strtoupper($this->code) . '%'])
                   ->orWhereRaw("UPPER(COALESCE(CAST(meta->'voucher_codes' AS TEXT), '')) LIKE ?", ['%' . strtoupper($this->code) . '%']);
             })
-            ->exists();
+            ->count();
+
+        return $usageCount >= $limitPerUser;
     }
 
     public function canBeUsedBy(?string $userId, ?string $customerEmail = null): bool
@@ -223,7 +231,8 @@ class Voucher extends Model
         $allIdentities = array_values(array_unique(array_merge($userIds, $customerIds)));
 
         // Usage limit per user check
-        if ($this->usage_limit_per_user && !empty($allIdentities)) {
+        $limitPerUser = (int) ($this->usage_limit_per_user ?? 0);
+        if ($limitPerUser > 0 && !empty($allIdentities)) {
             $userUsages = $this->usages()
                 ->where(function ($uq) use ($userIds, $customerIds) {
                     if (!empty($userIds)) {
@@ -253,7 +262,7 @@ class Voucher extends Model
                 })
                 ->count();
 
-            if ($userUsages >= $this->usage_limit_per_user) return false;
+            if ($userUsages >= $limitPerUser) return false;
         }
 
         // Scope 2: Customer tertentu

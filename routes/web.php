@@ -89,8 +89,14 @@ Route::get('/order-preview', [CheckoutController::class, 'orderPreview'])->name(
 
 Route::get('/order-tracking', [OrderTrackingController::class, 'index'])->name('order.tracking');
 
+Route::get('/csrf-token', function () {
+    return response()->json(['csrf_token' => csrf_token()]);
+})->name('csrf.token');
+
 Route::get('/payment', [CheckoutController::class, 'payment'])->name('payment');
 Route::post('/payment/process', [CheckoutController::class, 'processPayment'])->name('payment.process');
+Route::post('/payment/apply-voucher', [CheckoutController::class, 'applyVoucherPayment'])->name('payment.apply-voucher');
+Route::post('/payment/remove-voucher', [CheckoutController::class, 'removeVoucherPayment'])->name('payment.remove-voucher');
 
 Route::get('/thankyou', [CheckoutController::class, 'thankYou'])->name('thankyou');
 Route::get('/thank-you', [CheckoutController::class, 'thankYou'])->name('thank-you');

@@ -28,10 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
-            if ($request->expectsJson() || $request->ajax() || $request->is('login', 'api/*')) {
+            if ($request->expectsJson() || $request->ajax() || $request->is('login', 'api/*', 'cart/*', 'checkout/*', 'payment/*')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Sesi telah kedaluwarsa (CSRF token mismatch). Silakan coba masuk kembali.',
+                    'message' => 'Sesi telah kedaluwarsa (CSRF token mismatch). Silakan coba lagi.',
                     'csrf_expired' => true,
                     'csrf_token' => csrf_token(),
                 ], 419);
