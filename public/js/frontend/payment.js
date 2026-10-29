@@ -783,12 +783,16 @@ window.updatePaymentVoucherUI = function(data) {
 
     var shipRow = document.getElementById('payment-shipping-voucher-row');
     var shipAmount = document.getElementById('payment-shipping-voucher-amount');
+    var shipLabel = document.getElementById('payment-shipping-voucher-label');
     if (shipRow && shipAmount) {
         if (Number(data.shipping_voucher_discount || 0) > 0) {
             shipRow.classList.remove('hidden');
             shipAmount.textContent = data.shipping_voucher_formatted || ('- Rp ' + Number(data.shipping_voucher_discount).toLocaleString('id-ID'));
+            var shipVoucher = appliedVouchers.find(function(v) { return Boolean(v.is_shipping); });
+            if (shipLabel) shipLabel.textContent = shipVoucher ? '(' + shipVoucher.code + ')' : '';
         } else {
             shipRow.classList.add('hidden');
+            if (shipLabel) shipLabel.textContent = '';
         }
     }
 
@@ -814,13 +818,13 @@ window.updatePaymentVoucherUI = function(data) {
     modalItems.forEach(function(item) {
         var vCode = (item.dataset.voucherCode || '').toUpperCase();
         var isApplied = appliedCodes.includes(vCode);
-        var actionCol = item.querySelector('.shrink-0');
+        var actionCol = item.querySelector('.voucher-card-action');
         if (isApplied) {
-            item.classList.add('border-emerald-500', 'bg-emerald-50/30', 'ring-1', 'ring-emerald-500/30');
+            item.classList.add('border-emerald-500', 'bg-emerald-50/40', 'ring-1', 'ring-emerald-500/30');
             item.classList.remove('border-gray-200', 'bg-white');
             if (actionCol) {
                 actionCol.innerHTML = `
-                    <button type="button" onclick="removePaymentVoucher('${vCode}')" class="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-1 group">
+                    <button type="button" onclick="removePaymentVoucher('${vCode}')" class="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-1 group">
                         <i class="fa-solid fa-check text-[11px] group-hover:hidden"></i>
                         <i class="fa-solid fa-trash-can text-[11px] hidden group-hover:inline"></i>
                         <span class="group-hover:hidden">Diterapkan</span>
@@ -829,11 +833,11 @@ window.updatePaymentVoucherUI = function(data) {
                 `;
             }
         } else {
-            item.classList.remove('border-emerald-500', 'bg-emerald-50/30', 'ring-1', 'ring-emerald-500/30');
+            item.classList.remove('border-emerald-500', 'bg-emerald-50/40', 'ring-1', 'ring-emerald-500/30');
             item.classList.add('border-gray-200', 'bg-white');
             if (actionCol && !actionCol.querySelector('button[disabled]')) {
                 actionCol.innerHTML = `
-                    <button type="button" onclick="applyPaymentVoucher('${vCode}')" class="px-4 py-1.5 rounded-xl bg-brand-dark text-brand-gold font-bold text-xs hover:bg-brand-darker transition-colors shadow-2xs">
+                    <button type="button" onclick="applyPaymentVoucher('${vCode}')" class="px-3.5 py-1.5 rounded-lg bg-brand-dark text-brand-gold font-bold text-xs hover:bg-brand-darker transition-colors shadow-2xs">
                         Gunakan
                     </button>
                 `;

@@ -253,7 +253,7 @@
                                                 <span class="font-mono text-xs font-black text-brand-gold-dark tracking-wider">{{ $coupon->code }}</span>
                                             </div>
                                         </div>
-                                        <div class="shrink-0">
+                                        <div class="voucher-card-action shrink-0">
                                             @if($isApplied)
                                                 <button type="button" onclick="removePaymentVoucher('{{ $coupon->code }}')" class="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-1 group">
                                                     <i class="fa-solid fa-check text-[11px] group-hover:hidden"></i>
@@ -415,8 +415,13 @@
                     @endif
 
                     {{-- 6. Voucher Gratis Ongkir (motong biaya kirim only, jangan sampai potong harga barang) --}}
+                    @php
+                        $appliedShippingVouchers = collect($orderData['applied_vouchers'] ?? [])->filter(fn($av) => !empty($av['is_shipping']));
+                        $shippingVoucherCode = $appliedShippingVouchers->pluck('code')->first() 
+                            ?? collect($orderData['voucher_codes'] ?? [])->filter(fn($c) => str_contains(strtoupper($c), 'ONGKIR'))->first();
+                    @endphp
                     <div id="payment-shipping-voucher-row" class="flex justify-between items-center text-red-600 {{ $shippingVoucherDiscount > 0 ? '' : 'hidden' }}">
-                        <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-truck-fast text-xs text-emerald-600"></i> Voucher Gratis Ongkir</span>
+                        <span class="text-gray-600 flex items-center gap-1.5"><i class="fa-solid fa-truck-fast text-xs text-emerald-600"></i> Voucher Gratis Ongkir <span id="payment-shipping-voucher-label">{{ $shippingVoucherCode ? '(' . $shippingVoucherCode . ')' : '' }}</span></span>
                         <span id="payment-shipping-voucher-amount" class="font-bold">- Rp {{ number_format($shippingVoucherDiscount, 0, ',', '.') }}</span>
                     </div>
                     
