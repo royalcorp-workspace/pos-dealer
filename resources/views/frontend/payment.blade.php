@@ -209,23 +209,102 @@
                     </div>
                 </div>
 
-                {{-- Tombol Lihat Voucher Tersedia --}}
+                {{-- Dropdown Kupon yang Tersedia --}}
                 @if(isset($availableVouchers) && count($availableVouchers) > 0)
                     <div class="mt-4 pt-4 border-t border-gray-100">
-                        <button type="button" onclick="openAvailableVouchersModal()" class="w-full flex items-center justify-between p-3 rounded-xl bg-amber-50/60 border border-brand-gold/40 hover:border-brand-gold hover:bg-amber-50 transition-all text-left group">
+                        <button type="button" onclick="toggleAvailableVouchersDropdown()" class="w-full flex items-center justify-between p-3.5 rounded-xl bg-amber-50/60 border border-brand-gold/40 hover:border-brand-gold hover:bg-amber-50 transition-all text-left group">
                             <div class="flex items-center gap-2.5">
                                 <div class="w-8 h-8 rounded-lg bg-brand-gold/20 text-brand-gold-dark flex items-center justify-center text-sm shrink-0">
-                                    <i class="fa-solid fa-ticket-simple"></i>
+                                    <i class="fa-solid fa-ticket"></i>
                                 </div>
                                 <div>
                                     <span class="font-bold text-xs sm:text-sm text-brand-dark group-hover:text-brand-gold-dark transition-colors">Pilih dari Kupon yang Tersedia</span>
                                     <span class="block text-[11px] text-gray-500">Tersedia {{ count($availableVouchers) }} voucher aktif yang relevan</span>
                                 </div>
                             </div>
-                            <span class="text-xs font-bold text-brand-gold-dark bg-white border border-brand-gold/30 px-3 py-1.5 rounded-lg group-hover:bg-brand-gold group-hover:text-white transition-colors">
-                                Lihat Kupon <i class="fa-solid fa-chevron-right text-[10px] ml-0.5"></i>
-                            </span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-brand-gold-dark bg-white border border-brand-gold/30 px-2.5 py-1 rounded-lg shadow-2xs">
+                                    {{ count($availableVouchers) }} Kupon
+                                </span>
+                                <i id="available-vouchers-dropdown-chevron" class="fa-solid fa-chevron-down text-gray-400 group-hover:text-brand-gold-dark transition-transform duration-300"></i>
+                            </div>
                         </button>
+
+                        {{-- Kontainer Dropdown yang bisa di-scroll --}}
+                        <div id="available-vouchers-dropdown" class="hidden mt-3 p-3 bg-gray-50/80 border border-brand-muted/80 rounded-2xl max-h-80 overflow-y-auto space-y-3 transition-all">
+                            @foreach($availableVouchers as $coupon)
+                                @php
+                                    $appliedCodes = array_map('strtoupper', $orderData['voucher_codes'] ?? []);
+                                    $isApplied = in_array(strtoupper($coupon->code), $appliedCodes);
+                                    $minPurchase = (float) ($coupon->min_purchase ?? 0);
+                                    $eligibleSub = (float) ($coupon->eligible_subtotal ?? 0);
+                                    $meetsMinPurchase = ($minPurchase <= 0) || ($eligibleSub >= $minPurchase);
+                                    $isUsable = !empty($coupon->is_usable);
+                                    $isShipping = (int)$coupon->type === 3 || strtolower($coupon->type ?? '') === 'shipping';
+                                @endphp
+                                <div class="voucher-card-item rounded-xl border {{ $isApplied ? 'border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-500/30' : 'border-gray-200 bg-white hover:border-brand-gold/60' }} p-3 sm:p-3.5 transition-all duration-200 shadow-2xs" data-voucher-code="{{ $coupon->code }}">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-9 h-9 rounded-xl {{ $isShipping ? 'bg-blue-100 text-blue-700' : 'bg-brand-gold/20 text-brand-gold-dark' }} flex items-center justify-center text-sm shrink-0 font-bold">
+                                                <i class="fa-solid {{ $isShipping ? 'fa-truck-fast' : 'fa-percent' }}"></i>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <h4 class="font-bold text-xs sm:text-sm text-brand-dark tracking-tight truncate">{{ $coupon->title }}</h4>
+                                                <span class="font-mono text-xs font-black text-brand-gold-dark tracking-wider">{{ $coupon->code }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="shrink-0">
+                                            @if($isApplied)
+                                                <button type="button" onclick="removePaymentVoucher('{{ $coupon->code }}')" class="px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-800 font-bold text-xs hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-1 group">
+                                                    <i class="fa-solid fa-check text-[11px] group-hover:hidden"></i>
+                                                    <i class="fa-solid fa-trash-can text-[11px] hidden group-hover:inline"></i>
+                                                    <span class="group-hover:hidden">Diterapkan</span>
+                                                    <span class="hidden group-hover:inline">Hapus</span>
+                                                </button>
+                                            @elseif($isUsable && $meetsMinPurchase)
+                                                <button type="button" onclick="applyPaymentVoucher('{{ $coupon->code }}')" class="px-3.5 py-1.5 rounded-lg bg-brand-dark text-brand-gold font-bold text-xs hover:bg-brand-darker transition-colors shadow-2xs">
+                                                    Gunakan
+                                                </button>
+                                            @elseif(!$meetsMinPurchase)
+                                                <button type="button" disabled class="px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[10px] sm:text-[11px] cursor-not-allowed opacity-80">
+                                                    Belum Cukup
+                                                </button>
+                                            @else
+                                                <button type="button" disabled class="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-400 font-bold text-[10px] sm:text-[11px] cursor-not-allowed">
+                                                    Limit Habis
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    @if(!empty($coupon->description))
+                                        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed">{{ $coupon->description }}</p>
+                                    @endif
+
+                                    <div class="mt-2.5 flex flex-wrap items-center gap-1 pt-2 border-t border-gray-100 text-[10px] font-bold">
+                                        <span class="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 uppercase tracking-wider">{{ $coupon->scopeLabel() }}</span>
+                                        <span class="px-2 py-0.5 rounded-md {{ $coupon->allow_stacking ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600' }} uppercase tracking-wider">
+                                            {{ $coupon->allow_stacking ? 'Bisa Digabung' : 'Single' }}
+                                        </span>
+                                        @if($minPurchase > 0)
+                                            <span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-800">
+                                                Min. Rp {{ number_format($minPurchase, 0, ',', '.') }}
+                                            </span>
+                                            @if(!$meetsMinPurchase)
+                                                <span class="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700">
+                                                    Kurang Rp {{ number_format($minPurchase - $eligibleSub, 0, ',', '.') }}
+                                                </span>
+                                            @endif
+                                        @endif
+                                        @if(!empty($coupon->end_date))
+                                            <span class="px-2 py-0.5 rounded-md bg-gray-50 text-gray-400 font-normal">
+                                                s/d {{ \Carbon\Carbon::parse($coupon->end_date)->translatedFormat('d M Y') }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 @endif
             </div>
@@ -628,121 +707,6 @@
                 </div>
             </div>
 
-        </div>
-    </div>
-
-    <!-- Available Vouchers Modal Dialog -->
-    <div id="available-vouchers-modal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 transition-all duration-300">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-100 flex flex-col max-h-[90vh] relative animate-in fade-in zoom-in-95 duration-200">
-            <!-- Modal Header -->
-            <div class="px-5 py-4 bg-brand-dark text-white flex items-center justify-between border-b border-gray-800">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-8 h-8 rounded-xl bg-brand-gold/20 flex items-center justify-center text-brand-gold">
-                        <i class="fa-solid fa-ticket text-sm"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
-                            <span>Voucher & Kupon Promo</span>
-                        </h3>
-                        <p class="text-xs text-gray-400">Pilih kupon diskon atau gratis ongkir untuk pesanan Anda</p>
-                    </div>
-                </div>
-                <button type="button" onclick="closeAvailableVouchersModal()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer" title="Tutup">
-                    <i class="fa-solid fa-xmark text-sm"></i>
-                </button>
-            </div>
-
-            <!-- Modal Body (List of Vouchers) -->
-            <div class="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1 max-h-[65vh]">
-                @if(isset($availableVouchers) && count($availableVouchers) > 0)
-                    @foreach($availableVouchers as $coupon)
-                        @php
-                            $appliedCodes = array_map('strtoupper', $orderData['voucher_codes'] ?? []);
-                            $isApplied = in_array(strtoupper($coupon->code), $appliedCodes);
-                            $minPurchase = (float) ($coupon->min_purchase ?? 0);
-                            $eligibleSub = (float) ($coupon->eligible_subtotal ?? 0);
-                            $meetsMinPurchase = ($minPurchase <= 0) || ($eligibleSub >= $minPurchase);
-                            $isUsable = !empty($coupon->is_usable);
-                            $isShipping = (int)$coupon->type === 3 || strtolower($coupon->type ?? '') === 'shipping';
-                        @endphp
-                        <div class="voucher-card-item rounded-2xl border {{ $isApplied ? 'border-emerald-500 bg-emerald-50/30 ring-1 ring-emerald-500/30' : 'border-gray-200 bg-white hover:border-brand-gold/60' }} p-4 transition-all duration-200 shadow-2xs" data-voucher-code="{{ $coupon->code }}">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="flex items-center gap-2.5 min-w-0">
-                                    <div class="w-10 h-10 rounded-xl {{ $isShipping ? 'bg-blue-100 text-blue-700' : 'bg-brand-gold/20 text-brand-gold-dark' }} flex items-center justify-center text-base shrink-0 font-bold">
-                                        <i class="fa-solid {{ $isShipping ? 'fa-truck-fast' : 'fa-percent' }}"></i>
-                                    </div>
-                                    <div class="min-w-0">
-                                        <h4 class="font-extrabold text-sm text-brand-dark tracking-tight">{{ $coupon->title }}</h4>
-                                        <span class="font-mono text-xs font-black text-brand-gold-dark tracking-wider">{{ $coupon->code }}</span>
-                                    </div>
-                                </div>
-                                <div class="shrink-0">
-                                    @if($isApplied)
-                                        <button type="button" onclick="removePaymentVoucher('{{ $coupon->code }}')" class="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-1 group">
-                                            <i class="fa-solid fa-check text-[11px] group-hover:hidden"></i>
-                                            <i class="fa-solid fa-trash-can text-[11px] hidden group-hover:inline"></i>
-                                            <span class="group-hover:hidden">Diterapkan</span>
-                                            <span class="hidden group-hover:inline">Hapus</span>
-                                        </button>
-                                    @elseif($isUsable && $meetsMinPurchase)
-                                        <button type="button" onclick="applyPaymentVoucher('{{ $coupon->code }}')" class="px-4 py-1.5 rounded-xl bg-brand-dark text-brand-gold font-bold text-xs hover:bg-brand-darker transition-colors shadow-2xs">
-                                            Gunakan
-                                        </button>
-                                    @elseif(!$meetsMinPurchase)
-                                        <button type="button" disabled class="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px] cursor-not-allowed opacity-80">
-                                            Belum Cukup
-                                        </button>
-                                    @else
-                                        <button type="button" disabled class="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-400 font-bold text-[11px] cursor-not-allowed">
-                                            Limit Habis
-                                        </button>
-                                    @endif
-                                </div>
-                            </div>
-
-                            @if(!empty($coupon->description))
-                                <p class="text-xs text-gray-600 mt-2 leading-relaxed">{{ $coupon->description }}</p>
-                            @endif
-
-                            <div class="mt-3 flex flex-wrap items-center gap-1.5 pt-2.5 border-t border-gray-100 text-[10px] font-bold">
-                                <span class="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 uppercase tracking-wider">{{ $coupon->scopeLabel() }}</span>
-                                <span class="px-2 py-0.5 rounded-md {{ $coupon->allow_stacking ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600' }} uppercase tracking-wider">
-                                    {{ $coupon->allow_stacking ? 'Bisa Digabung' : 'Single Voucher' }}
-                                </span>
-                                @if($minPurchase > 0)
-                                    <span class="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-800">
-                                        Min. Belanja: Rp {{ number_format($minPurchase, 0, ',', '.') }}
-                                    </span>
-                                    @if(!$meetsMinPurchase)
-                                        <span class="px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700">
-                                            Kurang Rp {{ number_format($minPurchase - $eligibleSub, 0, ',', '.') }}
-                                        </span>
-                                    @endif
-                                @endif
-                                @if(!empty($coupon->end_date))
-                                    <span class="px-2 py-0.5 rounded-md bg-gray-50 text-gray-500">
-                                        Berlaku s/d {{ \Carbon\Carbon::parse($coupon->end_date)->translatedFormat('d M Y') }}
-                                    </span>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
-                @else
-                    <div class="py-12 text-center text-gray-400">
-                        <i class="fa-solid fa-ticket-simple text-3xl mb-2 text-gray-300"></i>
-                        <p class="text-sm font-semibold text-gray-600">Tidak ada voucher yang tersedia saat ini</p>
-                        <p class="text-xs text-gray-400 mt-0.5">Silakan masukkan kode voucher secara manual bila Anda memilikinya.</p>
-                    </div>
-                @endif
-            </div>
-
-            <!-- Modal Footer -->
-            <div class="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                <span>Tips: Voucher diskon & gratis ongkir dapat digabungkan</span>
-                <button type="button" onclick="closeAvailableVouchersModal()" class="px-4 py-1.5 rounded-xl border border-gray-300 font-bold text-gray-700 hover:bg-gray-100 transition-colors">
-                    Tutup
-                </button>
-            </div>
         </div>
     </div>
 
