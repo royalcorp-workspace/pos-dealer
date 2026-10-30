@@ -160,6 +160,9 @@ class Buffer extends Model
                         $displayName = $bundleNotes['bundle_name'];
                     }
 
+                    $basePrice = (float) ($itemMeta['base_price'] ?? $item->unit_price);
+                    $sellPrice = (float) ($itemMeta['sell_price'] ?? $itemMeta['after_disc_price'] ?? ($item->total > 0 && $item->quantity > 0 ? ($item->total / $item->quantity) : $item->unit_price));
+
                     return [
                         'id' => $item->id,
                         'product_id' => $item->product_id,
@@ -167,7 +170,11 @@ class Buffer extends Model
                         'name' => $displayName,
                         'brand' => $item->product->brand->name ?? '',
                         'image' => $item->product->thumbnail_url ?? '',
-                        'sell_price' => (float) $item->unit_price,
+                        'base_price' => $basePrice,
+                        'sell_price' => $sellPrice,
+                        'after_disc_price' => $sellPrice,
+                        'original_price' => $basePrice,
+                        'unit_price' => $basePrice,
                         'quantity' => (int) $item->quantity,
                         'item_note' => $userNote,
                         'color_id' => $colorId,

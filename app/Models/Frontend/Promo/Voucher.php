@@ -407,7 +407,28 @@ class Voucher extends Model
 
         return (float) collect($cart)
             ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
-            ->sum(fn($item) => ((float)($item['sell_price'] ?? $item['price'] ?? 0)) * ((int)($item['quantity'] ?? 0)));
+            ->sum(function ($item) {
+                $qty = (int) ($item['quantity'] ?? 0);
+                if ($qty <= 0) return 0.0;
+
+                // Hitung dari harga after diskon promo (BUKAN harga modal / original_price)
+                if (isset($item['after_disc_price']) && (float) $item['after_disc_price'] > 0) {
+                    $unitPrice = (float) $item['after_disc_price'];
+                } elseif (isset($item['total']) && (float) $item['total'] > 0) {
+                    $unitPrice = (float) $item['total'] / $qty;
+                } else {
+                    $unitPrice = (float) ($item['sell_price'] ?? $item['price'] ?? 0);
+                    // Jika unitPrice masih harga modal dan terdapat discount_nominal, kurangi diskonnya
+                    if (!empty($item['discount_nominal'])) {
+                        $unitDiscount = (float) $item['discount_nominal'] / $qty;
+                        if ($unitPrice > $unitDiscount) {
+                            $unitPrice = max(0.0, $unitPrice - $unitDiscount);
+                        }
+                    }
+                }
+
+                return $unitPrice * $qty;
+            });
     }
 
     public function appliesToCart(array $cart, ?string $userId = null): bool
