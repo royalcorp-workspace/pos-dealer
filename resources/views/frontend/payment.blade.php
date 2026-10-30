@@ -142,7 +142,16 @@
                                     <p class="font-bold text-sm text-gray-800 truncate">{{ $item['name'] }}</p>
                                     <p class="text-xs text-gray-500 mt-0.5 font-medium">Qty: {{ $item['quantity'] }}</p>
                                 </div>
-                                <span class="font-bold text-sm text-brand-dark ml-4 flex-shrink-0">Rp {{ number_format($item['sell_price'] * $item['quantity'], 0, ',', '.') }}</span>
+                                <div class="text-right ml-4 flex-shrink-0">
+                                    @php
+                                        $origUnitPrice = (float) ($item['original_price'] ?? $item['base_price'] ?? $item['sell_price']);
+                                        $sellUnitPrice = (float) ($item['after_disc_price'] ?? $item['sell_price']);
+                                    @endphp
+                                    @if($origUnitPrice > $sellUnitPrice)
+                                        <div class="text-xs text-gray-400 line-through">Rp {{ number_format($origUnitPrice * $item['quantity'], 0, ',', '.') }}</div>
+                                    @endif
+                                    <span class="font-bold text-sm text-brand-dark">Rp {{ number_format($sellUnitPrice * $item['quantity'], 0, ',', '.') }}</span>
+                                </div>
                             </div>
                         @endforeach
                     </div>
@@ -321,7 +330,7 @@
                     $items = $orderData['items'] ?? [];
                     $originalSubtotal = (float) ($orderData['original_cart_total'] ?? 0);
                     if ($originalSubtotal <= 0) {
-                        $originalSubtotal = (float) collect($items)->sum(fn($i) => ($i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
+                        $originalSubtotal = (float) collect($items)->sum(fn($i) => ($i['original_price'] ?? $i['base_price'] ?? $i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
                     }
                     
                     $totalPercentDiscount = 0.0;

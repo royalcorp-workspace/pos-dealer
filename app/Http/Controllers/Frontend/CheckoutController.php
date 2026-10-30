@@ -565,6 +565,7 @@ class CheckoutController extends Controller
             $cart[$key]['base_price'] = $basePrice;
             $cart[$key]['original_price'] = $basePrice;
             $cart[$key]['sell_price'] = $promotionalPrice;
+            $cart[$key]['after_disc_price'] = $promotionalPrice;
 
             $resolvedItems[] = [
                 'item' => $item,
@@ -855,9 +856,9 @@ class CheckoutController extends Controller
         ]);
 
         $itemsForOrderData = array_map(function ($item) use ($itemNotes) {
-            $originalPrice = (float) ($item['original_price'] ?? $item['sell_price'] ?? $item['sell_price']);
-            $price = (float) $item['sell_price'];
-            $discountNominal = $originalPrice - $price;
+            $originalPrice = (float) ($item['original_price'] ?? $item['base_price'] ?? $item['sell_price']);
+            $price = (float) ($item['after_disc_price'] ?? $item['sell_price']);
+            $discountNominal = max(0.0, $originalPrice - $price);
             $discountPercent = $originalPrice > 0 ? round(($discountNominal / $originalPrice) * 100, 2) : 0.0;
 
             return [
@@ -866,7 +867,10 @@ class CheckoutController extends Controller
                 'variant_id' => $item['variant_id'] ?? ($item['id'] !== $item['product_id'] ? $item['id'] : null),
                 'name' => $item['name'],
                 'image' => $item['image'] ?? '',
-                'sell_price' => $originalPrice,
+                'base_price' => $originalPrice,
+                'original_price' => $originalPrice,
+                'sell_price' => $price,
+                'after_disc_price' => $price,
                 'quantity' => (int) $item['quantity'],
                 'item_note' => $item['item_note'] ?? ($itemNotes[$item['id']] ?? ''),
                 'discount_nominal' => $discountNominal,
@@ -1001,33 +1005,45 @@ class CheckoutController extends Controller
                 'items' => !empty($meta['resolved_items']) 
                     ? array_map(function ($res) {
                         $it = $res['item'] ?? [];
+                        $qty = (int) ($it['quantity'] ?? 1);
+                        $basePrice = (float) ($res['base_price'] ?? $res['original_price'] ?? ($it['base_price'] ?? $it['sell_price'] ?? 0));
+                        $afterDisc = (float) ($res['after_disc_price'] ?? $res['sell_price'] ?? ($qty > 0 && isset($res['item_total']) ? ($res['item_total'] / $qty) : $basePrice));
                         return [
                             'id' => $it['id'] ?? '',
                             'product_id' => $it['product_id'] ?? '',
                             'variant_id' => $res['variant_id'] ?? null,
                             'name' => $it['name'] ?? '',
                             'image' => $it['image'] ?? '',
-                            'sell_price' => (float) ($res['base_price'] ?? $res['original_price'] ?? ($it['sell_price'] ?? 0)),
-                            'quantity' => (int) ($it['quantity'] ?? 1),
+                            'base_price' => $basePrice,
+                            'original_price' => $basePrice,
+                            'sell_price' => $afterDisc,
+                            'after_disc_price' => $afterDisc,
+                            'quantity' => $qty,
                             'item_note' => $it['item_note'] ?? '',
                             'discount_nominal' => (float) ($res['discount_nominal'] ?? 0),
                             'discount_percent' => (float) ($res['discount_percent'] ?? 0),
-                            'total' => (float) ($res['item_total'] ?? (($it['sell_price'] ?? 0) * ($it['quantity'] ?? 1))),
+                            'total' => (float) ($res['item_total'] ?? ($afterDisc * $qty)),
                         ];
                     }, $meta['resolved_items'])
                     : array_map(function ($item) {
+                        $qty = (int) $item['quantity'];
+                        $basePrice = (float) ($item['original_price'] ?? $item['base_price'] ?? $item['sell_price']);
+                        $afterDisc = (float) ($item['after_disc_price'] ?? $item['sell_price'] ?? $basePrice);
                         return [
                             'id' => $item['id'],
                             'product_id' => $item['product_id'],
                             'variant_id' => $item['variant_id'] ?? null,
                             'name' => $item['name'],
                             'image' => $item['image'] ?? '',
-                            'sell_price' => (float) ($item['original_price'] ?? $item['base_price'] ?? $item['sell_price']),
-                            'quantity' => (int) $item['quantity'],
+                            'base_price' => $basePrice,
+                            'original_price' => $basePrice,
+                            'sell_price' => $afterDisc,
+                            'after_disc_price' => $afterDisc,
+                            'quantity' => $qty,
                             'item_note' => $item['item_note'] ?? '',
                             'discount_nominal' => (float) ($item['discount_nominal'] ?? 0),
                             'discount_percent' => (float) ($item['discount_percent'] ?? 0),
-                            'total' => (float) $item['sell_price'] * (int) $item['quantity'],
+                            'total' => (float) ($item['total'] ?? ($afterDisc * $qty)),
                         ];
                     }, $cart),
             ];
@@ -1339,7 +1355,7 @@ class CheckoutController extends Controller
         $cart = $orderData['items'] ?? [];
         $cartTotal = (float) ($orderData['original_cart_total'] ?? 0);
         if ($cartTotal <= 0) {
-            $cartTotal = (float) collect($cart)->sum(fn($i) => ($i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
+            $cartTotal = (float) collect($cart)->sum(fn($i) => ($i['original_price'] ?? $i['base_price'] ?? $i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
         }
         $shippingCost = (float) ($orderData['shipping_cost'] ?? 0);
 
@@ -1581,7 +1597,7 @@ class CheckoutController extends Controller
         $cart = $orderData['items'] ?? [];
         $cartTotal = (float) ($orderData['original_cart_total'] ?? 0);
         if ($cartTotal <= 0) {
-            $cartTotal = (float) collect($cart)->sum(fn($i) => ($i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
+            $cartTotal = (float) collect($cart)->sum(fn($i) => ($i['original_price'] ?? $i['base_price'] ?? $i['sell_price'] ?? 0) * ($i['quantity'] ?? 0));
         }
         $shippingCost = (float) ($orderData['shipping_cost'] ?? 0);
         $customerEmail = strtolower(trim((string) ($orderData['customer']['email'] ?? '')));
@@ -3252,80 +3268,7 @@ class CheckoutController extends Controller
 
     private function getVoucherEligibleSubtotal(Voucher $voucher, array $cart): float
     {
-        // Scope 2 (Customer) & Scope 7 (Group Customer): All products in cart are eligible
-        if (in_array((int) $voucher->scope, [1, 2, 7], true)) {
-            return (float) collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
-        }
-
-        // Scope 3: Kategori tertentu
-        if ((int) $voucher->scope === 3) {
-            $productIds = $voucher->categories()
-                ->where('product_category.deleted', false)
-                ->with('products')
-                ->get()
-                ->flatMap(fn($category) => $category->products->where('deleted', false)->pluck('id'))
-                ->unique()
-                ->toArray();
-
-            return (float) collect($cart)
-                ->filter(fn($item) => in_array($item['product_id'] ?? null, $productIds, true))
-                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
-        }
-
-        // Scope 4: Produk Tertentu (per Artikel)
-        if ((int) $voucher->scope === 4) {
-            $eligibleProductIds = $voucher->products()
-                ->where('products.deleted', false)
-                ->pluck('products.id')
-                ->toArray();
-
-            return (float) collect($cart)
-                ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
-                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
-        }
-
-        // Scope 5: Brand Tertentu
-        if ((int) $voucher->scope === 5) {
-            $brandIds = $voucher->brands()
-                ->where('brands.deleted', false)
-                ->pluck('brands.id')
-                ->toArray();
-
-            $eligibleProductIds = Product::whereIn('brand_id', $brandIds)
-                ->where('deleted', false)
-                ->pluck('id')
-                ->toArray();
-
-            return (float) collect($cart)
-                ->filter(fn($item) => in_array($item['product_id'] ?? null, $eligibleProductIds, true))
-                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
-        }
-
-        // Scope 6: Brand & Artikel Tertentu
-        if ((int) $voucher->scope === 6) {
-            $directProductIds = $voucher->products()
-                ->where('products.deleted', false)
-                ->pluck('products.id')
-                ->toArray();
-
-            $brandIds = $voucher->brands()
-                ->where('brands.deleted', false)
-                ->pluck('brands.id')
-                ->toArray();
-
-            $brandProductIds = Product::whereIn('brand_id', $brandIds)
-                ->where('deleted', false)
-                ->pluck('id')
-                ->toArray();
-
-            $allEligible = array_values(array_unique(array_merge($directProductIds, $brandProductIds)));
-
-            return (float) collect($cart)
-                ->filter(fn($item) => in_array($item['product_id'] ?? null, $allEligible, true))
-                ->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
-        }
-
-        return (float) collect($cart)->sum(fn($item) => ($item['sell_price'] ?? 0) * ($item['quantity'] ?? 0));
+        return $voucher->getEligibleSubtotal($cart);
     }
 
     private function calculateVoucherDiscountValue(Voucher $voucher, float $eligibleSubtotal, float $shippingCost): float
@@ -4062,14 +4005,22 @@ class CheckoutController extends Controller
     private function formatOrderDataFromModel(Order $order): array
     {
         $items = $order->items->map(function ($item) {
+            $itemMeta = is_array($item->meta) ? $item->meta : (json_decode((string) $item->meta, true) ?: []);
+            $qty = (int) $item->quantity;
+            $unitPrice = (float) $item->unit_price;
+            $afterDisc = (float) ($itemMeta['after_disc_price'] ?? ($qty > 0 && (float)$item->total > 0 ? ((float)$item->total / $qty) : $unitPrice));
+
             return [
                 'id' => $item->id,
                 'product_id' => $item->product_id,
                 'variant_id' => $item->product_variant_id,
                 'name' => $item->name,
                 'image' => $item->product?->thumbnail_url ?? '',
-                'sell_price' => (float) $item->unit_price,
-                'quantity' => (int) $item->quantity,
+                'base_price' => $unitPrice,
+                'original_price' => $unitPrice,
+                'sell_price' => $afterDisc,
+                'after_disc_price' => $afterDisc,
+                'quantity' => $qty,
                 'item_note' => $item->item_notes ?? '',
                 'discount_nominal' => (float) $item->discount_nominal,
                 'discount_percent' => (float) $item->discount_percent,
