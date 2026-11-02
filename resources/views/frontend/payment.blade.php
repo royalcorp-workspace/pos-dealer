@@ -192,28 +192,37 @@
                     <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Voucher yang Diterapkan:</p>
                     <div id="payment-applied-vouchers-list" class="space-y-2">
                         @foreach($appliedVouchersList as $av)
-                            <div class="flex items-center justify-between bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 text-xs sm:text-sm text-emerald-950" data-voucher-code="{{ $av['code'] }}">
-                                <div class="flex items-center gap-2.5 min-w-0">
-                                    <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                                        <i class="fa-solid {{ !empty($av['is_shipping']) ? 'fa-truck-fast' : 'fa-percent' }} text-xs"></i>
-                                    </div>
-                                    <div class="min-w-0">
-                                        <div class="flex items-center gap-2">
-                                            <span class="font-mono font-black text-emerald-800 uppercase tracking-wider">{{ $av['code'] }}</span>
-                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full {{ !empty($av['is_shipping']) ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700' }}">
-                                                {{ !empty($av['is_shipping']) ? 'Gratis Ongkir' : 'Diskon Produk' }}
-                                            </span>
+                            @php
+                                $avCode = $av['code'] ?? ($av['voucher']['code'] ?? ($av['voucher']->code ?? ''));
+                                $avTitle = $av['title'] ?? ($av['voucher']['title'] ?? ($av['voucher']->title ?? 'Potongan Diskon'));
+                                $avDiscount = (float) ($av['discount'] ?? 0);
+                                $avDiscountFormatted = $av['discount_formatted'] ?? ('Rp ' . number_format($avDiscount, 0, ',', '.'));
+                                $avIsShipping = !empty($av['is_shipping']);
+                            @endphp
+                            @if(!empty($avCode))
+                                <div class="flex items-center justify-between bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 text-xs sm:text-sm text-emerald-950" data-voucher-code="{{ $avCode }}">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                                            <i class="fa-solid {{ $avIsShipping ? 'fa-truck-fast' : 'fa-percent' }} text-xs"></i>
                                         </div>
-                                        <p class="text-xs text-gray-600 truncate mt-0.5">{{ $av['title'] ?? 'Potongan Diskon' }}</p>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-mono font-black text-emerald-800 uppercase tracking-wider">{{ $avCode }}</span>
+                                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full {{ $avIsShipping ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700' }}">
+                                                    {{ $avIsShipping ? 'Gratis Ongkir' : 'Diskon Produk' }}
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-gray-600 truncate mt-0.5">{{ $avTitle }}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-3 shrink-0 ml-3">
+                                        <span class="font-bold text-emerald-700">{{ $avDiscountFormatted }}</span>
+                                        <button type="button" onclick="removePaymentVoucher('{{ $avCode }}')" class="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Hapus voucher">
+                                            <i class="fa-solid fa-trash-can text-xs"></i>
+                                        </button>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-3 shrink-0 ml-3">
-                                    <span class="font-bold text-emerald-700">{{ $av['discount_formatted'] ?? ('Rp ' . number_format($av['discount'] ?? 0, 0, ',', '.')) }}</span>
-                                    <button type="button" onclick="removePaymentVoucher('{{ $av['code'] }}')" class="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="Hapus voucher">
-                                        <i class="fa-solid fa-trash-can text-xs"></i>
-                                    </button>
-                                </div>
-                            </div>
+                            @endif
                         @endforeach
                     </div>
                 </div>
@@ -680,7 +689,7 @@
                         </div>
                     </div>
                     
-                    <div id="transfer-manual-details" data-order-total="{{ $orderData['total'] }}" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/40 rounded-2xl hidden transition-all">
+                    <div id="transfer-manual-details" data-order-total="{{ $displayTotal }}" class="mt-4 p-5 border border-brand-gold/40 bg-amber-50/40 rounded-2xl hidden transition-all">
                         <div class="flex items-center gap-2 mb-3">
                             <i class="fa-solid fa-circle-info text-amber-600 text-sm"></i>
                             <h4 class="font-bold text-brand-dark text-sm sm:text-base">Instruksi Transfer Bank Manual:</h4>

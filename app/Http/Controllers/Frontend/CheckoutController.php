@@ -800,6 +800,27 @@ class CheckoutController extends Controller
         $resolvedServiceName = $request->input('shipping_service_name') ?: ($shippingCalc['service_name'] ?? null);
         $resolvedServiceCode = $request->input('shipping_service_code') ?: ($shippingCalc['service_code'] ?? null);
 
+        $formattedAppliedVouchers = array_map(function ($av) {
+            $vModel = $av['voucher'] ?? null;
+            $code = is_object($vModel) ? ($vModel->code ?? '') : ($vModel['code'] ?? ($av['code'] ?? ''));
+            $title = is_object($vModel) ? ($vModel->title ?? '') : ($vModel['title'] ?? ($av['title'] ?? ''));
+            $id = is_object($vModel) ? ($vModel->id ?? null) : ($vModel['id'] ?? ($av['id'] ?? null));
+
+            return [
+                'id' => $id,
+                'voucher' => [
+                    'id' => $id,
+                    'code' => $code,
+                    'title' => $title,
+                ],
+                'code' => $code,
+                'title' => $title,
+                'discount' => (float) ($av['discount'] ?? 0),
+                'is_shipping' => !empty($av['is_shipping']),
+                'discount_formatted' => 'Rp ' . number_format((float)($av['discount'] ?? 0), 0, ',', '.'),
+            ];
+        }, $appliedVouchers);
+
         // Update Buffer without creating Order in orders table!
         $bufferMeta = array_merge($buffer->meta ?? [], [
             'shipping_address' => $shippingAddressData,
@@ -822,7 +843,7 @@ class CheckoutController extends Controller
             'shipping_service_name' => $resolvedServiceName,
             'shipping_service_code' => $resolvedServiceCode,
             'courier_service_type' => $resolvedServiceCode,
-            'applied_vouchers' => $appliedVouchers,
+            'applied_vouchers' => $formattedAppliedVouchers,
             'voucher_codes' => $voucherCodes,
             'voucher_code' => implode(',', $voucherCodes),
             'voucher_id' => $voucher?->id,
@@ -854,6 +875,31 @@ class CheckoutController extends Controller
             'shipping_addresses_id' => $shippingAddressesId,
             'meta' => $bufferMeta,
         ]);
+
+        // Clean up / replace older unpaid buffers for this guest email to prevent session confusion
+        if (!session()->get('is_logged_in') && !empty($request->email)) {
+            $cleanGuestEmail = strtolower(trim($request->email));
+            $staleBuffers = Buffer::where(function ($q) use ($cleanGuestEmail) {
+                    $q->whereRaw('LOWER(customer_email) = ?', [$cleanGuestEmail])
+                      ->orWhereRaw('LOWER(meta->\'customer\'->>\'email\') = ?', [$cleanGuestEmail]);
+                })
+                ->where('id', '!=', $buffer->id)
+                ->get();
+
+            foreach ($staleBuffers as $staleBuffer) {
+                $isPaidOrder = Order::where(function ($oq) use ($staleBuffer) {
+                        $oq->where('id', $staleBuffer->id)
+                           ->orWhere('meta->buffer_id', $staleBuffer->id);
+                    })
+                    ->where('payment_status', 2)
+                    ->exists();
+
+                if (!$isPaidOrder) {
+                    $staleBuffer->items()->delete();
+                    $staleBuffer->delete();
+                }
+            }
+        }
 
         $itemsForOrderData = array_map(function ($item) use ($itemNotes) {
             $originalPrice = (float) ($item['original_price'] ?? $item['base_price'] ?? $item['sell_price']);
@@ -904,7 +950,7 @@ class CheckoutController extends Controller
             'product_voucher_discount' => $productVoucherDiscount,
             'shipping_voucher_discount' => $shippingVoucherDiscount,
             'shipping_cost_subsidy' => $shippingVoucherDiscount,
-            'applied_vouchers' => $appliedVouchers,
+            'applied_vouchers' => $formattedAppliedVouchers,
             'subtotal' => $dbSubtotal,
             'voucher_discount' => $voucherDiscount,
             'total_discount' => $totalPromoDiscount + $voucherDiscount,
