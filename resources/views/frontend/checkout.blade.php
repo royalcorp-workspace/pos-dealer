@@ -86,10 +86,7 @@
         $cart = $cart ?? session()->get('cart', []);
         $cartTotal = $cartTotal ?? collect($cart)->sum(fn($item) => $item['sell_price'] * $item['quantity']);
         $form = $checkoutFormData ?? [];
-        $selectedVoucherCodes = array_values(array_unique(array_map('strtoupper', (array) ($selectedVoucherCodes ?? []))));
-        if (($selectedVoucher['code'] ?? null) && !in_array(strtoupper($selectedVoucher['code']), $selectedVoucherCodes, true)) {
-            $selectedVoucherCodes[] = strtoupper($selectedVoucher['code']);
-        }
+        $selectedVoucherCodes = [];
         $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
         $cartCategoryIds = \App\Models\Frontend\ProductsCatalog\Product::whereIn('id', $cartProductIds)->pluck('category_id')->unique()->values()->all();
     @endphp
@@ -772,33 +769,7 @@
                         <script id="checkout-courier-shipping-details" type="application/json">
                             @json($courierPrices)
                         </script>
-                        @php
-                            $allVouchersForClient = collect($vouchers ?? [])->merge($selectedVouchers ?? [])->unique('code')->mapWithKeys(function($v) use ($cart) {
-                                return [strtoupper($v->code) => [
-                                    'code' => strtoupper($v->code),
-                                    'title' => $v->title,
-                                    'discountType' => (int) $v->type,
-                                    'discountValue' => (float) $v->value,
-                                    'maxDiscount' => $v->max_discount ? (float) $v->max_discount : null,
-                                    'minPurchase' => (float) ($v->min_purchase ?? 0),
-                                    'eligibleSubtotal' => (float) $v->getEligibleSubtotal($cart),
-                                    'scope' => (int) $v->scope,
-                                    'allowStacking' => $v->allow_stacking ? 1 : 0,
-                                    'validForNewCustomer' => (bool) $v->valid_for_new_customer,
-                                    'isShipping' => ((int) $v->type === 3),
-                                    'products' => $v->products ? $v->products->pluck('name')->toArray() : [],
-                                ]];
-                            });
-                        @endphp
-                        <script id="checkout-available-vouchers" type="application/json">
-                            @json($allVouchersForClient)
-                        </script>
                     </div>
-
-                    <!-- Hidden Voucher State Preserved From Cart Drawer -->
-                    <input type="hidden" name="voucher_code" id="voucher-code" value="{{ implode(',', $selectedVoucherCodes) }}">
-                    <input type="hidden" name="voucher_codes" id="voucher-codes" value="{{ implode(',', $selectedVoucherCodes) }}">
-                    <input type="hidden" name="voucher_discount" id="voucher-discount-value" value="{{ $selectedVoucher['discount'] ?? 0 }}">
 
                     <!-- Hidden Shipping Details Sent to Server -->
                     <input type="hidden" name="shipping_cost" id="input-shipping-cost" value="{{ $form['shipping_cost'] ?? 0 }}">
@@ -806,26 +777,6 @@
                     <input type="hidden" name="shipping_service_code" id="input-shipping-service-code" value="{{ $selectedCourierDetails['service_code'] ?? '' }}">
                     <input type="hidden" name="shipping_eta_label" id="input-shipping-eta-label" value="{{ $selectedEta ?? '' }}">
                     <input type="hidden" name="shipping_eta_source" id="input-shipping-eta-source" value="{{ $selectedEtaSource ?? '' }}">
-
-                    @if(!empty($selectedVouchers))
-                        <div id="bonus-products-display" class="space-y-2">
-                            @foreach($selectedVouchers as $sv)
-                                @if((int)$sv->type === 4 && !empty($sv->products) && $sv->products->isNotEmpty())
-                                    <div class="flex items-start gap-2.5 bg-green-50 text-green-800 p-3.5 rounded-2xl border border-green-200 text-xs font-semibold">
-                                        <i class="fa-solid fa-gift text-sm text-green-600 mt-0.5 shrink-0"></i>
-                                        <div>
-                                            <p class="font-extrabold">Bonus Produk Dari Kupon ({{ $sv->code }}):</p>
-                                            <ul class="list-disc pl-4 mt-1 space-y-0.5">
-                                                @foreach($sv->products as $bp)
-                                                    <li>{{ (int)$sv->value }}x {{ $bp->name }}</li>
-                                                @endforeach
-                                            </ul>
-                                        </div>
-                                    </div>
-                                @endif
-                            @endforeach
-                        </div>
-                    @endif
                 @endif
             </div>
             
@@ -836,13 +787,13 @@
                     <input type="hidden" id="checkout-promo-discount" data-value="{{ $totalPercentDiscount + $totalNominalDiscount }}">
                     <input type="hidden" id="checkout-shipping-cost" data-value="{{ $form['shipping_cost'] ?? 0 }}">
                     <input type="hidden" id="checkout-product-discount" data-value="{{ $priceProductSettingDiscount ?? 0 }}">
-                    <input type="hidden" id="checkout-voucher-discount" data-value="{{ $selectedVoucher['discount'] ?? 0 }}">
-                    <input type="hidden" id="checkout-product-voucher-discount" data-value="{{ $productVoucherDiscount ?? 0 }}">
-                    <input type="hidden" id="checkout-shipping-voucher-discount" data-value="{{ $shippingVoucherDiscount ?? 0 }}">
-                    <input type="hidden" id="checkout-selected-voucher-codes" data-value="{{ implode(',', $selectedVoucherCodes) }}">
+                    <input type="hidden" id="checkout-voucher-discount" data-value="0">
+                    <input type="hidden" id="checkout-product-voucher-discount" data-value="0">
+                    <input type="hidden" id="checkout-shipping-voucher-discount" data-value="0">
+                    <input type="hidden" id="checkout-selected-voucher-codes" data-value="">
                     <input type="hidden" id="checkout-product-ids" data-value='@json($cartProductIds)'>
                     <input type="hidden" id="checkout-category-ids" data-value='@json($cartCategoryIds)'>
-                    <div id="checkout-form-data" data-has-existing-data="{{ (!empty($checkoutFormData) || !empty($selectedVoucherCodes) || !empty($form) || count($cart) > 0) ? 1 : 0 }}"></div>
+                    <div id="checkout-form-data" data-has-existing-data="{{ (!empty($checkoutFormData) || !empty($form) || count($cart) > 0) ? 1 : 0 }}"></div>
 
                     <div class="flex items-center gap-2.5 mb-5 pb-3.5 border-b border-gray-100">
                         <i class="fa-solid fa-receipt text-brand-gold"></i>
@@ -870,20 +821,7 @@
                             <span class="font-bold shrink-0 whitespace-nowrap text-right" id="product-discount">- Rp {{ number_format($priceProductSettingDiscount ?? 0, 0, ',', '.') }}</span>
                         </div>
 
-                        {{-- 3. Voucher Diskon (gabungan all voucher diskon) --}}
-                        @php
-                            $productVoucherCodes = collect($selectedVouchers ?? [])->filter(fn($v) => (int)$v->type !== 3)->pluck('code')->all();
-                            if (empty($productVoucherCodes)) {
-                                $productVoucherCodes = array_values(array_filter($selectedVoucherCodes ?? [], fn($c) => !str_contains(strtoupper($c), 'ONGKIR')));
-                            }
-                            $singleProductVoucherCode = !empty($productVoucherCodes) ? reset($productVoucherCodes) : '';
-                        @endphp
-                        <div class="flex justify-between items-center text-red-600 gap-2" id="checkout-voucher-row" style="{{ ($productVoucherDiscount ?? 0) > 0 ? '' : 'display: none;' }}">
-                            <span class="text-gray-600 flex items-center gap-1.5 min-w-0 truncate" id="checkout-voucher-label"><i class="fa-solid fa-ticket text-xs text-red-500 shrink-0"></i> <span class="truncate">Voucher Diskon{{ $singleProductVoucherCode ? ' (' . $singleProductVoucherCode . ')' : '' }}</span></span>
-                            <span class="font-bold shrink-0 whitespace-nowrap text-right" id="voucher-discount">- Rp {{ number_format($productVoucherDiscount ?? 0, 0, ',', '.') }}</span>
-                        </div>
-
-                        {{-- 4. Shipping --}}
+                        {{-- 3. Shipping --}}
                         <div class="flex justify-between items-center text-gray-600 gap-2">
                             <span class="min-w-0" id="checkout-shipping-label">Shipping</span>
                             <span class="text-brand-dark font-bold shrink-0 whitespace-nowrap text-right" id="shipping-cost">Rp {{ number_format($form['shipping_cost'] ?? 0, 0, ',', '.') }}</span>
@@ -894,12 +832,6 @@
                             <span class="font-semibold shrink-0 whitespace-nowrap text-right" id="checkout-shipping-eta-val">{{ $selectedEta ?? '' }}</span>
                         </div>
 
-                        {{-- 5. Voucher Gratis Ongkir (motong biaya kirim only, jangan sampai potong harga barang) --}}
-                        <div class="flex justify-between items-center text-red-600 gap-2" id="checkout-shipping-voucher-row" style="{{ ($shippingVoucherDiscount ?? 0) > 0 ? '' : 'display: none;' }}">
-                            <span class="text-gray-600 flex items-center gap-1.5 min-w-0 truncate" id="checkout-shipping-voucher-label"><i class="fa-solid fa-truck-fast text-xs text-emerald-600 shrink-0"></i> <span class="truncate">Voucher Gratis Ongkir</span></span>
-                            <span class="font-bold shrink-0 whitespace-nowrap text-right" id="shipping-voucher-discount">- Rp {{ number_format($shippingVoucherDiscount ?? 0, 0, ',', '.') }}</span>
-                        </div>
-
                         <div class="pt-4 border-t border-dashed border-gray-200">
                             <div class="flex justify-between items-baseline gap-2">
                                 <div class="min-w-0">
@@ -907,10 +839,16 @@
                                     <span class="text-[11px] text-gray-400 block truncate">Termasuk PPN & Biaya Kirim</span>
                                 </div>
                                 <span class="text-xl sm:text-2xl font-black text-brand-dark font-serif shrink-0 whitespace-nowrap text-right" id="total-cost">
-                                    Rp {{ number_format(max(0, $originalCartTotal - ($totalPercentDiscount ?? 0) - ($totalNominalDiscount ?? 0) - ($priceProductSettingDiscount ?? 0) - ($productVoucherDiscount ?? 0) + max(0, ($form['shipping_cost'] ?? 0) - ($shippingVoucherDiscount ?? 0))), 0, ',', '.') }}
+                                    Rp {{ number_format(max(0, $originalCartTotal - ($totalPercentDiscount ?? 0) - ($totalNominalDiscount ?? 0) - ($priceProductSettingDiscount ?? 0)) + ($form['shipping_cost'] ?? 0), 0, ',', '.') }}
                                 </span>
                             </div>
                         </div>
+
+                        <div class="mt-4 p-3 bg-brand-gold/10 border border-brand-gold/25 rounded-xl text-xs text-brand-dark flex items-start gap-2.5">
+                            <i class="fa-solid fa-ticket text-amber-600 mt-0.5 shrink-0"></i>
+                            <p class="leading-relaxed">Voucher diskon & gratis ongkir dapat Anda pilih dan terapkan pada <strong>halaman pembayaran</strong>.</p>
+                        </div>
+                    </div>
                     </div>
                     
                     <button type="submit" {{ count($cart) === 0 ? 'disabled' : '' }} class="w-full py-4 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl font-bold text-sm tracking-wide uppercase transition-all duration-200 shadow-md hover:shadow-lg flex justify-center items-center gap-2.5 group disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">

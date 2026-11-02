@@ -100,6 +100,11 @@
             const data = await response.json();
 
             if (response.ok && data.success !== false) {
+                if (data.cart_count === 0 && data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                    return;
+                }
+
                 const drawerBody = document.getElementById('cart-drawer-body');
                 if (drawerBody && data.cart_drawer_html) {
                     drawerBody.innerHTML = data.cart_drawer_html;
@@ -149,6 +154,11 @@
             const data = await response.json();
 
             if (response.ok && data.success !== false) {
+                if (data.cart_count === 0 && data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                    return;
+                }
+
                 const drawerBody = document.getElementById('cart-drawer-body');
                 const innerScrollEl = drawerBody ? drawerBody.querySelector('.overflow-y-auto, [class*="overflow-y-"]') : null;
                 const prevInnerScroll = innerScrollEl ? innerScrollEl.scrollTop : 0;
