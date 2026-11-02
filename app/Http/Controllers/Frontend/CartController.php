@@ -237,21 +237,26 @@ class CartController extends Controller
             return response()->json(['error' => 'Item not found'], 404);
         }
 
-        if ($quantity < 1) {
-            if ($item->product_id) {
-                $prod = \App\Models\Frontend\ProductsCatalog\Product::find($item->product_id);
-                if ($prod && !empty($prod->slug)) {
-                    $this->rememberLastProductUrl(route('products.show', $prod->slug));
-                }
-            } elseif ($item->item_notes) {
-                $bundleNotes = json_decode((string) $item->item_notes, true);
-                if (!empty($bundleNotes['bundle_id'])) {
-                    $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleNotes['bundle_id']);
-                    if ($bundle && !empty($bundle->slug)) {
-                        $this->rememberLastProductUrl(route('bundling.show', $bundle->slug));
-                    }
+        $targetProductUrl = null;
+        if ($item->product_id) {
+            $prod = \App\Models\Frontend\ProductsCatalog\Product::find($item->product_id);
+            if ($prod && !empty($prod->slug)) {
+                $targetProductUrl = route('products.show', $prod->slug);
+            }
+        } elseif ($item->item_notes) {
+            $bundleNotes = json_decode((string) $item->item_notes, true);
+            if (!empty($bundleNotes['bundle_id'])) {
+                $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleNotes['bundle_id']);
+                if ($bundle && !empty($bundle->slug)) {
+                    $targetProductUrl = route('bundling.show', $bundle->slug);
                 }
             }
+        }
+        if ($targetProductUrl) {
+            $this->rememberLastProductUrl($targetProductUrl);
+        }
+
+        if ($quantity < 1) {
             $item->delete();
         } else {
             $itemMeta = is_array($item->meta) ? $item->meta : (json_decode((string) $item->meta, true) ?: []);
@@ -269,25 +274,63 @@ class CartController extends Controller
             ]);
         }
 
-        $this->recalculateBuffer($buffer);
-        $cart = $this->getBufferCartArray($buffer);
-        $cartCount = $this->getCartCount($cart);
-        $lastProductUrl = $this->getLastProductUrl();
+        $remainingCount = $buffer->items()->count();
+        if ($remainingCount === 0) {
+            // Hapus semua detail identitas di buffer & session
+            $buffer->items()->delete();
+            $buffer->update([
+                'customer_id' => null,
+                'customer_name' => null,
+                'customer_email' => null,
+                'customer_phone' => null,
+                'subtotal' => 0,
+                'tax' => 0,
+                'discount' => 0,
+                'total' => 0,
+                'courier_id' => null,
+                'voucher_id' => null,
+                'voucher_nominal' => 0,
+                'shipping_cost' => 0,
+                'shipping_cost_subsidy' => 0,
+                'shipping_addresses_id' => null,
+                'transaction_fee' => 0,
+                'meta' => null,
+            ]);
+
+            session()->forget([
+                'checkout_form_data',
+                'order_data',
+                'applied_vouchers',
+                'selected_voucher',
+                'selected_voucher_codes',
+                'selected_voucher_code',
+                'checkout_shipping_address',
+                'cart',
+            ]);
+
+            $cart = [];
+            $cartCount = 0;
+            $redirectUrl = $targetProductUrl ?: $this->getLastProductUrl();
+        } else {
+            $this->recalculateBuffer($buffer);
+            $cart = $this->getBufferCartArray($buffer);
+            $cartCount = $this->getCartCount($cart);
+            $redirectUrl = null;
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
                 'cart_count' => $cartCount,
-                'cart_total' => $this->getCartTotal($cart),
-                'redirect_url' => $cartCount === 0 ? $lastProductUrl : null,
+                'cart_total' => $cartCount > 0 ? $this->getCartTotal($cart) : 0,
+                'redirect_url' => $redirectUrl,
                 'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
             ]);
         }
 
-        $referer = (string) $request->header('referer', '');
-        if ($cartCount === 0 && (str_contains($referer, '/checkout') || str_contains($referer, '/payment'))) {
-            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda telah kosong.');
+        if ($cartCount === 0) {
+            return redirect($redirectUrl)->with('info', 'Keranjang belanja Anda telah kosong.');
         }
 
         return redirect()->back();
@@ -297,44 +340,86 @@ class CartController extends Controller
     {
         $buffer = $this->findOrCreateBuffer();
 
+        $targetProductUrl = null;
         $item = BufferItem::where('buffer_id', $buffer->id)->where('id', $id)->first();
         if ($item) {
             if ($item->product_id) {
                 $prod = \App\Models\Frontend\ProductsCatalog\Product::find($item->product_id);
                 if ($prod && !empty($prod->slug)) {
-                    $this->rememberLastProductUrl(route('products.show', $prod->slug));
+                    $targetProductUrl = route('products.show', $prod->slug);
                 }
             } elseif ($item->item_notes) {
                 $bundleNotes = json_decode((string) $item->item_notes, true);
                 if (!empty($bundleNotes['bundle_id'])) {
                     $bundle = \App\Models\Frontend\ProductsCatalog\ProductBundling::find($bundleNotes['bundle_id']);
                     if ($bundle && !empty($bundle->slug)) {
-                        $this->rememberLastProductUrl(route('bundling.show', $bundle->slug));
+                        $targetProductUrl = route('bundling.show', $bundle->slug);
                     }
                 }
             }
+            if ($targetProductUrl) {
+                $this->rememberLastProductUrl($targetProductUrl);
+            }
             $item->delete();
-            $this->recalculateBuffer($buffer);
         }
 
-        $cart = $this->getBufferCartArray($buffer);
-        $cartCount = $this->getCartCount($cart);
-        $lastProductUrl = $this->getLastProductUrl();
+        $remainingCount = $buffer->items()->count();
+        if ($remainingCount === 0) {
+            // Hapus semua detail identitas di buffer & session
+            $buffer->items()->delete();
+            $buffer->update([
+                'customer_id' => null,
+                'customer_name' => null,
+                'customer_email' => null,
+                'customer_phone' => null,
+                'subtotal' => 0,
+                'tax' => 0,
+                'discount' => 0,
+                'total' => 0,
+                'courier_id' => null,
+                'voucher_id' => null,
+                'voucher_nominal' => 0,
+                'shipping_cost' => 0,
+                'shipping_cost_subsidy' => 0,
+                'shipping_addresses_id' => null,
+                'transaction_fee' => 0,
+                'meta' => null,
+            ]);
+
+            session()->forget([
+                'checkout_form_data',
+                'order_data',
+                'applied_vouchers',
+                'selected_voucher',
+                'selected_voucher_codes',
+                'selected_voucher_code',
+                'checkout_shipping_address',
+                'cart',
+            ]);
+
+            $cart = [];
+            $cartCount = 0;
+            $redirectUrl = $targetProductUrl ?: $this->getLastProductUrl();
+        } else {
+            $this->recalculateBuffer($buffer);
+            $cart = $this->getBufferCartArray($buffer);
+            $cartCount = $this->getCartCount($cart);
+            $redirectUrl = null;
+        }
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
                 'cart' => $cart,
                 'cart_count' => $cartCount,
-                'cart_total' => $this->getCartTotal($cart),
-                'redirect_url' => $cartCount === 0 ? $lastProductUrl : null,
+                'cart_total' => $cartCount > 0 ? $this->getCartTotal($cart) : 0,
+                'redirect_url' => $redirectUrl,
                 'cart_drawer_html' => view('frontend.components.cart-drawer-body', ['cart' => $cart])->render(),
             ]);
         }
 
-        $referer = (string) $request->header('referer', '');
-        if ($cartCount === 0 && (str_contains($referer, '/checkout') || str_contains($referer, '/payment'))) {
-            return redirect($lastProductUrl)->with('warning', 'Keranjang belanja Anda telah kosong.');
+        if ($cartCount === 0) {
+            return redirect($redirectUrl)->with('info', 'Keranjang belanja Anda telah kosong.');
         }
 
         return redirect()->back();

@@ -26,41 +26,25 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    try {
+        localStorage.removeItem('selectedCartCoupon');
+        localStorage.removeItem('selectedCartCoupons');
+    } catch (e) {}
+
     function formatRupiah(value) {
         return 'Rp ' + Number(value).toLocaleString('id-ID');
     }
 
     function updateTotal() {
-        var discountedSubtotal = Math.max(0, subtotal - promoDiscount - productDiscount - (selectedProductVoucherDiscount || 0));
-        var discountedShipping = Math.max(0, currentShippingCost - (selectedShippingVoucherDiscount || 0));
-        var total = discountedSubtotal + discountedShipping;
+        var discountedSubtotal = Math.max(0, subtotal - promoDiscount - productDiscount);
+        var total = discountedSubtotal + currentShippingCost;
         if (totalCost) totalCost.textContent = formatRupiah(total);
 
         var voucherRow = document.getElementById('checkout-voucher-row');
-        if (voucherDiscount) {
-            if (selectedProductVoucherDiscount > 0) {
-                voucherDiscount.textContent = '- ' + formatRupiah(selectedProductVoucherDiscount);
-                if (voucherRow) voucherRow.style.display = 'flex';
-            } else {
-                if (voucherRow) voucherRow.style.display = 'none';
-            }
-        }
+        if (voucherRow) voucherRow.style.display = 'none';
 
         var shippingVoucherRow = document.getElementById('checkout-shipping-voucher-row');
-        var shippingVoucherDiscountSpan = document.getElementById('shipping-voucher-discount');
-        if (shippingVoucherRow && shippingVoucherDiscountSpan) {
-            var hasShippingCoupon = selectedCoupons.some(function(code) { return checkCouponIsShipping(code); });
-            if (hasShippingCoupon) {
-                shippingVoucherRow.style.display = 'flex';
-                if (currentShippingCost > 0) {
-                    shippingVoucherDiscountSpan.textContent = '- ' + formatRupiah(selectedShippingVoucherDiscount || currentShippingCost);
-                } else {
-                    shippingVoucherDiscountSpan.textContent = 'Gratis (Pilih Kurir)';
-                }
-            } else {
-                shippingVoucherRow.style.display = 'none';
-            }
-        }
+        if (shippingVoucherRow) shippingVoucherRow.style.display = 'none';
 
         var productDiscountRow = document.getElementById('product-discount-row');
         if (productDiscountRow) {
@@ -916,7 +900,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var formEl = document.getElementById('checkout-form');
     var isLoggedIn = formEl ? formEl.dataset.isLoggedIn === '1' : false;
 
-    restoreCartCoupon();
     if (courierSelect && courierSelect.value && courierShippingPrices[courierSelect.value] !== undefined) {
         currentShippingCost = courierShippingPrices[courierSelect.value];
         var initDetails = courierShippingDetails[courierSelect.value] || null;

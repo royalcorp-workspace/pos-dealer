@@ -93,7 +93,13 @@ class CheckoutController extends Controller
             }
         }
 
-        $vouchers = $this->getAvailableVouchers($cart);
+        $vouchers = [];
+        $selectedVoucher = null;
+        $selectedVoucherCodes = [];
+        $selectedVouchers = collect();
+        $selectedVoucherDiscount = 0;
+        $productVoucherDiscount = 0;
+        $shippingVoucherDiscount = 0;
 
         // Kurir per produk & kategori: filter kurir toko vs expedisi
         $cartProductIds = collect($cart)->pluck('product_id')->filter()->unique()->values()->all();
@@ -124,56 +130,6 @@ class CheckoutController extends Controller
         }
         $couriers = $courierQuery->get();
 
-        $selectedVoucher = Session::get('selected_voucher');
-        $selectedVoucherCodes = $this->getSelectedVoucherCodesFromSession();
-        if (empty($selectedVoucherCodes) && $buffer) {
-            $bufferMeta = $buffer->meta ?? [];
-            if (!empty($bufferMeta['voucher_codes'])) {
-                $selectedVoucherCodes = array_values(array_unique(array_filter(array_map('strtoupper', (array) $bufferMeta['voucher_codes']))));
-                Session::put('selected_voucher_codes', $selectedVoucherCodes);
-            } elseif (!empty($bufferMeta['voucher_code'])) {
-                $selectedVoucherCodes = array_values(array_unique(array_filter(array_map('strtoupper', explode(',', (string) $bufferMeta['voucher_code'])))));
-                Session::put('selected_voucher_codes', $selectedVoucherCodes);
-            }
-        }
-
-        $initCheckEmail = session()->get('is_logged_in')
-            ? (session()->get('user')['email'] ?? (session()->get('user')['username'] ?? null))
-            : session()->get('checkout_form_data.email');
-        if (!empty($initCheckEmail)) {
-            $initCheckEmail = strtolower(trim((string)$initCheckEmail));
-        }
-
-        if (!empty($selectedVoucherCodes) && !empty($initCheckEmail)) {
-            $validCodes = [];
-            foreach ($selectedVoucherCodes as $code) {
-                $checkV = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($code))])->first();
-                if ($checkV) {
-                    if ($checkV->hasBeenUsedByEmail($initCheckEmail)) {
-                        continue;
-                    }
-                    if ($checkV->valid_for_new_customer && $checkV->isEmailExistingCustomer($initCheckEmail)) {
-                        continue;
-                    }
-                    $validCodes[] = strtoupper(trim($code));
-                }
-            }
-            if (count($validCodes) !== count($selectedVoucherCodes)) {
-                $selectedVoucherCodes = $validCodes;
-                Session::put('selected_voucher_codes', $selectedVoucherCodes);
-                if ($buffer) {
-                    $meta = $buffer->meta ?? [];
-                    $meta['voucher_codes'] = $selectedVoucherCodes;
-                    $meta['voucher_code'] = implode(',', $selectedVoucherCodes);
-                    $buffer->update(['meta' => $meta]);
-                }
-            }
-        }
-
-        $selectedVouchers = \App\Models\Frontend\Promo\Voucher::active()
-            ->whereIn(\Illuminate\Support\Facades\DB::raw('UPPER(code)'), array_map('strtoupper', $selectedVoucherCodes))
-            ->with(['categories', 'products', 'brands', 'customerGroups'])
-            ->get();
         $savedAddresses = collect();
         $savedAddressesSafe = collect();
         $checkoutFormData = Session::get('checkout_form_data', []);
@@ -362,26 +318,7 @@ class CheckoutController extends Controller
         $selectedVoucherDiscount = 0;
         $productVoucherDiscount = 0;
         $shippingVoucherDiscount = 0;
-        if (!empty($selectedVoucherCodes)) {
-            $defaultShippingCost = 0;
-            if (!empty($couriers->first()) && isset($courierPrices[$couriers->first()->code]['price'])) {
-                $defaultShippingCost = (float) ($courierPrices[$couriers->first()->code]['price'] ?? 0);
-            }
-            $indexCustomerEmail = session()->get('is_logged_in') 
-                ? (session()->get('user')['email'] ?? (session()->get('user')['username'] ?? null))
-                : session()->get('checkout_form_data.email');
-            $voucherCalc = $this->calculateVoucherDiscount($selectedVoucherCodes, $cart, $cartTotal, $defaultShippingCost, $indexCustomerEmail);
-            $selectedVoucherDiscount = (float) ($voucherCalc['discount'] ?? 0);
-            $productVoucherDiscount = (float) ($voucherCalc['product_voucher_discount'] ?? 0);
-            $shippingVoucherDiscount = (float) ($voucherCalc['shipping_voucher_discount'] ?? 0);
-            $selectedVoucher = [
-                'code' => ($voucherCalc['primary'] ?? null)?->code ?? ($selectedVoucherCodes[0] ?? ''),
-                'discount' => $selectedVoucherDiscount,
-                'product_discount' => $productVoucherDiscount,
-                'shipping_discount' => $shippingVoucherDiscount,
-            ];
-            Session::put('selected_voucher', $selectedVoucher);
-        }
+        $selectedVoucher = null;
 
         return view('frontend.checkout', compact('cart', 'vouchers', 'couriers', 'selectedVoucher', 'selectedVoucherCodes', 'savedAddresses', 'savedAddressesSafe', 'checkoutFormData', 'provinces', 'cities', 'subDistricts', 'selectedProvinceId', 'selectedCityId', 'selectedSubDistrictId', 'priceProductSettingDiscount', 'originalCartTotal', 'totalPercentDiscount', 'totalNominalDiscount', 'cartTotal', 'selectedVouchers', 'enforcedCourierType', 'cartWeightDetails', 'courierPrices', 'defaultCustomerAddr', 'selectedVoucherDiscount', 'productVoucherDiscount', 'shippingVoucherDiscount'));
     }
@@ -601,64 +538,19 @@ class CheckoutController extends Controller
             $shippingCost = $this->getShippingCost($request->courier, $subDistrictId ?? '', $cart);
         }
 
+        // Voucher dikelola dan diterapkan pada halaman pembayaran (/payment)
         $voucherDiscount = 0;
         $productVoucherDiscount = 0;
         $shippingVoucherDiscount = 0;
         $voucher = null;
         $customerEmail = strtolower(trim((string)$request->email));
         $appliedVouchers = [];
-        $voucherCodes = $this->parseVoucherCodes($request);
-        if ($voucherCodes) {
-            // Validasi email pengguna baru & batas penggunaan voucher ketika di guest mode atau email sudah pernah pakai
-            $validCodes = [];
-            $hasInvalid = false;
-            $invalidMessages = [];
-            foreach ($voucherCodes as $vCode) {
-                $checkVoucher = Voucher::active()->whereRaw('LOWER(code) = ?', [strtolower(trim($vCode))])->first();
-                if ($checkVoucher) {
-                    if ($checkVoucher->hasBeenUsedByEmail($customerEmail)) {
-                        $hasInvalid = true;
-                        $invalidMessages[] = "Email {$customerEmail} sudah pernah menggunakan voucher {$checkVoucher->code} sebelumnya.";
-                        continue;
-                    }
-                    if ($checkVoucher->valid_for_new_customer && $checkVoucher->isEmailExistingCustomer($customerEmail)) {
-                        $hasInvalid = true;
-                        $invalidMessages[] = "Voucher {$checkVoucher->code} khusus untuk pengguna baru (email {$customerEmail} sudah pernah bertransaksi).";
-                        continue;
-                    }
-                }
-                $validCodes[] = strtoupper(trim($vCode));
-            }
-
-            if ($hasInvalid) {
-                // Hapus voucher yang invalid dari session dan buffer otomatis
-                Session::put('selected_voucher_codes', $validCodes);
-                if ($buffer) {
-                    $meta = $buffer->meta ?? [];
-                    $meta['voucher_codes'] = $validCodes;
-                    $meta['voucher_code'] = implode(',', $validCodes);
-                    $buffer->update(['meta' => $meta]);
-                }
-                return redirect()->route('checkout')
-                    ->withErrors(['voucher_code' => implode(' ', $invalidMessages) . ' Voucher telah otomatis dihapus dari pesanan Anda. Silakan lanjutkan transaksi.'])
-                    ->withInput();
-            }
-
-            $voucherResult = $this->calculateVoucherDiscount($voucherCodes, $cart, $cartTotal, $shippingCost, $customerEmail);
-            $voucherDiscount = $voucherResult['discount'];
-            $productVoucherDiscount = $voucherResult['product_voucher_discount'] ?? 0;
-            $shippingVoucherDiscount = $voucherResult['shipping_voucher_discount'] ?? 0;
-            $voucher = $voucherResult['primary'];
-            $appliedVouchers = $voucherResult['vouchers'];
-        }
-
-        $shippingVoucherDiscount = min($shippingVoucherDiscount, $shippingCost);
-        $voucherDiscount = $productVoucherDiscount + $shippingVoucherDiscount;
+        $voucherCodes = [];
 
         $subtotal = $originalCartTotal;
         $totalPromoDiscount = $totalStaticDiscount + $priceProductSettingDiscount;
-        $discountedProductSubtotal = max(0, $originalCartTotal - $totalStaticDiscount - $priceProductSettingDiscount - $productVoucherDiscount);
-        $actualShippingCost = max(0, $shippingCost - $shippingVoucherDiscount);
+        $discountedProductSubtotal = max(0, $originalCartTotal - $totalStaticDiscount - $priceProductSettingDiscount);
+        $actualShippingCost = $shippingCost;
         $total = $discountedProductSubtotal + $actualShippingCost;
 
         $userId = null;
@@ -790,36 +682,15 @@ class CheckoutController extends Controller
         }
 
         $dbSubtotal = max(0, $originalCartTotal - $totalStaticDiscount - $priceProductSettingDiscount);
-        $dbDiscount = $productVoucherDiscount;
-        $actualShippingCost = max(0, $shippingCost - $shippingVoucherDiscount);
-        $dbTotal = max(0, $dbSubtotal - $productVoucherDiscount) + $actualShippingCost;
+        $dbDiscount = 0;
+        $actualShippingCost = $shippingCost;
+        $dbTotal = $dbSubtotal + $actualShippingCost;
 
         $shippingCalc = $this->calculateShippingDetails($request->courier, (string) ($finalSubDistrictId ?? $subDistrictId ?? ''), $cart);
         $resolvedEtaLabel = $request->input('shipping_eta_label') ?: ($shippingCalc['eta_label'] ?? null);
         $resolvedEtaSource = $request->input('shipping_eta_source') ?: ($shippingCalc['eta_source'] ?? null);
         $resolvedServiceName = $request->input('shipping_service_name') ?: ($shippingCalc['service_name'] ?? null);
         $resolvedServiceCode = $request->input('shipping_service_code') ?: ($shippingCalc['service_code'] ?? null);
-
-        $formattedAppliedVouchers = array_map(function ($av) {
-            $vModel = $av['voucher'] ?? null;
-            $code = is_object($vModel) ? ($vModel->code ?? '') : ($vModel['code'] ?? ($av['code'] ?? ''));
-            $title = is_object($vModel) ? ($vModel->title ?? '') : ($vModel['title'] ?? ($av['title'] ?? ''));
-            $id = is_object($vModel) ? ($vModel->id ?? null) : ($vModel['id'] ?? ($av['id'] ?? null));
-
-            return [
-                'id' => $id,
-                'voucher' => [
-                    'id' => $id,
-                    'code' => $code,
-                    'title' => $title,
-                ],
-                'code' => $code,
-                'title' => $title,
-                'discount' => (float) ($av['discount'] ?? 0),
-                'is_shipping' => !empty($av['is_shipping']),
-                'discount_formatted' => 'Rp ' . number_format((float)($av['discount'] ?? 0), 0, ',', '.'),
-            ];
-        }, $appliedVouchers);
 
         // Update Buffer without creating Order in orders table!
         $bufferMeta = array_merge($buffer->meta ?? [], [
@@ -843,14 +714,14 @@ class CheckoutController extends Controller
             'shipping_service_name' => $resolvedServiceName,
             'shipping_service_code' => $resolvedServiceCode,
             'courier_service_type' => $resolvedServiceCode,
-            'applied_vouchers' => $formattedAppliedVouchers,
-            'voucher_codes' => $voucherCodes,
-            'voucher_code' => implode(',', $voucherCodes),
-            'voucher_id' => $voucher?->id,
-            'voucher_ids' => collect($appliedVouchers)->pluck('voucher.id')->filter()->values()->all(),
-            'voucher_discount' => $voucherDiscount,
-            'product_voucher_discount' => $productVoucherDiscount,
-            'shipping_voucher_discount' => $shippingVoucherDiscount,
+            'applied_vouchers' => [],
+            'voucher_codes' => [],
+            'voucher_code' => '',
+            'voucher_id' => null,
+            'voucher_ids' => [],
+            'voucher_discount' => 0,
+            'product_voucher_discount' => 0,
+            'shipping_voucher_discount' => 0,
             'promo_discount' => $totalPromoDiscount,
             'total_static_discount' => $totalStaticDiscount,
             'price_product_setting_discount' => $priceProductSettingDiscount,
@@ -865,13 +736,13 @@ class CheckoutController extends Controller
             'customer_email' => $request->email,
             'customer_phone' => $phone,
             'subtotal' => $dbSubtotal,
-            'discount' => $dbDiscount,
+            'discount' => 0,
             'total' => $dbTotal,
             'courier_id' => $courierModel?->id,
-            'voucher_id' => $voucher?->id,
-            'voucher_nominal' => $voucherDiscount,
+            'voucher_id' => null,
+            'voucher_nominal' => 0,
             'shipping_cost' => $shippingCost,
-            'shipping_cost_subsidy' => $shippingVoucherDiscount,
+            'shipping_cost_subsidy' => 0,
             'shipping_addresses_id' => $shippingAddressesId,
             'meta' => $bufferMeta,
         ]);
@@ -947,19 +818,19 @@ class CheckoutController extends Controller
             'promo_discount' => $totalPromoDiscount,
             'total_static_discount' => $totalStaticDiscount,
             'price_product_setting_discount' => $priceProductSettingDiscount,
-            'product_voucher_discount' => $productVoucherDiscount,
-            'shipping_voucher_discount' => $shippingVoucherDiscount,
-            'shipping_cost_subsidy' => $shippingVoucherDiscount,
-            'applied_vouchers' => $formattedAppliedVouchers,
+            'product_voucher_discount' => 0,
+            'shipping_voucher_discount' => 0,
+            'shipping_cost_subsidy' => 0,
+            'applied_vouchers' => [],
             'subtotal' => $dbSubtotal,
-            'voucher_discount' => $voucherDiscount,
-            'total_discount' => $totalPromoDiscount + $voucherDiscount,
+            'voucher_discount' => 0,
+            'total_discount' => $totalPromoDiscount,
             'total' => $dbTotal,
             'transaction_fee' => 0.0,
-            'voucher_code' => implode(',', $voucherCodes),
-            'voucher_codes' => $voucherCodes,
-            'voucher_id' => $voucher?->id,
-            'voucher_ids' => collect($appliedVouchers)->pluck('voucher.id')->filter()->values()->all(),
+            'voucher_code' => '',
+            'voucher_codes' => [],
+            'voucher_id' => null,
+            'voucher_ids' => [],
             'items' => $itemsForOrderData,
             'resolved_items' => $resolvedItems,
         ];
@@ -975,7 +846,7 @@ class CheckoutController extends Controller
             'shipping_cost' => $shippingCost,
             'selected_address_id' => $addressId,
         ]);
-        Session::put('selected_voucher_codes', $voucherCodes);
+        Session::put('selected_voucher_codes', []);
         Session::put('order_data', $orderData);
         Session::put('checkout_data', $orderData);
 
