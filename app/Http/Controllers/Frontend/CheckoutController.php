@@ -1699,12 +1699,9 @@ class CheckoutController extends Controller
         $categoryType = $request->input('category_type') ? (int)$request->input('category_type') : null;
         $paymentMethodModel = \App\Models\PaymentMethod::findByCodeOrBank($paymentMethod, $categoryType);
 
-        // Tentukan apakah metode pembayaran adalah Bank Transfer / Manual
-        $isBankTransfer = ($paymentMethodModel && (
-            $paymentMethodModel->isTypeBankTransfer() 
-            || (int)$paymentMethodModel->type === 1 
-            || strtolower((string)$paymentMethodModel->provider) !== 'espay'
-        )) || in_array($paymentMethod, ['transfer_manual', 'trf'], true);
+        // Tentukan apakah metode pembayaran adalah Bank Transfer Manual (Khusus Type 1 / transfer_manual)
+        $isBankTransfer = in_array(strtolower((string)$paymentMethod), ['transfer_manual', 'trf', 'manual', 'manual_transfer'], true)
+            || ($paymentMethodModel && ($paymentMethodModel->isTypeBankTransfer() || (int)$paymentMethodModel->type === 1));
 
         if ($isBankTransfer && $request->hasFile('payment_proof')) {
             $request->validate([
@@ -2246,6 +2243,9 @@ class CheckoutController extends Controller
             $meta = $order->meta ?? [];
 
             $paymentType = (int) ($paymentMethodModel?->type ?? $categoryType ?? 0);
+            if ($paymentType === 0 && \App\Models\PaymentMethod::isVaCodeOrAlias($paymentMethod)) {
+                $paymentType = 2;
+            }
             $isTypeQris = ($paymentType === 4);
             $isTypeCreditCard = ($paymentType === 5);
             $isTypeDebitCard = ($paymentType === 6);
@@ -2275,11 +2275,11 @@ class CheckoutController extends Controller
             if (!$isTypeQris) {
                 unset($meta['qr_string'], $meta['qr_code'], $meta['qr_url']);
             }
-            if ($paymentType !== 2) {
+            if ($paymentType !== 2 && !\App\Models\PaymentMethod::isVaCodeOrAlias($paymentMethod)) {
                 unset($meta['va_number'], $meta['va_expired']);
             }
             if ($isBankTransfer) {
-                unset($meta['trx_id'], $meta['reference'], $meta['espay_reference'], $meta['payment_url']);
+                unset($meta['trx_id'], $meta['reference'], $meta['espay_reference'], $meta['payment_url'], $meta['va_number'], $meta['va_expired']);
             }
 
             $order->payment_method = $paymentMethodModel?->id ?? $paymentMethod;
@@ -2329,8 +2329,13 @@ class CheckoutController extends Controller
             \Illuminate\Support\Facades\Log::warning("Gagal membuat initial delivery record #{$order->order_number}: " . $e->getMessage());
         }
 
-        $isEspay = ($paymentMethodModel && strtolower((string)$paymentMethodModel->provider) === 'espay')
-            || (!empty(config('espay.merchant_key')) && $isSnapPayment);
+        $isEspay = !$isBankTransfer && (
+            ($paymentMethodModel && (strtolower((string)$paymentMethodModel->provider) === 'espay' || (int)$paymentMethodModel->type >= 2))
+            || $isSnapPayment
+            || (int)$paymentType === 2
+            || (int)$categoryType === 2
+            || \App\Models\PaymentMethod::isVaCodeOrAlias($paymentMethod)
+        );
         if ($isEspay) {
             $amount = number_format((float)($order->total), 2, '.', '');
             $baseUrl = rtrim(config('espay.base_url', 'https://sandbox-api.espay.id/rest/merchant'), '/');
@@ -2370,7 +2375,7 @@ class CheckoutController extends Controller
                     ? $reqProductCode 
                     : \App\Models\PaymentMethod::resolveEspayProductCode(
                         codeOrBank: $paymentMethod,
-                        type: $categoryType ?? $paymentMethodModel?->type,
+                        type: $categoryType ?? $paymentMethodModel?->type ?? 2,
                         paymentMethod: $paymentMethodModel
                     );
 
@@ -2378,19 +2383,46 @@ class CheckoutController extends Controller
                     ? $reqBankCode 
                     : \App\Models\PaymentMethod::resolveEspayBankCode(
                         codeOrBank: $paymentMethod,
-                        type: $categoryType ?? $paymentMethodModel?->type,
+                        type: $categoryType ?? $paymentMethodModel?->type ?? 2,
                         paymentMethod: $paymentMethodModel
                     );
             }
 
-            // Special explicit overrides for clearing codes (misal 014: BCA VA vs GoPay Jump App)
+            // Special explicit overrides for clearing codes & all VA channels
             $upperMethod = strtoupper($paymentMethod);
             if (in_array($upperMethod, ['GOPAY', 'GOPAYJUMPAPP', 'GOPAYINAPP']) || (($categoryType === 3 || $paymentMethodModel?->type === 3) && in_array($paymentMethod, ['014', 'GOPAY', 'GOPAYJUMPAPP', 'GOPAYINAPP']))) {
                 $resolvedProductCode = 'GOPAYJUMPAPP';
                 $resolvedBankCode = '014';
-            } elseif (in_array($upperMethod, ['BCAATM', 'BCA']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['014', 'BCAATM', 'BCA']))) {
+            } elseif (in_array($upperMethod, ['BCAATM', 'BCA', 'BCAVA', 'BCA_VA', 'VA_BCA']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['014', 'BCAATM', 'BCA']))) {
                 $resolvedProductCode = 'BCAATM';
                 $resolvedBankCode = '014';
+            } elseif (in_array($upperMethod, ['MANDIRIATM', 'MANDIRI', 'MANDIRIVA', 'MANDIRI_VA', 'VA_MANDIRI']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['008', 'MANDIRIATM', 'MANDIRI']))) {
+                $resolvedProductCode = 'MANDIRIATM';
+                $resolvedBankCode = '008';
+            } elseif (in_array($upperMethod, ['BRIATM', 'BRI', 'BRIVA', 'BRI_VA', 'VA_BRI']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['002', 'BRIATM', 'BRI']))) {
+                $resolvedProductCode = 'BRIATM';
+                $resolvedBankCode = '002';
+            } elseif (in_array($upperMethod, ['CIMBATM', 'CIMB', 'CIMBVA', 'CIMB_VA', 'VA_CIMB', 'CIMBNIAGA']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['022', 'CIMBATM', 'CIMB']))) {
+                $resolvedProductCode = 'CIMBATM';
+                $resolvedBankCode = '022';
+            } elseif (in_array($upperMethod, ['DANAMONATM', 'DANAMON', 'DANAMONVA', 'DANAMON_VA', 'VA_DANAMON']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['011', 'DANAMONATM', 'DANAMON']))) {
+                $resolvedProductCode = 'DANAMONATM';
+                $resolvedBankCode = '011';
+            } elseif (in_array($upperMethod, ['BANKSAQUATM', 'BANKSAQU', 'SAQU', 'SAQUATM', 'SAQUVA', 'VA_SAQU']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['472', 'BANKSAQUATM', 'SAQU']))) {
+                $resolvedProductCode = 'BANKSAQUATM';
+                $resolvedBankCode = '472';
+            } elseif (in_array($upperMethod, ['BIIATM', 'BII', 'MAYBANK', 'MAYBANKATM', 'MAYBANKVA', 'VA_MAYBANK']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['016', 'BIIATM', 'MAYBANK']))) {
+                $resolvedProductCode = 'BIIATM';
+                $resolvedBankCode = '016';
+            } elseif (in_array($upperMethod, ['BNIATM', 'BNI', 'BNIVA', 'BNI_VA', 'VA_BNI']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['009', 'BNIATM', 'BNI']))) {
+                $resolvedProductCode = 'BNIATM';
+                $resolvedBankCode = '009';
+            } elseif (in_array($upperMethod, ['PERMATAATM', 'PERMATA', 'PERMATAVA', 'PERMATA_VA', 'VA_PERMATA']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['013', 'PERMATAATM', 'PERMATA']))) {
+                $resolvedProductCode = 'PERMATAATM';
+                $resolvedBankCode = '013';
+            } elseif (in_array($upperMethod, ['BSIATM', 'BSI', 'BSIVA', 'BSI_VA', 'VA_BSI']) || (($categoryType === 2 || $paymentMethodModel?->type === 2) && in_array($paymentMethod, ['451', 'BSIATM', 'BSI']))) {
+                $resolvedProductCode = 'BSIATM';
+                $resolvedBankCode = '451';
             } elseif (in_array($upperMethod, ['OVO']) || (($categoryType === 3 || $paymentMethodModel?->type === 3) && in_array($paymentMethod, ['503', 'OVO']))) {
                 $resolvedProductCode = 'OVO';
                 $resolvedBankCode = '503';
@@ -2399,7 +2431,7 @@ class CheckoutController extends Controller
             // Espay SendInvoice expects bank clearing code (e.g. 014, 008, 002) in 'bank_code' parameter
             $espayBankCode = $resolvedBankCode ?: \App\Models\PaymentMethod::resolveEspayBankCode(
                 codeOrBank: $paymentMethod,
-                type: $categoryType ?? $paymentMethodModel?->type,
+                type: $categoryType ?? $paymentMethodModel?->type ?? 2,
                 paymentMethod: $paymentMethodModel
             );
 
@@ -2431,6 +2463,9 @@ class CheckoutController extends Controller
                         '022' => '5919',  // CIMB Niaga
                         '011' => '8922',  // Danamon
                         '013' => '8412',  // Permata
+                        '472' => '4720',  // Bank Saqu
+                        '016' => '7812',  // Maybank / BII
+                        '451' => '900',   // BSI
                         default => '8808'
                     };
                     $generatedVa = $bankPrefix . substr($cleanOrderNum, -8);
@@ -2589,6 +2624,29 @@ class CheckoutController extends Controller
                             unset($updatedMeta['va_number'], $updatedMeta['va_expired']);
                         } elseif (!empty($paymentData['va_number'])) {
                             $updatedMeta['va_number'] = $paymentData['va_number'];
+                        } elseif (!empty($paymentData['vaNumber'])) {
+                            $updatedMeta['va_number'] = $paymentData['vaNumber'];
+                        } elseif (!empty($paymentData['virtual_account'])) {
+                            $updatedMeta['va_number'] = $paymentData['virtual_account'];
+                        } elseif ($paymentType === 2 || \App\Models\PaymentMethod::isVaCodeOrAlias($paymentMethod)) {
+                            $cleanOrderNum = preg_replace('/[^\d]/', '', $order->order_number);
+                            if (strlen($cleanOrderNum) < 8) {
+                                $cleanOrderNum = date('Ymd') . rand(1000, 9999);
+                            }
+                            $bankPrefix = match($resolvedBankCode) {
+                                '014' => '8808',
+                                '008' => '89508',
+                                '002' => '12345',
+                                '009' => '988',
+                                '022' => '5919',
+                                '011' => '8922',
+                                '013' => '8412',
+                                '472' => '4720',
+                                '016' => '7812',
+                                '451' => '900',
+                                default => '8808'
+                            };
+                            $updatedMeta['va_number'] = $bankPrefix . substr($cleanOrderNum, -8);
                         }
 
                         if (!empty($paymentUrl)) {
