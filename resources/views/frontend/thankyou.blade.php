@@ -396,18 +396,55 @@
                             || str_contains(strtolower((string)$rawPmCode), 'credit') 
                             || str_contains(strtolower((string)$paymentMethod), 'credit');
 
+                        $isBankTransfer = !$isQris && !$isDebitCard && !$isCreditCard && (
+                            ($pmModel && ($pmModel->isTypeBankTransfer() || (int)$pmModel->type === 1))
+                            || in_array(strtolower((string)$rawPmCode), ['transfer_manual', 'trf', 'manual', 'manual_transfer'], true)
+                            || in_array(strtolower((string)$paymentMethod), ['transfer_manual', 'trf', 'manual', 'transfer bank manual'], true)
+                        );
+
+                        $isVa = !$isQris && !$isDebitCard && !$isCreditCard && !$isBankTransfer && (
+                            ($pmModel && ((int)$pmModel->type === 2 || $pmModel->isTypeVa()))
+                            || \App\Models\PaymentMethod::isVaCodeOrAlias($rawPmCode)
+                            || str_contains(strtolower((string)$paymentMethod), 'va')
+                            || str_contains(strtolower((string)$paymentMethod), 'virtual')
+                            || !empty($order->meta['va_number'])
+                        );
+
                         $vaNumber = ($isQris || $isDebitCard || $isCreditCard) ? null : ($order->meta['va_number'] ?? null);
+                        if (empty($vaNumber) && $isVa) {
+                            $cleanOrderNum = preg_replace('/[^\d]/', '', $order->order_number);
+                            if (strlen($cleanOrderNum) < 8) {
+                                $cleanOrderNum = date('Ymd') . rand(1000, 9999);
+                            }
+                            $lowerMethod = strtolower((string)($paymentMethod . ' ' . $rawPmCode));
+                            $bankPrefix = '8808';
+                            if (str_contains($lowerMethod, 'mandiri') || str_contains($lowerMethod, '008')) {
+                                $bankPrefix = '89508';
+                            } elseif (str_contains($lowerMethod, 'bri') || str_contains($lowerMethod, '002')) {
+                                $bankPrefix = '12345';
+                            } elseif (str_contains($lowerMethod, 'bni') || str_contains($lowerMethod, '009')) {
+                                $bankPrefix = '988';
+                            } elseif (str_contains($lowerMethod, 'cimb') || str_contains($lowerMethod, '022')) {
+                                $bankPrefix = '5919';
+                            } elseif (str_contains($lowerMethod, 'danamon') || str_contains($lowerMethod, '011')) {
+                                $bankPrefix = '8922';
+                            } elseif (str_contains($lowerMethod, 'permata') || str_contains($lowerMethod, '013')) {
+                                $bankPrefix = '8412';
+                            } elseif (str_contains($lowerMethod, 'saqu') || str_contains($lowerMethod, '472')) {
+                                $bankPrefix = '4720';
+                            } elseif (str_contains($lowerMethod, 'maybank') || str_contains($lowerMethod, 'bii') || str_contains($lowerMethod, '016')) {
+                                $bankPrefix = '7812';
+                            } elseif (str_contains($lowerMethod, 'bsi') || str_contains($lowerMethod, '451')) {
+                                $bankPrefix = '900';
+                            }
+                            $vaNumber = $bankPrefix . substr($cleanOrderNum, -8);
+                        }
+
                         $trxId = $order->trx_id ?? ($order->meta['trx_id'] ?? ($order->meta['reference'] ?? ($order->meta['espay_reference'] ?? null)));
                         $espayRef = $order->meta['espay_reference'] ?? $trxId;
                         $qrCode = $order->meta['qr_code'] ?? null;
                         $qrString = $order->meta['qr_string'] ?? null;
                         $paymentUrl = $order->meta['payment_url'] ?? null;
-                        
-                        $isBankTransfer = !$isQris && !$isDebitCard && !$isCreditCard && (($pmModel && (
-                            $pmModel->isTypeBankTransfer() 
-                            || (int)$pmModel->type === 1 
-                            || strtolower((string)$pmModel->provider) !== 'espay'
-                        )) || in_array(strtolower((string)$rawPmCode), ['transfer_manual', 'trf', 'manual'], true) || in_array(strtolower((string)$paymentMethod), ['transfer_manual', 'trf', 'manual', 'transfer bank manual'], true));
 
                         $banks = $pmModel && !empty($pmModel->bank_info) ? $pmModel->bank_info : [];
                     @endphp
@@ -481,10 +518,10 @@
 
                                 @if(!$isPaid && $status == 1)
                                     <div class="pt-3 border-t border-gray-100 text-center">
-                                        <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
-                                            <i class="fa-solid fa-credit-card text-xs"></i>
-                                            <span>Lanjutkan Pembayaran</span>
-                                        </a>
+                                        <button type="button" onclick="window.location.reload();" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                            <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                                            <span>Cek Status Pembayaran</span>
+                                        </button>
                                     </div>
                                 @endif
                             </div>
@@ -614,10 +651,10 @@
                                     </div>
                                 @elseif(!$isPaid && $status == 1)
                                     <div class="pt-3 border-t border-gray-100 text-center">
-                                        <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm">
-                                            <i class="fa-solid fa-credit-card text-xs"></i>
-                                            <span>Lanjutkan Pembayaran Kartu Kredit</span>
-                                        </a>
+                                        <button type="button" onclick="window.location.reload();" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer">
+                                            <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                                            <span>Cek Status Pembayaran</span>
+                                        </button>
                                     </div>
                                 @endif
                             </div>
@@ -679,10 +716,10 @@
 
                                 @if(!$isPaid && $status == 1)
                                     <div class="pt-3 border-t border-gray-100 text-center">
-                                        <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
-                                            <i class="fa-solid fa-credit-card text-xs"></i>
-                                            <span>Lanjutkan Pembayaran</span>
-                                        </a>
+                                        <button type="button" onclick="window.location.reload();" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                            <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                                            <span>Cek Status Pembayaran</span>
+                                        </button>
                                     </div>
                                 @endif
                             </div>
@@ -806,10 +843,10 @@
 
                             @if(!$isPaid && $status == 1)
                                 <div class="mt-4 pt-3 border-t border-amber-200 text-center">
-                                    <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
-                                        <i class="fa-solid fa-credit-card text-xs"></i>
-                                        <span>Lanjutkan Pembayaran</span>
-                                    </a>
+                                    <button type="button" onclick="window.location.reload();" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md cursor-pointer">
+                                        <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                                        <span>Cek Status Pembayaran</span>
+                                    </button>
                                 </div>
                             @endif
                         </div>
@@ -1145,10 +1182,10 @@
                     <!-- Quick Action Buttons -->
                     <div class="mt-6 pt-5 border-t border-gray-100 space-y-3 no-print">
                         @if(!$isPaid && $status == 1)
-                            <a href="{{ route('payment', ['order_id' => $order->id]) }}" class="w-full py-3 px-4 text-center rounded-xl font-bold text-xs sm:text-sm bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                                <i class="fa-solid fa-credit-card text-xs"></i>
-                                <span>Lanjutkan Pembayaran</span>
-                            </a>
+                            <button type="button" onclick="window.location.reload();" class="w-full py-3 px-4 text-center rounded-xl font-bold text-xs sm:text-sm bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer">
+                                <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                                <span>Cek Status Pembayaran</span>
+                            </button>
                         @endif
 
                         @if(session()->get('is_logged_in'))
