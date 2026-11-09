@@ -681,10 +681,10 @@ class CheckoutController extends Controller
             }
         }
 
-        $dbSubtotal = max(0, $originalCartTotal - $totalStaticDiscount - $priceProductSettingDiscount);
-        $dbDiscount = 0;
+        $dbSubtotal = $originalCartTotal;
+        $dbDiscount = $totalPromoDiscount;
         $actualShippingCost = $shippingCost;
-        $dbTotal = $dbSubtotal + $actualShippingCost;
+        $dbTotal = max(0, $originalCartTotal - $totalPromoDiscount) + $actualShippingCost;
 
         $shippingCalc = $this->calculateShippingDetails($request->courier, (string) ($finalSubDistrictId ?? $subDistrictId ?? ''), $cart);
         $resolvedEtaLabel = $request->input('shipping_eta_label') ?: ($shippingCalc['eta_label'] ?? null);
@@ -736,7 +736,7 @@ class CheckoutController extends Controller
             'customer_email' => $request->email,
             'customer_phone' => $phone,
             'subtotal' => $dbSubtotal,
-            'discount' => 0,
+            'discount' => $dbDiscount,
             'total' => $dbTotal,
             'courier_id' => $courierModel?->id,
             'voucher_id' => null,
@@ -825,6 +825,7 @@ class CheckoutController extends Controller
             'subtotal' => $dbSubtotal,
             'voucher_discount' => 0,
             'total_discount' => $totalPromoDiscount,
+            'discount' => $dbDiscount,
             'total' => $dbTotal,
             'transaction_fee' => 0.0,
             'voucher_code' => '',
@@ -1457,6 +1458,7 @@ class CheckoutController extends Controller
         $orderData['product_voucher_discount'] = $productVoucherDiscount;
         $orderData['shipping_voucher_discount'] = $shippingVoucherDiscount;
         $orderData['voucher_discount'] = $totalVoucherDiscount;
+        $orderData['subtotal'] = $cartTotal;
         $orderData['discount'] = $totalDiscount;
         $orderData['total_discount'] = $totalDiscount;
         $orderData['shipping_cost_subsidy'] = $shippingVoucherDiscount;
@@ -1467,6 +1469,7 @@ class CheckoutController extends Controller
 
         $buffer = $this->getCurrentBuffer();
         if ($buffer) {
+            $buffer->subtotal = $cartTotal;
             $buffer->discount = $totalDiscount;
             $buffer->shipping_cost_subsidy = $shippingVoucherDiscount;
             $buffer->total = $calculatedTotal;
@@ -1481,6 +1484,10 @@ class CheckoutController extends Controller
             $meta['product_voucher_discount'] = $productVoucherDiscount;
             $meta['shipping_voucher_discount'] = $shippingVoucherDiscount;
             $meta['voucher_discount'] = $totalVoucherDiscount;
+            $meta['original_cart_total'] = $cartTotal;
+            $meta['promo_discount'] = $staticPromoDiscount + $priceSettingDiscount;
+            $meta['total_static_discount'] = $staticPromoDiscount;
+            $meta['price_product_setting_discount'] = $priceSettingDiscount;
             $buffer->meta = $meta;
             $buffer->save();
         }
@@ -1566,6 +1573,7 @@ class CheckoutController extends Controller
         $orderData['product_voucher_discount'] = $productVoucherDiscount;
         $orderData['shipping_voucher_discount'] = $shippingVoucherDiscount;
         $orderData['voucher_discount'] = $totalVoucherDiscount;
+        $orderData['subtotal'] = $cartTotal;
         $orderData['discount'] = $totalDiscount;
         $orderData['total_discount'] = $totalDiscount;
         $orderData['shipping_cost_subsidy'] = $shippingVoucherDiscount;
@@ -1576,6 +1584,7 @@ class CheckoutController extends Controller
 
         $buffer = $this->getCurrentBuffer();
         if ($buffer) {
+            $buffer->subtotal = $cartTotal;
             $buffer->discount = $totalDiscount;
             $buffer->shipping_cost_subsidy = $shippingVoucherDiscount;
             $buffer->total = $calculatedTotal;
@@ -1590,6 +1599,10 @@ class CheckoutController extends Controller
             $meta['product_voucher_discount'] = $productVoucherDiscount;
             $meta['shipping_voucher_discount'] = $shippingVoucherDiscount;
             $meta['voucher_discount'] = $totalVoucherDiscount;
+            $meta['original_cart_total'] = $cartTotal;
+            $meta['promo_discount'] = $staticPromoDiscount + $priceSettingDiscount;
+            $meta['total_static_discount'] = $staticPromoDiscount;
+            $meta['price_product_setting_discount'] = $priceSettingDiscount;
             $buffer->meta = $meta;
             $buffer->save();
         }
@@ -1943,9 +1956,55 @@ class CheckoutController extends Controller
                 }
 
                 $orderNumber = Order::generateOrderNumber();
-                $orderSubtotal = $buffer?->subtotal ?? ($sessionOrderData['subtotal'] ?? 0);
-                $orderDiscount = $buffer?->discount ?? ($sessionOrderData['total_discount'] ?? 0);
-                $orderShippingCost = $buffer?->shipping_cost ?? ($sessionOrderData['shipping_cost'] ?? 0);
+
+                // 1. Resolve true Gross Cart Subtotal (Original price before discounts)
+                $origCartTotal = (float) (
+                    $bufferMeta['original_cart_total'] 
+                    ?? ($sessionOrderData['original_cart_total'] ?? 0)
+                );
+                if ($origCartTotal <= 0 && !empty($resolvedItems)) {
+                    $origCartTotal = (float) collect($resolvedItems)->sum(function ($r) {
+                        $it = $r['item'] ?? [];
+                        $qty = max(1, (int) ($it['quantity'] ?? 1));
+                        $p = (float) ($r['base_price'] ?? $r['original_price'] ?? ($it['base_price'] ?? $it['unit_price'] ?? $it['sell_price'] ?? 0));
+                        return $p * $qty;
+                    });
+                }
+                if ($origCartTotal <= 0 && !empty($cart)) {
+                    $origCartTotal = (float) collect($cart)->sum(function ($it) {
+                        $qty = max(1, (int) ($it['quantity'] ?? 1));
+                        $p = (float) ($it['original_price'] ?? $it['base_price'] ?? $it['unit_price'] ?? $it['sell_price'] ?? 0);
+                        return $p * $qty;
+                    });
+                }
+                if ($origCartTotal <= 0) {
+                    $origCartTotal = (float) ($buffer?->subtotal ?? ($sessionOrderData['subtotal'] ?? 0));
+                }
+
+                // 2. Resolve Item Promo Discount & Tier Volume Discount
+                $staticPromoDisc = (float) (
+                    $bufferMeta['total_static_discount'] 
+                    ?? ($sessionOrderData['total_static_discount'] 
+                    ?? ($bufferMeta['promo_discount'] 
+                    ?? ($sessionOrderData['promo_discount'] ?? 0)))
+                );
+                $tierVolumeDisc = (float) (
+                    $bufferMeta['price_product_setting_discount'] 
+                    ?? ($sessionOrderData['price_product_setting_discount'] ?? 0)
+                );
+                $prodVoucherDisc = (float) (
+                    $bufferMeta['product_voucher_discount'] 
+                    ?? ($sessionOrderData['product_voucher_discount'] ?? 0)
+                );
+                
+                $totalOrderDiscount = $staticPromoDisc + $tierVolumeDisc + $prodVoucherDisc;
+                if ($totalOrderDiscount <= 0) {
+                    $totalOrderDiscount = (float) ($buffer?->discount ?? ($sessionOrderData['total_discount'] ?? ($sessionOrderData['discount'] ?? 0)));
+                }
+
+                $orderSubtotal = $origCartTotal;
+                $orderDiscount = $totalOrderDiscount;
+                $orderShippingCost = (float) ($buffer?->shipping_cost ?? ($sessionOrderData['shipping_cost'] ?? 0));
                 $orderShippingSubsidy = (float) (
                     $buffer?->shipping_cost_subsidy 
                     ?? ($sessionOrderData['shipping_cost_subsidy'] 
@@ -1953,7 +2012,10 @@ class CheckoutController extends Controller
                     ?? ($bufferMeta['shipping_voucher_discount'] 
                     ?? 0)))
                 );
-                $orderTotal = ($orderSubtotal - $orderDiscount + $orderShippingCost - $orderShippingSubsidy) + $charge;
+                $orderShippingSubsidy = min($orderShippingSubsidy, $orderShippingCost);
+
+                // Correct Total: Subtotal Asli - Total Diskon Produk + Biaya Pengiriman Bersih + Fee
+                $orderTotal = max(0, $orderSubtotal - $orderDiscount) + max(0, $orderShippingCost - $orderShippingSubsidy) + $charge;
 
                 $customerEmail = strtolower(trim((string)($customer?->email ?? ($customerData['email'] ?? ($orderMeta['customer']['email'] ?? '')))));
                 if (empty($customerEmail)) {

@@ -44,7 +44,20 @@
             $paymentMethod = ucwords(str_replace(['_', '-'], ' ', (string)$rawPmCode));
         }
     }
-    $total = $order?->total ?? 0;
+    $total = (float) ($order?->total ?? 0);
+    $orderMetaForTotal = is_array($order?->meta) ? $order->meta : (json_decode($order?->meta ?? '[]', true) ?: []);
+    $staticPromoForTotal = (float) ($orderMetaForTotal['total_static_discount'] ?? ($orderMetaForTotal['promo_discount'] ?? 0));
+    $origCartForTotal = (float) ($orderMetaForTotal['original_cart_total'] ?? 0);
+    $vouchProdForTotal = (float) ($orderMetaForTotal['product_voucher_discount'] ?? ($order?->voucher_nominal ?? 0));
+    $shipCostForTotal = (float) ($order?->shipping_cost ?? 0);
+    $shipSubForTotal = (float) ($order?->shipping_cost_subsidy ?? ($orderMetaForTotal['shipping_voucher_discount'] ?? 0));
+    $feeForTotal = (float) ($order?->transaction_fee ?? 0);
+    if ($origCartForTotal > 0 && $staticPromoForTotal > 0) {
+        $expectedTotalCheck = max(0, $origCartForTotal - $staticPromoForTotal - $vouchProdForTotal) + max(0, $shipCostForTotal - $shipSubForTotal) + $feeForTotal;
+        if ($expectedTotalCheck > 0 && ($expectedTotalCheck - $total) >= ($staticPromoForTotal - 1)) {
+            $total = $expectedTotalCheck;
+        }
+    }
     $status = $order?->status ?? 1;
     $paymentStatus = (int)($order?->payment_status ?? 1);
     $isPaid = ($paymentStatus === 2) || ($status >= 2 && $status !== \App\Models\Frontend\Order::STATUS_CANCELLED);
@@ -1020,7 +1033,11 @@
                         }
 
                         $transactionFee = (float) ($order?->transaction_fee ?? 0);
+                        $expectedNetTotal = max(0, $originalCartTotal - $staticPromoDiscount - $priceProductSettingDiscount - $productVoucherDiscount) + max(0, $shippingCost - $shippingSubsidy) + $transactionFee;
                         $orderFinalTotal = (float) ($order?->total ?? 0);
+                        if ($orderFinalTotal <= 0 || ($expectedNetTotal > 0 && ($expectedNetTotal - $orderFinalTotal) >= ($staticPromoDiscount - 1) && $staticPromoDiscount > 0)) {
+                            $orderFinalTotal = $expectedNetTotal;
+                        }
                     @endphp
 
                     <!-- Summary / Sinkronisasi Total Pesanan -->
