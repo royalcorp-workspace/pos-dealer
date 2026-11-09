@@ -3,7 +3,7 @@
 @section('title', 'Pesanan Berhasil - ' . ($order?->order_number ?? 'IMG'))
 
 @php
-    $orderId = $order?->order_number ?? 'ORD.' . date('Ymd') . '.0001';
+    $orderId = $order?->order_number ?? 'IMG' . date('y') . '0001';
     $rawPmCode = $order?->meta['payment_method_code'] ?? $order?->payment_method ?? '-';
     $pmModel = (\Illuminate\Support\Str::isUuid((string)$order?->payment_method) ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($order->payment_method) : null)
         ?? (!empty($order?->meta['payment_method_id']) && \Illuminate\Support\Str::isUuid((string)$order->meta['payment_method_id']) ? \App\Models\PaymentMethod::withoutGlobalScope('active')->find($order->meta['payment_method_id']) : null)
