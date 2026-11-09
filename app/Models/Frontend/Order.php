@@ -86,22 +86,34 @@ class Order extends Model
     public static function generateOrderNumber($date = null): string
     {
         $dateObj = $date ? \Illuminate\Support\Carbon::parse($date) : now();
-        $prefix = 'ORD.' . $dateObj->format('Ymd') . '.';
+        $year2Digit = $dateObj->format('y');
+        $prefix = 'IMG' . $year2Digit;
 
-        $lastOrderNumber = static::withoutGlobalScopes()
-            ->where('order_number', 'ilike', $prefix . '%')
-            ->orderByRaw("LENGTH(SPLIT_PART(order_number, '.', 3)) DESC, SPLIT_PART(order_number, '.', 3) DESC")
-            ->value('order_number');
-
-        if ($lastOrderNumber) {
-            $parts = explode('.', $lastOrderNumber);
-            $lastSeq = (int) end($parts);
-            $nextSeq = $lastSeq + 1;
+        if (\Illuminate\Support\Facades\DB::getDriverName() === 'pgsql') {
+            $maxSeq = static::withoutGlobalScopes()
+                ->where('order_number', 'like', $prefix . '%')
+                ->selectRaw("COALESCE(MAX(CAST(SUBSTRING(order_number FROM '^' || ? || '([0-9]+)$') AS BIGINT)), 0) as max_seq", [$prefix])
+                ->value('max_seq');
         } else {
-            $nextSeq = 1;
+            $lastOrder = static::withoutGlobalScopes()
+                ->where('order_number', 'like', $prefix . '%')
+                ->orderByRaw('LENGTH(order_number) DESC, order_number DESC')
+                ->value('order_number');
+            $maxSeq = 0;
+            if ($lastOrder && preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $lastOrder, $m)) {
+                $maxSeq = (int) $m[1];
+            }
         }
 
-        return $prefix . str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+        $nextSeq = ((int) $maxSeq) + 1;
+        $orderNumber = $prefix . str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+
+        while (static::withoutGlobalScopes()->where('order_number', $orderNumber)->exists()) {
+            $nextSeq++;
+            $orderNumber = $prefix . str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+        }
+
+        return $orderNumber;
     }
 
     protected static function boot(): void
@@ -410,10 +422,9 @@ class Order extends Model
         }
 
         return [
-            self::STATUS_DRAFT => 'Draft',
             self::STATUS_PENDING_APPROVAL => 'Ordered',
             self::STATUS_CONFIRMED => 'Confirmed',
-            self::STATUS_PROCESSING => 'Pesanan Diproses',
+            self::STATUS_PROCESSING => 'Processing',
             self::STATUS_SHIPPED => 'Shipped',
             self::STATUS_DELIVERED => 'Delivered',
             self::STATUS_CANCELLED => 'Cancelled',
@@ -424,6 +435,20 @@ class Order extends Model
     public function statusLabel(): string
     {
         return \App\Models\Reff::getShow('StatusOrder', $this->status, self::statusLabels()[$this->status] ?? 'Unknown');
+    }
+
+    public function statusLabelIndo(): string
+    {
+        return match ($this->status) {
+            self::STATUS_PENDING_APPROVAL => 'Menunggu Pembayaran',
+            self::STATUS_CONFIRMED => 'Dikonfirmasi',
+            self::STATUS_PROCESSING => 'Diproses',
+            self::STATUS_SHIPPED => 'Dikirim',
+            self::STATUS_DELIVERED => 'Terkirim',
+            self::STATUS_CANCELLED => 'Dibatalkan',
+            self::STATUS_RETURNED => 'Dikembalikan',
+            default => 'Unknown',
+        };
     }
 
     public function getStatusBadgeClassAttribute(): string
@@ -438,6 +463,61 @@ class Order extends Model
             self::STATUS_CANCELLED => 'bg-red-100 text-red-700',
             self::STATUS_RETURNED => 'bg-orange-100 text-orange-700',
             default => 'bg-gray-100 text-gray-600',
+        };
+    }
+
+    public function getSourcePlatformAttribute(): string
+    {
+        $platform = strtolower(trim((string) ($this->meta['platform'] ?? '')));
+        if (in_array($platform, ['mobile_app', 'mobile', 'app', 'android', 'ios'])) {
+            return 'mobile';
+        }
+        if (in_array($platform, ['website', 'web', 'store_web', 'frontend'])) {
+            return 'web';
+        }
+        if (in_array($platform, ['pos', 'store', 'outlet', 'retail_pos'])) {
+            return 'pos';
+        }
+
+        // Fallbacks based on order_number or creator patterns
+        $orderNum = (string) ($this->order_number ?? '');
+        if (str_starts_with($orderNum, 'MOB-') || str_starts_with($orderNum, 'ORD-260831')) {
+            return 'mobile';
+        }
+        if (str_starts_with($orderNum, 'ORD-POS-') || str_starts_with((string)$this->creator, 'Store - ')) {
+            return 'pos';
+        }
+        if (str_starts_with($orderNum, 'WEB-') || str_starts_with($orderNum, 'ORD.')) {
+            return 'web';
+        }
+
+        return 'web';
+    }
+
+    public function getSourcePlatformLabelAttribute(): string
+    {
+        return match($this->source_platform) {
+            'mobile' => 'Mobile',
+            'pos' => 'POS',
+            default => 'Web',
+        };
+    }
+
+    public function getSourcePlatformBadgeClassAttribute(): string
+    {
+        return match($this->source_platform) {
+            'mobile' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+            'pos' => 'bg-purple-50 text-purple-700 border border-purple-200',
+            default => 'bg-blue-50 text-blue-700 border border-blue-200',
+        };
+    }
+
+    public function getSourcePlatformIconAttribute(): string
+    {
+        return match($this->source_platform) {
+            'mobile' => 'smartphone',
+            'pos' => 'storefront',
+            default => 'language',
         };
     }
 }
