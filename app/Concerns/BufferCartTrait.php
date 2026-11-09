@@ -159,13 +159,14 @@ trait BufferCartTrait
         $items = $buffer->items()->get();
         $subtotal = $items->sum(fn($item) => (float) $item->unit_price * (int) $item->quantity);
         $discount = $items->sum(function ($item) {
+            if ((float) $item->discount_nominal > 0) {
+                return (float) $item->discount_nominal;
+            }
             $itemTotal = (float) $item->unit_price * (int) $item->quantity;
-            $discountNominal = (float) $item->discount_nominal;
-            $discountPercent = $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
-            return $discountNominal + $discountPercent;
+            return $itemTotal > 0 ? ($itemTotal * (float) $item->discount_percent / 100) : 0;
         });
         $tax = 0;
-        $total = $subtotal - $discount + $tax;
+        $total = max(0, $subtotal - $discount) + $tax;
 
         $buffer->update([
             'subtotal' => $subtotal,
