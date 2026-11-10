@@ -58,11 +58,11 @@
             $total = $expectedTotalCheck;
         }
     }
-    $status = $order?->status ?? 1;
-    $paymentStatus = (int)($order?->payment_status ?? 1);
-    $isPaid = ($paymentStatus === 2) || ($status >= 2 && $status !== \App\Models\Frontend\Order::STATUS_CANCELLED);
-    $statusLabel = $isPaid ? 'Sudah Dibayar (Lunas)' : (\App\Models\Frontend\Order::statusLabels()[$status] ?? 'Menunggu Pembayaran');
-    $statusBadge = $isPaid ? 'bg-emerald-100 text-emerald-800' : ($order?->getStatusBadgeClassAttribute() ?? 'bg-yellow-100 text-yellow-700');
+    $status = (int)($order?->status ?? 1);
+    $paymentStatus = (int)($order?->payment_status ?? 0);
+    $isPaid = $order?->isPaymentPaid() ?? (($paymentStatus === 1 || $paymentStatus === 2 || $status >= \App\Models\Frontend\Order::STATUS_PROCESSING) && $status !== \App\Models\Frontend\Order::STATUS_CANCELLED);
+    $statusLabel = $isPaid ? 'Sudah Dibayar (Lunas)' : 'Menunggu Pembayaran';
+    $statusBadge = $isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-700';
     $items = $order?->items;
     if (empty($items) || count($items) === 0) {
         $items = \App\Models\Frontend\Order\OrderItem::where('order_id', $order?->id)->get();

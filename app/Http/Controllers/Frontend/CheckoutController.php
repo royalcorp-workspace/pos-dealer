@@ -762,7 +762,11 @@ class CheckoutController extends Controller
                         $oq->where('id', $staleBuffer->id)
                            ->orWhere('meta->buffer_id', $staleBuffer->id);
                     })
-                    ->where('payment_status', 2)
+                    ->where(function ($pq) {
+                        $pq->where('payment_status', Order::PAYMENT_PAID)
+                           ->orWhere('payment_status', 2)
+                           ->orWhere('status', '>=', Order::STATUS_PROCESSING);
+                    })
                     ->exists();
 
                 if (!$isPaidOrder) {
@@ -870,7 +874,7 @@ class CheckoutController extends Controller
         }
 
         // If buffer is empty/missing, check if there is an existing UNPAID order to resume payment
-        if ((empty($cart) || !$buffer) && $existingOrder && (int)$existingOrder->payment_status === 1 && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+        if ((empty($cart) || !$buffer) && $existingOrder && !$existingOrder->isPaymentPaid() && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
             $orderData = $this->formatOrderDataFromModel($existingOrder);
             session()->put('order_data', $orderData);
             session()->put('last_created_order_id', $existingOrder->id);
@@ -882,7 +886,7 @@ class CheckoutController extends Controller
         $orderData = session()->get('order_data');
 
         // Check if existing order matches orderData in session
-        if ($existingOrder && (int)$existingOrder->payment_status === 1 && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+        if ($existingOrder && !$existingOrder->isPaymentPaid() && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
             if (empty($orderData) || ($orderData['id'] ?? '') !== $existingOrder->id) {
                 $orderData = $this->formatOrderDataFromModel($existingOrder);
                 session()->put('order_data', $orderData);
@@ -1653,7 +1657,7 @@ class CheckoutController extends Controller
         }
 
         // If order already exists and is already paid, redirect to thankyou immediately
-        if ($existingOrder && (int)$existingOrder->payment_status === 2) {
+        if ($existingOrder && $existingOrder->isPaymentPaid()) {
             return response()->json([
                 'success' => true,
                 'redirect_url' => route('thankyou', ['order_id' => $existingOrder->id]),
@@ -2072,7 +2076,7 @@ class CheckoutController extends Controller
                     'courier_id' => $buffer?->courier_id ?? ($sessionOrderData['courier_id'] ?? null),
                     'status' => Order::STATUS_PENDING_APPROVAL,
                     'payment_method' => $paymentMethodModel?->id ?? $paymentMethod,
-                    'payment_status' => 1,
+                    'payment_status' => Order::PAYMENT_UNPAID, // 0 = Unpaid
                     'subtotal' => $orderSubtotal,
                     'tax' => 0,
                     'discount' => $orderDiscount,
@@ -2897,8 +2901,8 @@ class CheckoutController extends Controller
                 return redirect()->back()->with('info', 'Pesanan ini sudah dibatalkan sebelumnya.');
             }
 
-            // Only allow cancel if unpaid (payment_status == 1) and not shipped
-            if ((int)$order->payment_status !== 1 && (int)$order->status >= \App\Models\Frontend\Order::STATUS_SHIPPED) {
+            // Only allow cancel if unpaid and not shipped
+            if ($order->isPaymentPaid() || (int)$order->status >= \App\Models\Frontend\Order::STATUS_SHIPPED) {
                 return redirect()->back()->with('error', 'Pesanan yang sudah dibayar atau sedang dikirim tidak dapat dibatalkan secara otomatis.');
             }
 

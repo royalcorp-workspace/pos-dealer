@@ -219,11 +219,9 @@ class PaymentGatewayController extends Controller
             }
 
             // Check if not already paid
-            if ($order->payment_status !== 2) {
-                // payment_status 2 = Terbayar/Menunggu Verifikasi
-                // order status 2 = Confirmed
+            if (!$order->isPaymentPaid()) {
                 $order->update([
-                    'payment_status' => 2,
+                    'payment_status' => \App\Models\Frontend\Order::PAYMENT_PAID,
                     'status' => \App\Models\Frontend\Order::STATUS_PROCESSING,
                     'editor' => 'inquiry payment',
                     'meta' => $orderMeta,

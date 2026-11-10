@@ -31,6 +31,12 @@ class Order extends Model
     public const STATUS_CANCELLED = 6;
     public const STATUS_RETURNED = 7;
 
+    public const PAYMENT_UNPAID = 0;
+    public const PAYMENT_PAID = 1;
+    public const PAYMENT_FAILED = 2;
+    public const PAYMENT_REFUNDED = 3;
+    public const PAYMENT_PARTIAL = 4;
+
     protected $fillable = [
         'id',
         'order_number',
@@ -127,6 +133,9 @@ class Order extends Model
             if ($model->status === null || $model->status === self::STATUS_DRAFT || $model->status === 0) {
                 $model->status = self::STATUS_PENDING_APPROVAL;
             }
+            if ($model->payment_status === null) {
+                $model->payment_status = self::PAYMENT_UNPAID;
+            }
             if (empty($model->order_date)) {
                 $model->order_date = now()->format('Y-m-d');
             }
@@ -177,6 +186,13 @@ class Order extends Model
 
             if ((int) $model->jde_push_status === 2 && empty($model->jde_push_date)) {
                 $model->jde_push_date = now()->format('Y-m-d');
+            }
+
+            // Ketika status pesanan menjadi Processing (3) atau lebih, otomatis ubah payment_status menjadi Paid (1)
+            if ((int) $model->status >= self::STATUS_PROCESSING && (int) $model->status !== self::STATUS_CANCELLED) {
+                if ((int) $model->payment_status === self::PAYMENT_UNPAID) {
+                    $model->payment_status = self::PAYMENT_PAID;
+                }
             }
         });
 
@@ -509,6 +525,39 @@ class Order extends Model
             'mobile' => 'bg-emerald-50 text-emerald-700 border border-emerald-200',
             'pos' => 'bg-purple-50 text-purple-700 border border-purple-200',
             default => 'bg-blue-50 text-blue-700 border border-blue-200',
+        };
+    }
+
+    public function isPaymentPaid(): bool
+    {
+        return ((int) $this->payment_status === self::PAYMENT_PAID || (int) $this->payment_status === 2 || (int) $this->status >= self::STATUS_PROCESSING)
+            && (int) $this->status !== self::STATUS_CANCELLED;
+    }
+
+    public function paymentStatusLabel(): string
+    {
+        if ($this->isPaymentPaid()) {
+            return 'Paid';
+        }
+        if ((int) $this->payment_status === self::PAYMENT_UNPAID) {
+            return 'Unpaid';
+        }
+        return \App\Models\Reff::getShow('PaymentStatus', $this->payment_status, 'Unpaid');
+    }
+
+    public function getPaymentStatusBadgeClassAttribute(): string
+    {
+        if ($this->isPaymentPaid()) {
+            return 'bg-success/10 text-success';
+        }
+        if ((int) $this->payment_status === self::PAYMENT_UNPAID) {
+            return 'bg-gray-100 text-gray-600';
+        }
+        return match ($this->payment_status) {
+            self::PAYMENT_FAILED => 'bg-danger/10 text-danger',
+            self::PAYMENT_REFUNDED => 'bg-orange-100 text-orange-700',
+            self::PAYMENT_PARTIAL => 'bg-warning/10 text-warning',
+            default => 'bg-gray-100 text-gray-600',
         };
     }
 
