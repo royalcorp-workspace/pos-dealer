@@ -112,7 +112,7 @@ class SnapBiController extends Controller
             return response()->json($errResponse, 404);
         }
 
-        if ($order->payment_status !== 2) {
+        if (!$order->isPaymentPaid()) {
             $orderMeta = $order->meta ?? [];
             if (!empty($cleanVa)) {
                 $orderMeta['va_number'] = $cleanVa;
@@ -124,7 +124,7 @@ class SnapBiController extends Controller
                 $orderMeta['espay_reference'] = $inquiryReqId;
             }
 
-            $order->payment_status = 2; // Paid
+            $order->payment_status = Order::PAYMENT_PAID; // Paid
             $order->status = Order::STATUS_PROCESSING;
             $order->editor = 'inquiry payment';
             $order->meta = $orderMeta;
@@ -232,7 +232,7 @@ class SnapBiController extends Controller
             return response()->json($errResponse, 404);
         }
 
-        if ($order->payment_status !== 2) {
+        if (!$order->isPaymentPaid()) {
             $orderMeta = $order->meta ?? [];
             if (!empty($cleanRef)) {
                 $orderMeta['trx_id'] = $cleanRef;
@@ -240,7 +240,7 @@ class SnapBiController extends Controller
                 $orderMeta['espay_reference'] = $cleanRef;
             }
 
-            $order->payment_status = 2; // Paid
+            $order->payment_status = Order::PAYMENT_PAID; // Paid
             $order->status = Order::STATUS_PROCESSING;
             $order->editor = 'inquiry payment';
             $order->meta = $orderMeta;
