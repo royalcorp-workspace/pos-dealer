@@ -44,31 +44,13 @@
             $paymentMethod = ucwords(str_replace(['_', '-'], ' ', (string)$rawPmCode));
         }
     }
-    $total = (float) ($order?->total ?? 0);
-    $orderMetaForTotal = is_array($order?->meta) ? $order->meta : (json_decode($order?->meta ?? '[]', true) ?: []);
-    $staticPromoForTotal = (float) ($orderMetaForTotal['total_static_discount'] ?? ($orderMetaForTotal['promo_discount'] ?? 0));
-    $origCartForTotal = (float) ($orderMetaForTotal['original_cart_total'] ?? 0);
-    $vouchProdForTotal = (float) ($orderMetaForTotal['product_voucher_discount'] ?? ($order?->voucher_nominal ?? 0));
-    $shipCostForTotal = (float) ($order?->shipping_cost ?? 0);
-    $shipSubForTotal = (float) ($order?->shipping_cost_subsidy ?? ($orderMetaForTotal['shipping_voucher_discount'] ?? 0));
-    $feeForTotal = (float) ($order?->transaction_fee ?? 0);
-    if ($origCartForTotal > 0 && $staticPromoForTotal > 0) {
-        $expectedTotalCheck = max(0, $origCartForTotal - $staticPromoForTotal - $vouchProdForTotal) + max(0, $shipCostForTotal - $shipSubForTotal) + $feeForTotal;
-        if ($expectedTotalCheck > 0 && ($expectedTotalCheck - $total) >= ($staticPromoForTotal - 1)) {
-            $total = $expectedTotalCheck;
-        }
-    }
-    $status = (int)($order?->status ?? 1);
-    $paymentStatus = (int)($order?->payment_status ?? 0);
-    $isPaid = $order?->isPaymentPaid() ?? (($paymentStatus === 1 || $paymentStatus === 2 || $status >= \App\Models\Frontend\Order::STATUS_PROCESSING) && $status !== \App\Models\Frontend\Order::STATUS_CANCELLED);
-    $statusLabel = $isPaid ? 'Sudah Dibayar (Lunas)' : 'Menunggu Pembayaran';
-    $statusBadge = $isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-700';
     $items = $order?->items;
     if (empty($items) || count($items) === 0) {
         $items = \App\Models\Frontend\Order\OrderItem::where('order_id', $order?->id)->get();
     }
-    if ((empty($items) || count($items) === 0) && !empty($order?->meta['items'])) {
-        $items = collect($order->meta['items'])->map(function($raw) {
+    $orderMeta = is_array($order?->meta) ? $order->meta : (json_decode($order?->meta ?? '[]', true) ?: []);
+    if ((empty($items) || count($items) === 0) && !empty($orderMeta['items'])) {
+        $items = collect($orderMeta['items'])->map(function($raw) {
             $unitPrice = (float)($raw['sell_price'] ?? ($raw['unit_price'] ?? 0));
             $qty = (int)($raw['quantity'] ?? 1);
             return (object) [
@@ -85,8 +67,125 @@
         });
     }
 
-    $paymentStartedAt = !empty($order?->meta['payment_started_at']) 
-        ? \Carbon\Carbon::parse($order->meta['payment_started_at']) 
+    // 1. Gross Cart Subtotal (Original price before promo / voucher discounts)
+    $originalCartTotal = (float) ($orderMeta['original_cart_total'] ?? 0);
+    if ($originalCartTotal <= 0 && $items && count($items) > 0) {
+        $originalCartTotal = (float) collect($items)->sum(function($it) {
+            $meta = is_array($it->meta) ? $it->meta : (json_decode($it->meta ?? '[]', true) ?: []);
+            $unitP = (float) ($it->unit_price ?? $meta['original_price'] ?? $meta['base_price'] ?? $it->sell_price ?? 0);
+            return $unitP * (int) ($it->quantity ?? 1);
+        });
+    }
+    if ($originalCartTotal <= 0) {
+        $originalCartTotal = (float) ($order?->subtotal ?? 0);
+    }
+
+    // 2. Catalog Promo Discounts & Tier Volume Discounts
+    $priceProductSettingDiscount = (float) ($orderMeta['price_product_setting_discount'] ?? 0);
+    $staticPromoDiscount = (float) ($orderMeta['total_static_discount'] ?? 0);
+    if ($staticPromoDiscount <= 0 && !empty($orderMeta['promo_discount'])) {
+        $staticPromoDiscount = max(0, (float) $orderMeta['promo_discount'] - $priceProductSettingDiscount);
+    }
+
+    // 3. Shipping Cost & Subsidy
+    $shippingCost = (float) ($order?->shipping_cost ?? ($orderMeta['shipping_cost'] ?? 0));
+    $shippingSubsidy = 0.0;
+    if (!empty($orderMeta['shipping_voucher_discount']) && (float)$orderMeta['shipping_voucher_discount'] > 0) {
+        $shippingSubsidy = (float)$orderMeta['shipping_voucher_discount'];
+    } elseif (!empty($order?->shipping_cost_subsidy) && (float)$order->shipping_cost_subsidy > 0) {
+        $shippingSubsidy = (float)$order->shipping_cost_subsidy;
+    } elseif (!empty($orderMeta['shipping_cost_subsidy']) && (float)$orderMeta['shipping_cost_subsidy'] > 0) {
+        $shippingSubsidy = (float)$orderMeta['shipping_cost_subsidy'];
+    } elseif (!empty($orderMeta['shipping_subsidy']) && (float)$orderMeta['shipping_subsidy'] > 0) {
+        $shippingSubsidy = (float)$orderMeta['shipping_subsidy'];
+    } elseif (!empty($orderMeta['shipping_discount']) && (float)$orderMeta['shipping_discount'] > 0) {
+        $shippingSubsidy = (float)$orderMeta['shipping_discount'];
+    }
+
+    // 4. Product Voucher Discount & Voucher Nominal
+    $productVoucherDiscount = (float) ($orderMeta['product_voucher_discount'] ?? 0);
+    $voucherNominal = (float) ($order?->voucher_nominal ?? ($orderMeta['voucher_discount'] ?? 0));
+
+    if ($productVoucherDiscount <= 0 && $voucherNominal > 0) {
+        $productVoucherDiscount = max(0, $voucherNominal - $shippingSubsidy);
+    }
+
+    if ($order?->voucher_id && method_exists($order, 'voucher') && !$order->relationLoaded('voucher')) {
+        $order->load('voucher');
+    }
+
+    if ($productVoucherDiscount <= 0 && $shippingSubsidy <= 0 && $order?->voucher) {
+        $vModel = $order->voucher;
+        $calculatedVal = (float) $vModel->calculateDiscountValue($originalCartTotal, $shippingCost);
+        if ((int) $vModel->type === 3) {
+            $shippingSubsidy = min($calculatedVal, $shippingCost);
+        } else {
+            $productVoucherDiscount = min($calculatedVal, $originalCartTotal);
+        }
+    }
+    $shippingSubsidy = min($shippingSubsidy, $shippingCost);
+
+    // 5. Resolve Voucher Codes
+    $shippingVoucherCode = null;
+    $productVoucherCode = null;
+
+    if (!empty($orderMeta['applied_vouchers'])) {
+        foreach ($orderMeta['applied_vouchers'] as $av) {
+            if (!empty($av['is_shipping'])) {
+                $shippingVoucherCode = $av['code'] ?? ($av['voucher']['code'] ?? null);
+                if ($shippingSubsidy <= 0 && !empty($av['discount'])) {
+                    $shippingSubsidy = min((float) $av['discount'], $shippingCost);
+                }
+            } else {
+                $productVoucherCode = $av['code'] ?? ($av['voucher']['code'] ?? null);
+                if ($productVoucherDiscount <= 0 && !empty($av['discount'])) {
+                    $productVoucherDiscount = (float) $av['discount'];
+                }
+            }
+        }
+    }
+    if (!$shippingVoucherCode && !empty($orderMeta['voucher_codes'])) {
+        foreach ($orderMeta['voucher_codes'] as $vc) {
+            if (str_contains(strtoupper($vc), 'ONGKIR') || str_contains(strtoupper($vc), 'SHIP') || str_contains(strtoupper($vc), 'FREE')) {
+                $shippingVoucherCode = $vc;
+                break;
+            }
+        }
+    }
+    if (empty($productVoucherCode) && !empty($orderMeta['voucher_codes'])) {
+        $productVoucherCode = collect($orderMeta['voucher_codes'])->filter(fn($c) => !str_contains(strtoupper($c), 'ONGKIR') && !str_contains(strtoupper($c), 'SHIP'))->first();
+    }
+    if (empty($productVoucherCode) && !empty($orderMeta['voucher_code'])) {
+        $productVoucherCode = $orderMeta['voucher_code'];
+    }
+    if (empty($productVoucherCode) && $order?->voucher && (int)$order->voucher->type !== 3) {
+        $productVoucherCode = $order->voucher->code;
+    }
+    if (empty($shippingVoucherCode) && $order?->voucher && (int)$order->voucher->type === 3) {
+        $shippingVoucherCode = $order->voucher->code;
+    }
+
+    $shippingServiceName = $orderMeta['shipping_service_name'] ?? null;
+    $courierDisplayName = strtoupper($orderMeta['courier'] ?? ($order?->courier?->name ?? 'Kurir'));
+    if ($shippingServiceName) {
+        $courierDisplayName .= ' (' . $shippingServiceName . ')';
+    }
+
+    // 6. Transaction Fee & Unified Final Total (ALWAYS mathematically consistent)
+    $transactionFee = (float) ($order?->transaction_fee ?? 0);
+    $expectedNetTotal = max(0, $originalCartTotal - $staticPromoDiscount - $priceProductSettingDiscount - $productVoucherDiscount) + max(0, $shippingCost - $shippingSubsidy) + $transactionFee;
+
+    $total = ($expectedNetTotal > 0) ? $expectedNetTotal : (float) ($order?->total ?? 0);
+    $orderFinalTotal = $total;
+
+    $status = (int)($order?->status ?? 1);
+    $paymentStatus = (int)($order?->payment_status ?? 0);
+    $isPaid = $order?->isPaymentPaid() ?? (($paymentStatus === 1 || $paymentStatus === 2 || $status >= \App\Models\Frontend\Order::STATUS_PROCESSING) && $status !== \App\Models\Frontend\Order::STATUS_CANCELLED);
+    $statusLabel = $isPaid ? 'Sudah Dibayar (Lunas)' : 'Menunggu Pembayaran';
+    $statusBadge = $isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-100 text-yellow-700';
+
+    $paymentStartedAt = !empty($orderMeta['payment_started_at']) 
+        ? \Carbon\Carbon::parse($orderMeta['payment_started_at']) 
         : ($order?->created_at ?? now());
     $expireAt = (clone $paymentStartedAt)->addHours(24);
     $remainingSeconds = max(0, (int) now()->diffInSeconds($expireAt, false));
@@ -950,95 +1049,6 @@
                             </div>
                         @endforeach
                     </div>
-
-                    @php
-                        $orderMeta = is_array($order?->meta) ? $order->meta : (json_decode($order?->meta ?? '[]', true) ?: []);
-                        
-                        $originalCartTotal = (float) ($orderMeta['original_cart_total'] ?? 0);
-                        if ($originalCartTotal <= 0) {
-                            $originalCartTotal = (float) collect($items)->sum(function($it) {
-                                $meta = is_array($it->meta) ? $it->meta : (json_decode($it->meta ?? '[]', true) ?: []);
-                                $unitP = (float) ($it->unit_price ?? $meta['original_price'] ?? $it->sell_price ?? 0);
-                                return $unitP * (int) ($it->quantity ?? 1);
-                            });
-                        }
-                        if ($originalCartTotal <= 0) {
-                            $originalCartTotal = (float) ($order?->subtotal ?? 0);
-                        }
-
-                        $priceProductSettingDiscount = (float) ($orderMeta['price_product_setting_discount'] ?? 0);
-                        $staticPromoDiscount = (float) ($orderMeta['total_static_discount'] ?? 0);
-                        if ($staticPromoDiscount <= 0 && !empty($orderMeta['promo_discount'])) {
-                            $staticPromoDiscount = max(0, (float) $orderMeta['promo_discount'] - $priceProductSettingDiscount);
-                        }
-                        
-                        $shippingSubsidy = 0.0;
-                        if (!empty($orderMeta['shipping_voucher_discount']) && (float)$orderMeta['shipping_voucher_discount'] > 0) {
-                            $shippingSubsidy = (float)$orderMeta['shipping_voucher_discount'];
-                        } elseif (!empty($order?->shipping_cost_subsidy) && (float)$order->shipping_cost_subsidy > 0) {
-                            $shippingSubsidy = (float)$order->shipping_cost_subsidy;
-                        } elseif (!empty($orderMeta['shipping_cost_subsidy']) && (float)$orderMeta['shipping_cost_subsidy'] > 0) {
-                            $shippingSubsidy = (float)$orderMeta['shipping_cost_subsidy'];
-                        } elseif (!empty($orderMeta['shipping_subsidy']) && (float)$orderMeta['shipping_subsidy'] > 0) {
-                            $shippingSubsidy = (float)$orderMeta['shipping_subsidy'];
-                        } elseif (!empty($orderMeta['shipping_discount']) && (float)$orderMeta['shipping_discount'] > 0) {
-                            $shippingSubsidy = (float)$orderMeta['shipping_discount'];
-                        }
-
-                        $shippingVoucherCode = null;
-                        if (!empty($orderMeta['applied_vouchers'])) {
-                            foreach ($orderMeta['applied_vouchers'] as $av) {
-                                if (!empty($av['is_shipping'])) {
-                                    $shippingVoucherCode = $av['code'] ?? ($av['voucher']['code'] ?? null);
-                                    if ($shippingSubsidy <= 0 && !empty($av['discount'])) {
-                                        $shippingSubsidy = (float) $av['discount'];
-                                    }
-                                    break;
-                                }
-                            }
-                        }
-                        if (!$shippingVoucherCode && !empty($orderMeta['voucher_codes'])) {
-                            foreach ($orderMeta['voucher_codes'] as $vc) {
-                                if (str_contains(strtoupper($vc), 'ONGKIR') || str_contains(strtoupper($vc), 'SHIP') || str_contains(strtoupper($vc), 'FREE')) {
-                                    $shippingVoucherCode = $vc;
-                                    break;
-                                }
-                            }
-                        }
-
-                        $productVoucherDiscount = (float) ($orderMeta['product_voucher_discount'] ?? 0);
-                        $voucherNominal = (float) ($order?->voucher_nominal ?? ($orderMeta['voucher_discount'] ?? 0));
-                        
-                        if ($productVoucherDiscount <= 0 && $voucherNominal > 0) {
-                            $productVoucherDiscount = max(0, $voucherNominal - $shippingSubsidy);
-                        }
-                        
-                        $productVoucherCode = null;
-                        if (!empty($orderMeta['applied_vouchers'])) {
-                            $appliedProductVouchers = collect($orderMeta['applied_vouchers'])->filter(fn($av) => empty($av['is_shipping']));
-                            $productVoucherCode = $appliedProductVouchers->pluck('code')->first() ?? $appliedProductVouchers->pluck('voucher.code')->first();
-                        }
-                        if (empty($productVoucherCode) && !empty($orderMeta['voucher_codes'])) {
-                            $productVoucherCode = collect($orderMeta['voucher_codes'])->filter(fn($c) => !str_contains(strtoupper($c), 'ONGKIR') && !str_contains(strtoupper($c), 'SHIP'))->first();
-                        }
-                        if (empty($productVoucherCode) && !empty($orderMeta['voucher_code'])) {
-                            $productVoucherCode = $orderMeta['voucher_code'];
-                        }
-
-                        $shippingCost = (float) ($order?->shipping_cost ?? ($orderMeta['shipping_cost'] ?? 0));
-                        $shippingServiceName = $orderMeta['shipping_service_name'] ?? null;
-                        $courierDisplayName = strtoupper($orderMeta['courier'] ?? ($order?->courier?->name ?? 'Kurir'));
-                        if ($shippingServiceName) {
-                            $courierDisplayName .= ' (' . $shippingServiceName . ')';
-                        }
-
-                        $transactionFee = (float) ($order?->transaction_fee ?? 0);
-                        $expectedNetTotal = max(0, $originalCartTotal - $staticPromoDiscount - $priceProductSettingDiscount - $productVoucherDiscount) + max(0, $shippingCost - $shippingSubsidy) + $transactionFee;
-                        $orderFinalTotal = (float) ($order?->total ?? 0);
-                        if ($orderFinalTotal <= 0 || ($expectedNetTotal > 0 && ($expectedNetTotal - $orderFinalTotal) >= ($staticPromoDiscount - 1) && $staticPromoDiscount > 0)) {
-                            $orderFinalTotal = $expectedNetTotal;
-                        }
-                    @endphp
 
                     <!-- Summary / Sinkronisasi Total Pesanan -->
                     <div class="mt-6 pt-5 border-t border-dashed border-gray-200 space-y-2.5 text-xs sm:text-sm">

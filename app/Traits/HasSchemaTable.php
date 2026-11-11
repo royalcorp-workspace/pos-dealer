@@ -90,9 +90,14 @@ trait HasSchemaTable
             $driver = config('database.default') === 'pgsql' ? 'pgsql' : null;
         }
 
+        // If the table is already an alias (e.g. laravel_reserved_0), contains ' as ', or already contains a schema dot, do not prefix
+        if (str_starts_with($table, 'laravel_reserved_') || str_contains($table, ' as ') || str_contains($table, '.')) {
+            return $table;
+        }
+
         if ($driver === 'pgsql') {
             $schema = $this->getModelSchema();
-            if (!empty($schema) && !str_contains($table, '.')) {
+            if (!empty($schema)) {
                 return "{$schema}.{$table}";
             }
         }

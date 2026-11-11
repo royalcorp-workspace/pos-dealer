@@ -681,10 +681,59 @@ class CheckoutController extends Controller
             }
         }
 
+        $existingCodes = [];
+        if ($request->filled('voucher_codes')) {
+            $existingCodes = array_filter(array_map('trim', explode(',', (string)$request->voucher_codes)));
+        } elseif ($request->filled('voucher_code')) {
+            $existingCodes = [trim((string)$request->voucher_code)];
+        } elseif (!empty(session('selected_voucher_codes'))) {
+            $existingCodes = (array)session('selected_voucher_codes');
+        } elseif (!empty($buffer?->meta['voucher_codes'])) {
+            $existingCodes = (array)$buffer->meta['voucher_codes'];
+        }
+
+        $appliedVouchers = [];
+        $savedVoucherCodes = [];
+        $appliedProductVoucherDiscount = 0.0;
+        $appliedShippingVoucherDiscount = 0.0;
+        $appliedTotalVoucherDiscount = 0.0;
+        $primaryVoucherModel = null;
+        $appliedVoucherIds = [];
+
+        if (!empty($existingCodes)) {
+            $voucherCalc = $this->calculateVoucherDiscount($existingCodes, $cart, $originalCartTotal, $shippingCost, $request->email);
+            if (!empty($voucherCalc['vouchers'])) {
+                $appliedProductVoucherDiscount = (float)($voucherCalc['product_voucher_discount'] ?? 0);
+                $appliedShippingVoucherDiscount = (float)($voucherCalc['shipping_voucher_discount'] ?? 0);
+                $appliedTotalVoucherDiscount = (float)($voucherCalc['discount'] ?? 0);
+                $savedVoucherCodes = collect($voucherCalc['vouchers'])->map(fn($v) => strtoupper($v['voucher']?->code ?? ($v['code'] ?? '')))->filter()->values()->all();
+                
+                foreach ($voucherCalc['vouchers'] as $av) {
+                    $vModel = $av['voucher'] ?? null;
+                    $appliedVouchers[] = [
+                        'id' => $vModel?->id,
+                        'voucher' => [
+                            'id' => $vModel?->id,
+                            'code' => $vModel?->code ?? '',
+                            'title' => $vModel?->title ?? '',
+                        ],
+                        'code' => $vModel?->code ?? '',
+                        'title' => $vModel?->title ?? '',
+                        'discount' => (float)($av['discount'] ?? 0),
+                        'is_shipping' => !empty($av['is_shipping']),
+                        'discount_formatted' => 'Rp ' . number_format((float)($av['discount'] ?? 0), 0, ',', '.'),
+                    ];
+                }
+                $primaryVoucherModel = collect($voucherCalc['vouchers'])->first(fn($v) => empty($v['is_shipping']))['voucher'] 
+                    ?? ($voucherCalc['primary'] ?? ($voucherCalc['vouchers'][0]['voucher'] ?? null));
+                $appliedVoucherIds = collect($voucherCalc['vouchers'])->map(fn($v) => $v['voucher']?->id ?? null)->filter()->values()->all();
+            }
+        }
+
         $dbSubtotal = $originalCartTotal;
-        $dbDiscount = $totalPromoDiscount;
+        $dbDiscount = $totalPromoDiscount + $appliedProductVoucherDiscount;
         $actualShippingCost = $shippingCost;
-        $dbTotal = max(0, $originalCartTotal - $totalPromoDiscount) + $actualShippingCost;
+        $dbTotal = max(0, $originalCartTotal - $dbDiscount) + max(0, $actualShippingCost - $appliedShippingVoucherDiscount);
 
         $shippingCalc = $this->calculateShippingDetails($request->courier, (string) ($finalSubDistrictId ?? $subDistrictId ?? ''), $cart);
         $resolvedEtaLabel = $request->input('shipping_eta_label') ?: ($shippingCalc['eta_label'] ?? null);
@@ -714,14 +763,15 @@ class CheckoutController extends Controller
             'shipping_service_name' => $resolvedServiceName,
             'shipping_service_code' => $resolvedServiceCode,
             'courier_service_type' => $resolvedServiceCode,
-            'applied_vouchers' => [],
-            'voucher_codes' => [],
-            'voucher_code' => '',
-            'voucher_id' => null,
-            'voucher_ids' => [],
-            'voucher_discount' => 0,
-            'product_voucher_discount' => 0,
-            'shipping_voucher_discount' => 0,
+            'applied_vouchers' => $appliedVouchers,
+            'voucher_codes' => $savedVoucherCodes,
+            'voucher_code' => implode(',', $savedVoucherCodes),
+            'voucher_id' => $primaryVoucherModel?->id,
+            'voucher_ids' => $appliedVoucherIds,
+            'voucher_discount' => $appliedTotalVoucherDiscount,
+            'product_voucher_discount' => $appliedProductVoucherDiscount,
+            'shipping_voucher_discount' => $appliedShippingVoucherDiscount,
+            'shipping_cost_subsidy' => $appliedShippingVoucherDiscount,
             'promo_discount' => $totalPromoDiscount,
             'total_static_discount' => $totalStaticDiscount,
             'price_product_setting_discount' => $priceProductSettingDiscount,
@@ -739,10 +789,10 @@ class CheckoutController extends Controller
             'discount' => $dbDiscount,
             'total' => $dbTotal,
             'courier_id' => $courierModel?->id,
-            'voucher_id' => null,
-            'voucher_nominal' => 0,
+            'voucher_id' => $primaryVoucherModel?->id,
+            'voucher_nominal' => $appliedTotalVoucherDiscount,
             'shipping_cost' => $shippingCost,
-            'shipping_cost_subsidy' => 0,
+            'shipping_cost_subsidy' => $appliedShippingVoucherDiscount,
             'shipping_addresses_id' => $shippingAddressesId,
             'meta' => $bufferMeta,
         ]);
@@ -822,20 +872,20 @@ class CheckoutController extends Controller
             'promo_discount' => $totalPromoDiscount,
             'total_static_discount' => $totalStaticDiscount,
             'price_product_setting_discount' => $priceProductSettingDiscount,
-            'product_voucher_discount' => 0,
-            'shipping_voucher_discount' => 0,
-            'shipping_cost_subsidy' => 0,
-            'applied_vouchers' => [],
+            'product_voucher_discount' => $appliedProductVoucherDiscount,
+            'shipping_voucher_discount' => $appliedShippingVoucherDiscount,
+            'shipping_cost_subsidy' => $appliedShippingVoucherDiscount,
+            'applied_vouchers' => $appliedVouchers,
             'subtotal' => $dbSubtotal,
-            'voucher_discount' => 0,
-            'total_discount' => $totalPromoDiscount,
+            'voucher_discount' => $appliedTotalVoucherDiscount,
+            'total_discount' => $dbDiscount,
             'discount' => $dbDiscount,
             'total' => $dbTotal,
             'transaction_fee' => 0.0,
-            'voucher_code' => '',
-            'voucher_codes' => [],
-            'voucher_id' => null,
-            'voucher_ids' => [],
+            'voucher_code' => implode(',', $savedVoucherCodes),
+            'voucher_codes' => $savedVoucherCodes,
+            'voucher_id' => $primaryVoucherModel?->id,
+            'voucher_ids' => $appliedVoucherIds,
             'items' => $itemsForOrderData,
             'resolved_items' => $resolvedItems,
         ];
@@ -851,7 +901,7 @@ class CheckoutController extends Controller
             'shipping_cost' => $shippingCost,
             'selected_address_id' => $addressId,
         ]);
-        Session::put('selected_voucher_codes', []);
+        Session::put('selected_voucher_codes', $savedVoucherCodes);
         Session::put('order_data', $orderData);
         Session::put('checkout_data', $orderData);
 
@@ -1496,6 +1546,34 @@ class CheckoutController extends Controller
             $buffer->save();
         }
 
+        $existingOrderId = $orderData['id'] ?? session()->get('last_created_order_id') ?? session()->get('thankyou_order_id');
+        if ($existingOrderId) {
+            $existingOrder = $this->getOrderFromIdentifier($existingOrderId);
+            if ($existingOrder && !$existingOrder->isPaymentPaid() && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+                $existingOrder->voucher_id = $primaryModel?->id;
+                $existingOrder->voucher_nominal = $totalVoucherDiscount;
+                $existingOrder->discount = $totalDiscount;
+                $existingOrder->shipping_cost_subsidy = $shippingVoucherDiscount;
+                $existingOrder->total = max(0, (float)$existingOrder->subtotal - (float)$totalDiscount) + max(0, (float)$existingOrder->shipping_cost - (float)$shippingVoucherDiscount) + (float)($existingOrder->transaction_fee ?? 0);
+                $oMeta = is_array($existingOrder->meta) ? $existingOrder->meta : (json_decode($existingOrder->meta ?? '[]', true) ?: []);
+                $oMeta['applied_vouchers'] = $formattedApplied;
+                $oMeta['voucher_codes'] = $newCodes;
+                $oMeta['voucher_code'] = implode(',', $newCodes);
+                $oMeta['voucher_id'] = $primaryModel?->id;
+                $oMeta['voucher_ids'] = $appliedVoucherIds;
+                $oMeta['product_voucher_discount'] = $productVoucherDiscount;
+                $oMeta['shipping_voucher_discount'] = $shippingVoucherDiscount;
+                $oMeta['shipping_cost_subsidy'] = $shippingVoucherDiscount;
+                $oMeta['voucher_discount'] = $totalVoucherDiscount;
+                $oMeta['original_cart_total'] = $cartTotal;
+                $oMeta['promo_discount'] = $staticPromoDiscount + $priceSettingDiscount;
+                $oMeta['total_static_discount'] = $staticPromoDiscount;
+                $oMeta['price_product_setting_discount'] = $priceSettingDiscount;
+                $existingOrder->meta = $oMeta;
+                $existingOrder->save();
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => "Voucher {$voucher->code} berhasil digunakan!",
@@ -1609,6 +1687,34 @@ class CheckoutController extends Controller
             $meta['price_product_setting_discount'] = $priceSettingDiscount;
             $buffer->meta = $meta;
             $buffer->save();
+        }
+
+        $existingOrderId = $orderData['id'] ?? session()->get('last_created_order_id') ?? session()->get('thankyou_order_id');
+        if ($existingOrderId) {
+            $existingOrder = $this->getOrderFromIdentifier($existingOrderId);
+            if ($existingOrder && !$existingOrder->isPaymentPaid() && (int)$existingOrder->status !== Order::STATUS_CANCELLED) {
+                $existingOrder->voucher_id = $primaryModel?->id;
+                $existingOrder->voucher_nominal = $totalVoucherDiscount;
+                $existingOrder->discount = $totalDiscount;
+                $existingOrder->shipping_cost_subsidy = $shippingVoucherDiscount;
+                $existingOrder->total = max(0, (float)$existingOrder->subtotal - (float)$totalDiscount) + max(0, (float)$existingOrder->shipping_cost - (float)$shippingVoucherDiscount) + (float)($existingOrder->transaction_fee ?? 0);
+                $oMeta = is_array($existingOrder->meta) ? $existingOrder->meta : (json_decode($existingOrder->meta ?? '[]', true) ?: []);
+                $oMeta['applied_vouchers'] = $formattedApplied;
+                $oMeta['voucher_codes'] = $newCodes;
+                $oMeta['voucher_code'] = implode(',', $newCodes);
+                $oMeta['voucher_id'] = $primaryModel?->id;
+                $oMeta['voucher_ids'] = $appliedVoucherIds;
+                $oMeta['product_voucher_discount'] = $productVoucherDiscount;
+                $oMeta['shipping_voucher_discount'] = $shippingVoucherDiscount;
+                $oMeta['shipping_cost_subsidy'] = $shippingVoucherDiscount;
+                $oMeta['voucher_discount'] = $totalVoucherDiscount;
+                $oMeta['original_cart_total'] = $cartTotal;
+                $oMeta['promo_discount'] = $staticPromoDiscount + $priceSettingDiscount;
+                $oMeta['total_static_discount'] = $staticPromoDiscount;
+                $oMeta['price_product_setting_discount'] = $priceSettingDiscount;
+                $existingOrder->meta = $oMeta;
+                $existingOrder->save();
+            }
         }
 
         return response()->json([
@@ -2066,6 +2172,15 @@ class CheckoutController extends Controller
                     }
                 }
 
+                $orderMeta['original_cart_total'] = $origCartTotal;
+                $orderMeta['total_static_discount'] = $staticPromoDisc;
+                $orderMeta['price_product_setting_discount'] = $tierVolumeDisc;
+                $orderMeta['product_voucher_discount'] = $prodVoucherDisc;
+                $orderMeta['promo_discount'] = $staticPromoDisc + $tierVolumeDisc;
+                $orderMeta['shipping_voucher_discount'] = $orderShippingSubsidy;
+                $orderMeta['shipping_cost_subsidy'] = $orderShippingSubsidy;
+                $orderMeta['voucher_discount'] = $prodVoucherDisc + $orderShippingSubsidy;
+
                 $order = Order::create([
                     'id' => Str::uuid()->toString(),
                     'order_number' => $orderNumber,
@@ -2256,12 +2371,95 @@ class CheckoutController extends Controller
                     }
                 }
             } else {
-                $meta = $order->meta ?? [];
+                $meta = is_array($order->meta) ? $order->meta : (json_decode($order->meta ?? '[]', true) ?: []);
                 $meta['payment_started_at'] = now()->toIso8601String();
                 if ($paymentMethodModel && is_array($paymentMethodModel->instructions)) {
                     $meta['payment_instructions'] = $paymentMethodModel->instructions;
                 }
+
+                // Sync voucher and discount data to existing order from session/buffer if updated
+                $resolvedVoucherId = $buffer?->voucher_id ?? ($sessionOrderData['voucher_id'] ?? $order->voucher_id);
+                $resolvedVoucherNominal = (float)($buffer?->voucher_nominal ?? ($sessionOrderData['voucher_discount'] ?? ($order->voucher_nominal ?? 0)));
+                $resolvedShippingSubsidy = (float)(
+                    $buffer?->shipping_cost_subsidy 
+                    ?? ($sessionOrderData['shipping_cost_subsidy'] 
+                    ?? ($sessionOrderData['shipping_voucher_discount'] 
+                    ?? ($bufferMeta['shipping_voucher_discount'] 
+                    ?? ($order->shipping_cost_subsidy ?? 0))))
+                );
+                $resolvedProductVoucherDiscount = (float)(
+                    $bufferMeta['product_voucher_discount'] 
+                    ?? ($sessionOrderData['product_voucher_discount'] 
+                    ?? ($meta['product_voucher_discount'] ?? 0))
+                );
+                $resolvedStaticPromoDisc = (float)(
+                    $bufferMeta['total_static_discount'] 
+                    ?? ($sessionOrderData['total_static_discount'] 
+                    ?? ($bufferMeta['promo_discount'] 
+                    ?? ($sessionOrderData['promo_discount'] 
+                    ?? ($meta['total_static_discount'] ?? ($meta['promo_discount'] ?? 0)))))
+                );
+                $resolvedPriceSettingDiscount = (float)(
+                    $bufferMeta['price_product_setting_discount'] 
+                    ?? ($sessionOrderData['price_product_setting_discount'] 
+                    ?? ($meta['price_product_setting_discount'] ?? 0))
+                );
+
+                $resolvedTotalDiscount = $resolvedStaticPromoDisc + $resolvedPriceSettingDiscount + $resolvedProductVoucherDiscount;
+                if ($resolvedTotalDiscount <= 0 && $resolvedVoucherNominal > 0) {
+                    $resolvedTotalDiscount = $resolvedVoucherNominal;
+                }
+
+                $order->voucher_id = $resolvedVoucherId;
+                $order->voucher_nominal = $resolvedVoucherNominal;
+                $order->discount = $resolvedTotalDiscount;
+                $order->shipping_cost_subsidy = min($resolvedShippingSubsidy, (float)$order->shipping_cost);
+
+                $meta['applied_vouchers'] = !empty($appliedVouchers) ? $appliedVouchers : ($meta['applied_vouchers'] ?? []);
+                $meta['voucher_codes'] = $bufferMeta['voucher_codes'] ?? ($sessionOrderData['voucher_codes'] ?? ($meta['voucher_codes'] ?? []));
+                $meta['voucher_code'] = $bufferMeta['voucher_code'] ?? ($sessionOrderData['voucher_code'] ?? ($meta['voucher_code'] ?? ''));
+                $meta['voucher_id'] = $resolvedVoucherId;
+                $meta['product_voucher_discount'] = $resolvedProductVoucherDiscount;
+                $meta['shipping_voucher_discount'] = $order->shipping_cost_subsidy;
+                $meta['shipping_cost_subsidy'] = $order->shipping_cost_subsidy;
+                $meta['voucher_discount'] = $resolvedVoucherNominal;
+                $meta['promo_discount'] = $resolvedStaticPromoDisc + $resolvedPriceSettingDiscount;
+                $meta['total_static_discount'] = $resolvedStaticPromoDisc;
+                $meta['price_product_setting_discount'] = $resolvedPriceSettingDiscount;
+                if (!empty($bufferMeta['original_cart_total'])) {
+                    $meta['original_cart_total'] = $bufferMeta['original_cart_total'];
+                } elseif (!empty($sessionOrderData['original_cart_total'])) {
+                    $meta['original_cart_total'] = $sessionOrderData['original_cart_total'];
+                }
+
                 $order->meta = $meta;
+
+                // Sync VoucherUsage for existing order if not already recorded
+                if (!empty($meta['applied_vouchers'])) {
+                    foreach ($meta['applied_vouchers'] as $appliedVoucher) {
+                        $voucherIdToUse = $appliedVoucher['voucher']['id'] ?? ($appliedVoucher['voucher']->id ?? ($appliedVoucher['id'] ?? null));
+                        $appliedVoucherModel = $voucherIdToUse ? \App\Models\Frontend\Promo\Voucher::find($voucherIdToUse) : null;
+                        if (!$appliedVoucherModel && !empty($appliedVoucher['code'])) {
+                            $appliedVoucherModel = \App\Models\Frontend\Promo\Voucher::where('code', $appliedVoucher['code'])->first();
+                        }
+                        if ($appliedVoucherModel) {
+                            $existingUsage = VoucherUsage::where('order_id', $order->id)
+                                ->where('voucher_id', $appliedVoucherModel->id)
+                                ->first();
+                            if (!$existingUsage) {
+                                $resolvedUsageUserId = $userId ?: ($order->customer?->user_id ?: ($order->customer?->id ?: null));
+                                VoucherUsage::create([
+                                    'id' => Str::uuid(),
+                                    'voucher_id' => $appliedVoucherModel->id,
+                                    'user_id' => $resolvedUsageUserId,
+                                    'order_id' => $order->id,
+                                    'discount_amount' => $appliedVoucher['discount'] ?? 0,
+                                ]);
+                                $appliedVoucherModel->increment('used_count');
+                            }
+                        }
+                    }
+                }
             }
 
             // Post-creation safety guarantee: ensure order has items in order_items table
@@ -2306,7 +2504,7 @@ class CheckoutController extends Controller
                 }
             }
 
-            $meta = $order->meta ?? [];
+            $meta = is_array($order->meta) ? $order->meta : (json_decode($order->meta ?? '[]', true) ?: []);
 
             $paymentType = (int) ($paymentMethodModel?->type ?? $categoryType ?? 0);
             if ($paymentType === 0 && \App\Models\PaymentMethod::isVaCodeOrAlias($paymentMethod)) {
@@ -2350,7 +2548,7 @@ class CheckoutController extends Controller
 
             $order->payment_method = $paymentMethodModel?->id ?? $paymentMethod;
             $order->transaction_fee = $charge;
-            $order->total = ((float)$order->subtotal - (float)$order->discount + (float)$order->shipping_cost - (float)($order->shipping_cost_subsidy ?? 0)) + $charge;
+            $order->total = max(0, (float)$order->subtotal - (float)$order->discount) + max(0, (float)$order->shipping_cost - (float)($order->shipping_cost_subsidy ?? 0)) + $charge;
             $meta['payment_method_id'] = $paymentMethodModel?->id;
             $meta['payment_method_code'] = $paymentMethodModel?->code ?? $paymentMethod;
             $meta['payment_method_name'] = $paymentMethodModel?->name ?? ($meta['payment_method_name'] ?? null);
