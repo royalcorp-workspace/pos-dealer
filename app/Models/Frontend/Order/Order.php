@@ -52,6 +52,13 @@ class Order extends Model
         'discount',
         'total',
         'notes',
+        'voucher_id',
+        'voucher_nominal',
+        'shipping_cost',
+        'shipping_cost_subsidy',
+        'shipping_addresses_id',
+        'transaction_fee',
+        'settlement_id',
         'meta',
         'creator',
         'editor',
@@ -408,5 +415,15 @@ class Order extends Model
             'pos' => 'storefront',
             default => 'language',
         };
+    }
+
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Promo\Voucher::class);
+    }
+
+    public function shippingAddressRelation(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\Frontend\Shipping\ShippingAddress::class, 'shipping_addresses_id');
     }
 }
