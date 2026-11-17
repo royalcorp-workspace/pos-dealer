@@ -50,6 +50,9 @@ class Order extends Model
         'payment_status',
         'settlement_id',
         'subtotal',
+        'dpp_amount',
+        'ppn_rate',
+        'ppn_amount',
         'tax',
         'discount',
         'total',
@@ -75,6 +78,9 @@ class Order extends Model
             'status' => 'integer',
             'payment_status' => 'integer',
             'subtotal' => 'decimal:2',
+            'dpp_amount' => 'decimal:2',
+            'ppn_rate' => 'decimal:2',
+            'ppn_amount' => 'decimal:2',
             'tax' => 'decimal:2',
             'discount' => 'decimal:2',
             'total' => 'decimal:2',
@@ -568,5 +574,50 @@ class Order extends Model
             'pos' => 'storefront',
             default => 'language',
         };
+    }
+
+    /**
+     * Dapatkan Sub Total Produk Bersih (setelah Diskon Promo & Voucher)
+     * Formula Excel "Cara Hitung PPN Website.xlsx":
+     * Sub Total = Harga Produk - Diskon - Voucher
+     */
+    public function getNetProductSubtotal(): float
+    {
+        $hargaProduk = (float) ($this->subtotal ?? 0);
+        $diskon = (float) ($this->discount ?? 0);
+        return max(0.0, round($hargaProduk - $diskon, 2));
+    }
+
+    /**
+     * Dapatkan total nilai Sebelum PPN (DPP)
+     * Formula Excel: DPP = Sub Total / (1 + (ppn_rate / 100))
+     */
+    public function getDppAmountAttribute($value): float
+    {
+        $netSubtotal = $this->getNetProductSubtotal();
+        if ($netSubtotal <= 0) {
+            return 0.0;
+        }
+
+        $rate = (float) ($this->ppn_rate ?: 11.0);
+        if ($rate <= 0) {
+            return $netSubtotal;
+        }
+
+        return round($netSubtotal / (1 + ($rate / 100)), 2);
+    }
+
+    /**
+     * Dapatkan total nominal PPN
+     * Formula Excel: PPN = DPP * (ppn_rate / 100) atau Sub Total - DPP
+     */
+    public function getPpnAmountAttribute($value): float
+    {
+        $netSubtotal = $this->getNetProductSubtotal();
+        if ($netSubtotal <= 0) {
+            return 0.0;
+        }
+
+        return round($netSubtotal - $this->dpp_amount, 2);
     }
 }

@@ -1165,10 +1165,16 @@
                     </div>
                     <p class="text-xs sm:text-sm text-gray-600 leading-relaxed">{{ $fullAddress }}</p>
                     
-                    @if(!empty($order->notes))
-                        <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-2 text-xs text-gray-500">
-                            <i class="fa-solid fa-note-sticky text-brand-gold mt-0.5"></i>
-                            <p><strong>Catatan Pesanan:</strong> {{ $order->notes }}</p>
+                    @php
+                        $thankyouOrderNotes = $order->notes ?: ($order->meta['notes'] ?? ($order->meta['customer_notes'] ?? null));
+                    @endphp
+                    @if(!empty($thankyouOrderNotes))
+                        <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-2 text-xs text-gray-600">
+                            <i class="fa-solid fa-note-sticky text-brand-gold mt-0.5 shrink-0 text-[13px]"></i>
+                            <div>
+                                <strong class="text-brand-dark">Catatan Pesanan:</strong>
+                                <span class="italic text-gray-600 ml-1">"{{ $thankyouOrderNotes }}"</span>
+                            </div>
                         </div>
                     @endif
                 </div>
@@ -1208,13 +1214,6 @@
 
                     <!-- Quick Action Buttons -->
                     <div class="mt-6 pt-5 border-t border-gray-100 space-y-3 no-print">
-                        @if(!$isPaid && $status == 1)
-                            <button type="button" onclick="window.location.reload();" class="w-full py-3 px-4 text-center rounded-xl font-bold text-xs sm:text-sm bg-brand-dark hover:bg-brand-darker text-brand-gold hover:text-white transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2 cursor-pointer">
-                                <i class="fa-solid fa-arrows-rotate text-xs"></i>
-                                <span>Cek Status Pembayaran</span>
-                            </button>
-                        @endif
-
                         @if(session()->get('is_logged_in'))
                             <a href="{{ route('dashboard', ['tab' => 'orders']) }}" class="w-full py-2.5 px-4 text-center text-gray-700 bg-white hover:bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs transition-all shadow-2xs hover:shadow-sm flex items-center justify-center gap-2">
                                 <i class="fa-solid fa-receipt text-gray-400 text-xs"></i>

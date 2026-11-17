@@ -495,6 +495,16 @@
                             </label>
                             <input type="text" name="postal_code" value="{{ $defaultPostal }}" class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="12345">
                         </div>
+                        <div class="mt-4 pt-4 border-t border-gray-100">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-1.5 flex items-center justify-between gap-1.5">
+                                <span class="flex items-center gap-1.5">
+                                    <i class="fa-regular fa-note-sticky text-brand-gold text-xs"></i> Catatan Pesanan
+                                </span>
+                                <span class="text-[11px] font-normal text-gray-400 capitalize">Opsional</span>
+                            </label>
+                            <textarea name="notes" id="checkout-notes" rows="2" maxlength="500" class="w-full px-4 py-3 bg-gray-50/50 border border-gray-200 rounded-xl focus:outline-none focus:border-brand-gold focus:ring-2 focus:ring-brand-gold/20 focus:bg-white text-sm transition-all" placeholder="Tulis catatan untuk pesanan Anda (contoh: patokan rumah, titipkan di pos satpam, waktu pengiriman, dll)">{{ old('notes', $form['notes'] ?? ($checkoutFormData['notes'] ?? '')) }}</textarea>
+                            <p class="text-[11px] text-gray-400 mt-1">Catatan ini akan diteruskan ke tim gudang dan kurir pengiriman.</p>
+                        </div>
                     </div>
 
                     <!-- Section 3: Courier / Shipping Options -->
@@ -1042,6 +1052,9 @@
                 const cityInput = document.querySelector('input[name="city"]') || document.getElementById('checkout-city-input');
                 if (cityInput) { cityInput.value = ''; }
 
+                const notesInput = document.querySelector('textarea[name="notes"]');
+                if (notesInput) { notesInput.value = ''; }
+
                 // 2. Reset dropdown bertingkat Provinsi, Kota, dan Kecamatan
                 const provSelect = document.getElementById('checkout-province');
                 const citySelect = document.getElementById('checkout-city');
@@ -1115,7 +1128,7 @@
                     }, 200);
                 }
             }
-            const formInputs = document.querySelectorAll('input[name="email"], input[name="name"], input[name="phone"], select[name="province_id"], select[name="city_id"], select[name="sub_district_id"], textarea[name="address"], input[name="postal_code"]');
+            const formInputs = document.querySelectorAll('input[name="email"], input[name="name"], input[name="phone"], select[name="province_id"], select[name="city_id"], select[name="sub_district_id"], textarea[name="address"], input[name="postal_code"], textarea[name="notes"]');
             
             // 1. Muat ulang data dari sessionStorage jika ada (kecuali jika ada error validasi dari server)
             const savedFormData = JSON.parse(sessionStorage.getItem('checkout_form_data') || '{}');

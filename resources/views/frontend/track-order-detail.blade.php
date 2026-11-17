@@ -245,6 +245,19 @@
                         <span class="text-2xl font-extrabold text-brand-gold-dark">Rp {{ number_format($total, 0, ',', '.') }}</span>
                     </div>
                 </div>
+
+                @php
+                    $trackOrderNotes = $order->notes ?: ($order->meta['notes'] ?? ($order->meta['customer_notes'] ?? null));
+                @endphp
+                @if(!empty($trackOrderNotes))
+                    <div class="p-4 bg-amber-50/50 border-t border-amber-100/80 flex items-start gap-2.5 text-xs text-gray-700">
+                        <i class="fa-regular fa-note-sticky text-brand-gold mt-0.5 text-sm shrink-0"></i>
+                        <div>
+                            <span class="font-bold text-brand-dark">Catatan Pesanan:</span>
+                            <span class="italic text-gray-600 ml-1">"{{ $trackOrderNotes }}"</span>
+                        </div>
+                    </div>
+                @endif
             </div>
 
             @if(!$isUnpaid)
