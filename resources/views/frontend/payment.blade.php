@@ -102,6 +102,19 @@
                         </div>
                     </div>
                     <p class="text-xs sm:text-sm text-gray-600 mt-1 leading-relaxed">{{ $fullAddressString }}</p>
+
+                    @php
+                        $paymentOrderNotes = $orderData['notes'] ?? ($orderData['customer_notes'] ?? (session()->get('checkout_form_data')['notes'] ?? null));
+                    @endphp
+                    @if(!empty($paymentOrderNotes))
+                        <div class="mt-3 pt-3 border-t border-gray-100 flex items-start gap-2 text-xs">
+                            <i class="fa-regular fa-note-sticky text-brand-gold mt-0.5 shrink-0 text-[13px]"></i>
+                            <div>
+                                <span class="font-bold text-brand-dark">Catatan Pesanan:</span>
+                                <span class="italic text-gray-600 ml-1">"{{ $paymentOrderNotes }}"</span>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             @endif
 

@@ -325,7 +325,7 @@ class CheckoutController extends Controller
 
     public function store(Request $request)
     {
-        $formFields = $request->only(['name', 'email', 'phone', 'address', 'postal_code', 'courier', 'voucher_code', 'selected_address_id', 'sub_district_id']);
+        $formFields = $request->only(['name', 'email', 'phone', 'address', 'postal_code', 'courier', 'voucher_code', 'selected_address_id', 'sub_district_id', 'notes']);
 
         $rawPhone = trim((string) $request->phone);
         $cleanPhone = ltrim(preg_replace('/[\s\-]/', '', $rawPhone), '+');
@@ -355,6 +355,7 @@ class CheckoutController extends Controller
             'voucher_code' => 'nullable|string|max:200',
             'voucher_codes' => 'nullable|string|max:500',
             'selected_address_id' => 'nullable|uuid|exists:addresses,id',
+            'notes' => 'nullable|string|max:1000',
             'item_notes' => 'nullable|array',
             'item_notes.*' => 'nullable|string|max:500',
         ], [
@@ -888,7 +889,16 @@ class CheckoutController extends Controller
             'voucher_ids' => $appliedVoucherIds,
             'items' => $itemsForOrderData,
             'resolved_items' => $resolvedItems,
+            'notes' => $request->input('notes'),
+            'customer_notes' => $request->input('notes'),
         ];
+
+        if ($buffer) {
+            $bufferMeta = is_array($buffer->meta) ? $buffer->meta : (json_decode($buffer->meta ?? '[]', true) ?: []);
+            $bufferMeta['notes'] = $request->input('notes');
+            $bufferMeta['customer_notes'] = $request->input('notes');
+            $buffer->update(['meta' => $bufferMeta]);
+        }
 
         Session::put('checkout_form_data', [
             'name' => $recipientName,
@@ -900,6 +910,7 @@ class CheckoutController extends Controller
             'courier' => $request->courier,
             'shipping_cost' => $shippingCost,
             'selected_address_id' => $addressId,
+            'notes' => $request->input('notes'),
         ]);
         Session::put('selected_voucher_codes', $savedVoucherCodes);
         Session::put('order_data', $orderData);
@@ -2172,6 +2183,17 @@ class CheckoutController extends Controller
                     }
                 }
 
+                $customerNotes = $sessionOrderData['notes'] 
+                    ?? (session()->get('checkout_form_data')['notes'] 
+                    ?? ($bufferMeta['notes'] 
+                    ?? ($sessionOrderData['customer_notes'] ?? null)));
+                if (is_string($customerNotes)) {
+                    $customerNotes = trim($customerNotes);
+                    if ($customerNotes === '') {
+                        $customerNotes = null;
+                    }
+                }
+
                 $orderMeta['original_cart_total'] = $origCartTotal;
                 $orderMeta['total_static_discount'] = $staticPromoDisc;
                 $orderMeta['price_product_setting_discount'] = $tierVolumeDisc;
@@ -2180,6 +2202,8 @@ class CheckoutController extends Controller
                 $orderMeta['shipping_voucher_discount'] = $orderShippingSubsidy;
                 $orderMeta['shipping_cost_subsidy'] = $orderShippingSubsidy;
                 $orderMeta['voucher_discount'] = $prodVoucherDisc + $orderShippingSubsidy;
+                $orderMeta['notes'] = $customerNotes;
+                $orderMeta['customer_notes'] = $customerNotes;
 
                 $order = Order::create([
                     'id' => Str::uuid()->toString(),
@@ -2196,7 +2220,7 @@ class CheckoutController extends Controller
                     'tax' => 0,
                     'discount' => $orderDiscount,
                     'total' => $orderTotal,
-                    'notes' => null,
+                    'notes' => $customerNotes,
                     'voucher_id' => $buffer?->voucher_id ?? ($sessionOrderData['voucher_id'] ?? null),
                     'voucher_nominal' => $buffer?->voucher_nominal ?? ($sessionOrderData['voucher_discount'] ?? 0),
                     'shipping_cost' => $orderShippingCost,
@@ -4298,6 +4322,8 @@ class CheckoutController extends Controller
             'voucher_codes' => $order->voucher ? [$order->voucher->code] : [],
             'voucher_id' => $order->voucher_id,
             'voucher_ids' => $order->voucher_id ? [$order->voucher_id] : [],
+            'notes' => $order->notes ?: ($order->meta['notes'] ?? ($order->meta['customer_notes'] ?? null)),
+            'customer_notes' => $order->notes ?: ($order->meta['notes'] ?? ($order->meta['customer_notes'] ?? null)),
             'items' => $items,
             'payment_method' => $order->payment_method,
             'payment_method_code' => $order->meta['payment_method_code'] ?? null,
