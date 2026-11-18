@@ -577,6 +577,36 @@ class Order extends Model
     }
 
     /**
+     * Status PPN Aktif
+     */
+    public function getIsPpnActiveAttribute(): bool
+    {
+        if (isset($this->attributes['is_ppn_active'])) {
+            return (bool) $this->attributes['is_ppn_active'];
+        }
+        if (isset($this->meta['is_ppn_active'])) {
+            return (bool) $this->meta['is_ppn_active'];
+        }
+        return (float) ($this->attributes['ppn_rate'] ?? 0) > 0;
+    }
+
+    /**
+     * Dapatkan tarif PPN order secara dinamis
+     */
+    public function getPpnRateAttribute($value): float
+    {
+        if (isset($this->attributes['is_ppn_active']) && !$this->attributes['is_ppn_active']) {
+            return 0.0;
+        }
+
+        if ($value !== null && $value !== '') {
+            return (float) $value;
+        }
+
+        return (float) config('services.tax.ppn_rate', 11.0);
+    }
+
+    /**
      * Dapatkan Sub Total Produk Bersih (setelah Diskon Promo & Voucher)
      * Formula Excel "Cara Hitung PPN Website.xlsx":
      * Sub Total = Harga Produk - Diskon - Voucher
@@ -599,7 +629,7 @@ class Order extends Model
             return 0.0;
         }
 
-        $rate = (float) ($this->ppn_rate ?: 11.0);
+        $rate = (float) $this->ppn_rate;
         if ($rate <= 0) {
             return $netSubtotal;
         }
@@ -615,6 +645,11 @@ class Order extends Model
     {
         $netSubtotal = $this->getNetProductSubtotal();
         if ($netSubtotal <= 0) {
+            return 0.0;
+        }
+
+        $rate = (float) $this->ppn_rate;
+        if ($rate <= 0) {
             return 0.0;
         }
 
