@@ -141,17 +141,11 @@ class SnapBiController extends Controller
                 }
             }
 
-            // Catat ke tabel payments
-            \App\Models\CreditMemo::create([
-                'id' => \Illuminate\Support\Str::uuid()->toString(),
-                'credit_memo_number' => 'CM-' . $order->order_number . '-' . rand(100, 999),
-                'order_id' => $order->id,
+            // Catat CreditMemo
+            $order->ensureCreditMemoRecorded([
                 'gateway' => 'espay',
                 'transaction_id' => $request->input('inquiryRequestId') ?? \Illuminate\Support\Str::uuid()->toString(),
-                'amount' => $order->total,
-                'status' => 'success',
                 'payload' => $request->all(),
-                'paid_at' => now(),
             ]);
 
             try {
@@ -258,16 +252,10 @@ class SnapBiController extends Controller
             }
 
             // Catat CreditMemo
-            \App\Models\CreditMemo::create([
-                'id' => \Illuminate\Support\Str::uuid()->toString(),
-                'credit_memo_number' => 'CM-QR-' . $order->order_number . '-' . rand(100, 999),
-                'order_id' => $order->id,
+            $order->ensureCreditMemoRecorded([
                 'gateway' => 'espay_qris',
                 'transaction_id' => $request->input('originalReferenceNo') ?? ($request->input('referenceNo') ?? \Illuminate\Support\Str::uuid()->toString()),
-                'amount' => $order->total,
-                'status' => 'success',
                 'payload' => $request->all(),
-                'paid_at' => now(),
             ]);
 
             try {

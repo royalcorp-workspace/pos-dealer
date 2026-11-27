@@ -2205,6 +2205,46 @@ class CheckoutController extends Controller
                 $orderMeta['notes'] = $customerNotes;
                 $orderMeta['customer_notes'] = $customerNotes;
 
+                // Hitung tarif PPN dinamis untuk Order dari item pertama yang memiliki konfigurasi PPN
+                $primaryOrderPpnRate = 0.0;
+                $hasPpnConfigured = false;
+                if (!empty($resolvedItems)) {
+                    foreach ($resolvedItems as $resolvedCandidate) {
+                        $cVarId = $resolvedCandidate['variant_id'] ?? null;
+                        $cProdId = $resolvedCandidate['item']['product_id'] ?? null;
+                        $cVar = $cVarId ? \App\Models\Frontend\ProductVariant::find($cVarId) : null;
+                        $cProd = $cProdId ? \App\Models\Frontend\Product::find($cProdId) : null;
+                        $cRate = $cVar?->ppn_rate ?? ($cProd?->ppn_rate ?? null);
+                        $cActive = $cVar?->is_ppn_active ?? ($cProd?->is_ppn_active ?? true);
+                        if ($cRate !== null) {
+                            $primaryOrderPpnRate = $cActive ? (float)$cRate : 0.0;
+                            $hasPpnConfigured = true;
+                            break;
+                        }
+                    }
+                } elseif (!empty($cart)) {
+                    foreach ($cart as $cItem) {
+                        $cVarId = $cItem['variant_id'] ?? null;
+                        $cProdId = $cItem['product_id'] ?? null;
+                        $cVar = $cVarId ? \App\Models\Frontend\ProductsCatalog\ProductVariant::find($cVarId) : null;
+                        $cProd = $cProdId ? \App\Models\Frontend\ProductsCatalog\Product::find($cProdId) : null;
+                        $cRate = $cVar?->ppn_rate ?? ($cProd?->ppn_rate ?? null);
+                        $cActive = $cVar?->is_ppn_active ?? ($cProd?->is_ppn_active ?? true);
+                        if ($cRate !== null) {
+                            $primaryOrderPpnRate = $cActive ? (float)$cRate : 0.0;
+                            $hasPpnConfigured = true;
+                            break;
+                        }
+                    }
+                }
+                if (!$hasPpnConfigured) {
+                    $primaryOrderPpnRate = (float) config('services.tax.ppn_rate', 11.0);
+                }
+
+                $netProductSubtotal = max(0.0, $orderSubtotal - $orderDiscount);
+                $orderDppAmount = $primaryOrderPpnRate > 0 ? round($netProductSubtotal / (1 + ($primaryOrderPpnRate / 100)), 2) : $netProductSubtotal;
+                $orderPpnAmount = round($netProductSubtotal - $orderDppAmount, 2);
+
                 $order = Order::create([
                     'id' => Str::uuid()->toString(),
                     'order_number' => $orderNumber,
@@ -2220,6 +2260,9 @@ class CheckoutController extends Controller
                     'tax' => 0,
                     'discount' => $orderDiscount,
                     'total' => $orderTotal,
+                    'dpp_amount' => $orderDppAmount,
+                    'ppn_rate' => $primaryOrderPpnRate,
+                    'ppn_amount' => $orderPpnAmount,
                     'notes' => $customerNotes,
                     'voucher_id' => $buffer?->voucher_id ?? ($sessionOrderData['voucher_id'] ?? null),
                     'voucher_nominal' => $buffer?->voucher_nominal ?? ($sessionOrderData['voucher_discount'] ?? 0),
@@ -2265,6 +2308,14 @@ class CheckoutController extends Controller
                         $itemMeta['discount_percent'] = $discountPercent;
                         $itemMeta['unit_discount_nominal'] = (int)$item['quantity'] > 0 ? round($productDiscountNominal / (int)$item['quantity'], 2) : 0;
 
+                        $varModel = $variantId ? \App\Models\Frontend\ProductVariant::find($variantId) : null;
+                        $prodModel = ($item['product_id'] ?? null) ? \App\Models\Frontend\Product::find($item['product_id']) : null;
+                        $itemRateRaw = $varModel?->ppn_rate ?? ($prodModel?->ppn_rate ?? $primaryOrderPpnRate);
+                        $itemActiveRaw = $varModel?->is_ppn_active ?? ($prodModel?->is_ppn_active ?? true);
+                        $itemPpnRate = $itemActiveRaw && (float)$itemRateRaw > 0 ? (float)$itemRateRaw : 0.0;
+                        $itemDppPrice = $itemPpnRate > 0 ? round($basePrice / (1 + ($itemPpnRate / 100)), 2) : $basePrice;
+                        $itemPpnAmount = round($basePrice - $itemDppPrice, 2);
+
                         OrderItem::create([
                             'id' => Str::uuid(),
                             'order_id' => $order->id,
@@ -2273,6 +2324,9 @@ class CheckoutController extends Controller
                             'name' => $itemName,
                             'quantity' => $item['quantity'],
                             'unit_price' => $basePrice,
+                            'dpp_price' => $itemDppPrice,
+                            'ppn_rate' => $itemPpnRate,
+                            'ppn_amount' => $itemPpnAmount,
                             'discount_nominal' => $productDiscountNominal,
                             'discount_percent' => $discountPercent,
                             'total' => $itemTotal,
@@ -2330,6 +2384,14 @@ class CheckoutController extends Controller
                         $discNom = max(0.0, $origSub - $itemTot);
                         $discPct = $origSub > 0 ? round(($discNom / $origSub) * 100, 2) : 0.0;
 
+                        $varModel = $variantId ? \App\Models\Frontend\ProductsCatalog\ProductVariant::find($variantId) : null;
+                        $prodModel = ($item['product_id'] ?? null) ? \App\Models\Frontend\ProductsCatalog\Product::find($item['product_id']) : null;
+                        $itemRateRaw = $varModel?->ppn_rate ?? ($prodModel?->ppn_rate ?? $primaryOrderPpnRate);
+                        $itemActiveRaw = $varModel?->is_ppn_active ?? ($prodModel?->is_ppn_active ?? true);
+                        $itemPpnRate = $itemActiveRaw && (float)$itemRateRaw > 0 ? (float)$itemRateRaw : 0.0;
+                        $itemDppPrice = $itemPpnRate > 0 ? round($basePrice / (1 + ($itemPpnRate / 100)), 2) : $basePrice;
+                        $itemPpnAmount = round($basePrice - $itemDppPrice, 2);
+
                         OrderItem::create([
                             'id' => Str::uuid(),
                             'order_id' => $order->id,
@@ -2338,6 +2400,9 @@ class CheckoutController extends Controller
                             'name' => $item['name'],
                             'quantity' => $qty,
                             'unit_price' => $basePrice,
+                            'dpp_price' => $itemDppPrice,
+                            'ppn_rate' => $itemPpnRate,
+                            'ppn_amount' => $itemPpnAmount,
                             'discount_nominal' => $discNom,
                             'discount_percent' => $discPct,
                             'total' => $itemTot,

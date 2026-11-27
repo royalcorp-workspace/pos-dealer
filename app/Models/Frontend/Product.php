@@ -134,4 +134,17 @@ class Product extends Model
     {
         return $this->price;
     }
+
+    public function getPpnRateAttribute($value): float
+    {
+        if (isset($this->attributes['is_ppn_active']) && !$this->attributes['is_ppn_active']) {
+            return 0.0;
+        }
+
+        if ($value !== null && $value !== '') {
+            return (float) $value;
+        }
+
+        return (float) config('services.tax.ppn_rate', 11.0);
+    }
 }
