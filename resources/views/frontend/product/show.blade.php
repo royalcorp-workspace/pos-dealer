@@ -897,24 +897,23 @@
                 @php
                     $rawWarranty = trim((string)($product->warranty_duration ?? ''));
                     $hasWarranty = !empty($rawWarranty);
-                    
-                    if ($hasWarranty) {
-                        $warrantyFormatted = is_numeric($rawWarranty) ? ($rawWarranty . ' ' . __('Tahun')) : $rawWarranty;
-                        $trustWarrantyTitle = __('Garansi Resmi');
-                        $trustWarrantySub = $warrantyFormatted;
-                        $specWarrantyText = "Resmi " . $warrantyFormatted;
-                    } else {
-                        $trustWarrantyTitle = __('Garansi');
-                        $trustWarrantySub = __('Tanpa Garansi');
-                        $specWarrantyText = __('Tidak Ada Garansi');
-                    }
+                    $warrantyFormatted = $hasWarranty ? (is_numeric($rawWarranty) ? ($rawWarranty . ' ' . __('Tahun')) : $rawWarranty) : null;
+                    $specWarrantyText = $hasWarranty ? ("Resmi " . $warrantyFormatted) : null;
                 @endphp
                 <div class="grid grid-cols-3 gap-2.5 mb-8 p-4 rounded-2xl bg-white border border-[#EFECE6] shadow-2xs">
-                    <div class="flex flex-col items-center text-center p-2">
-                        <i class="fa-solid fa-shield-halved text-brand-gold text-lg mb-1.5"></i>
-                        <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ $trustWarrantyTitle }}</span>
-                        <span class="text-[10px] text-gray-400 mt-0.5">{{ $trustWarrantySub }}</span>
-                    </div>
+                    @if($hasWarranty)
+                        <div class="flex flex-col items-center text-center p-2">
+                            <i class="fa-solid fa-shield-halved text-brand-gold text-lg mb-1.5"></i>
+                            <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ __('Garansi Resmi') }}</span>
+                            <span class="text-[10px] text-gray-400 mt-0.5">{{ $warrantyFormatted }}</span>
+                        </div>
+                    @else
+                        <div class="flex flex-col items-center text-center p-2">
+                            <i class="fa-solid fa-circle-check text-brand-gold text-lg mb-1.5"></i>
+                            <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ __('Produk Asli') }}</span>
+                            <span class="text-[10px] text-gray-400 mt-0.5">{{ __('100% Original') }}</span>
+                        </div>
+                    @endif
                     <div class="flex flex-col items-center text-center p-2 border-x border-gray-100">
                         <i class="fa-solid fa-truck-fast text-brand-gold text-lg mb-1.5"></i>
                         <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ __('Pengiriman') }}</span>
@@ -993,10 +992,12 @@
                                     <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Kategori') }}</dt>
                                     <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $categoryName }}</dd>
                                 </div>
-                                <div class="p-3 bg-gray-50 rounded-xl">
-                                    <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Garansi') }}</dt>
-                                    <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $specWarrantyText }}</dd>
-                                </div>
+                                @if($hasWarranty)
+                                    <div class="p-3 bg-gray-50 rounded-xl">
+                                        <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Garansi') }}</dt>
+                                        <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $specWarrantyText }}</dd>
+                                    </div>
+                                @endif
                                 <div class="p-3 bg-gray-50 rounded-xl">
                                     <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Ketersediaan') }}</dt>
                                     <dd id="spec-availability" class="mt-0.5 font-bold {{ $totalAvailableStock > 0 ? 'text-emerald-700' : 'text-red-600' }} text-sm">
