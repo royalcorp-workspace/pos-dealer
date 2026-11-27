@@ -330,10 +330,16 @@ class ProductCatalogController extends Controller
             $pA = is_string($rawA) ? json_decode($rawA, true) : $rawA;
             if (is_array($pA)) {
                 if (!empty($pA['_size_title'])) {
-                    $detectedSizeTitle = trim((string)$pA['_size_title']);
+                    $st = trim((string)$pA['_size_title']);
+                    if (!str_starts_with($st, '_')) {
+                        $detectedSizeTitle = $st;
+                    }
                 }
                 if (!empty($pA['_completeness_title'])) {
-                    $detectedCompletenessTitle = trim((string)$pA['_completeness_title']);
+                    $ct = trim((string)$pA['_completeness_title']);
+                    if (!str_starts_with($ct, '_')) {
+                        $detectedCompletenessTitle = $ct;
+                    }
                 }
                 if (isset($pA['_has_thickness'])) {
                     $hasExplicitThicknessFlag = true;
@@ -350,7 +356,11 @@ class ProductCatalogController extends Controller
             }
         }
         $sizeTitle = $detectedSizeTitle ?: 'Ukuran';
+        if (str_starts_with($sizeTitle, '_')) $sizeTitle = 'Ukuran';
         $completenessTitle = $detectedCompletenessTitle ?: 'Kelengkapan';
+        if (str_starts_with($completenessTitle, '_') || strcasecmp($completenessTitle, $sizeTitle) === 0) {
+            $completenessTitle = 'Kelengkapan';
+        }
         $isThicknessEnabled = $hasExplicitThicknessFlag ? $hasThicknessSetting : $hasThicknessSetting;
 
         // Determine if any variant is explicitly marked active (status = 1 / true)
@@ -382,7 +392,7 @@ class ProductCatalogController extends Controller
             
             $ignoredKeys = ['width', 'length', 'height', 'weight', 'status', '_size_title', '_completeness_title', '_has_thickness', 'image', 'image_url', 'thickness', 'tebal'];
             foreach ($variantAttributes as $key => $value) {
-                if (in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
+                if (str_starts_with($key, '_') || in_array(strtolower($key), $ignoredKeys) || in_array($key, $ignoredKeys) || empty($value)) {
                     continue;
                 }
                 $normKey = $key;
@@ -460,7 +470,7 @@ class ProductCatalogController extends Controller
 
             // 2. Ensure Completeness / Custom Option is added if present or detectable from variant_name
             $kelengkapanVal = null;
-            if (!empty($variantAttributes[$completenessTitle])) {
+            if (!empty($variantAttributes[$completenessTitle]) && !str_starts_with($completenessTitle, '_') && strcasecmp($completenessTitle, $sizeTitle) !== 0) {
                 $kelengkapanVal = (string) $variantAttributes[$completenessTitle];
             } elseif (!empty($variantAttributes['Kelengkapan'])) {
                 $kelengkapanVal = (string) $variantAttributes['Kelengkapan'];
@@ -472,6 +482,10 @@ class ProductCatalogController extends Controller
                 $kelengkapanVal = 'Kasur Saja';
             } elseif (preg_match('/(set\s+kasur\s*\+\s*divan|set\s+kasur|full\s*set|full\s*bed\s*set)/i', (string)$variant->variant_name)) {
                 $kelengkapanVal = 'Set Kasur + Divan';
+            }
+
+            if ($kelengkapanVal && (strcasecmp($kelengkapanVal, $sizeTitle) === 0 || str_starts_with($kelengkapanVal, '_') || preg_match('/^\d{2,3}\s*[xX]\s*\d{2,3}$/', trim($kelengkapanVal)))) {
+                $kelengkapanVal = null;
             }
 
             if ($kelengkapanVal) {
@@ -555,8 +569,16 @@ class ProductCatalogController extends Controller
         }
         unset($optionsList);
 
+        foreach (array_keys($attributeGroups) as $gk) {
+            if (str_starts_with($gk, '_') || (strcasecmp($gk, $sizeTitle) === 0 && $gk !== $sizeTitle)) {
+                unset($attributeGroups[$gk]);
+            }
+        }
         if ($sizeTitle !== 'Ukuran' && isset($attributeGroups['Ukuran'])) {
             unset($attributeGroups['Ukuran']);
+        }
+        if (isset($attributeGroups[$completenessTitle]) && (strcasecmp($completenessTitle, $sizeTitle) === 0 || str_starts_with($completenessTitle, '_'))) {
+            unset($attributeGroups[$completenessTitle]);
         }
 
         return view('frontend.product.show', compact('product', 'attributeGroups', 'sizeTitle', 'completenessTitle', 'relatedProducts', 'suggestAddons'));
