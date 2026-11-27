@@ -340,9 +340,13 @@ class ProductCatalogController extends Controller
                     if ($pA['_has_thickness'] === true || $pA['_has_thickness'] === 'true' || $pA['_has_thickness'] === 1 || $pA['_has_thickness'] === '1') {
                         $hasThicknessSetting = true;
                     }
-                } elseif (!empty($pA['Ketebalan'])) {
+                } elseif (!empty($pA['Ketebalan']) || !empty($pA['tebal']) || (!empty($pA['height']) && (float)$pA['height'] > 0) || (!empty($v->height) && (float)$v->height > 0) || preg_match('/[Tt]\.?\s*\d+/i', (string)$v->variant_name)) {
                     $hasThicknessSetting = true;
                 }
+            } elseif (!empty($v->height) && (float)$v->height > 0) {
+                $hasThicknessSetting = true;
+            } elseif (preg_match('/[Tt]\.?\s*\d+/i', (string)$v->variant_name)) {
+                $hasThicknessSetting = true;
             }
         }
         $sizeTitle = $detectedSizeTitle ?: 'Ukuran';
@@ -500,9 +504,11 @@ class ProductCatalogController extends Controller
                     $ketebalanVal = ((int)$variantAttributes['tebal']) . ' cm';
                 } elseif (!empty($variantAttributes['height']) && (float)$variantAttributes['height'] > 0) {
                     $ketebalanVal = ((int)$variantAttributes['height']) . ' cm';
-                } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$variant->variant_name, $m)) {
+                } elseif (!empty($variant->height) && (float)$variant->height > 0) {
+                    $ketebalanVal = ((int)$variant->height) . ' cm';
+                } elseif (preg_match('/[Tt]\.?\s*(\d+)\s*(?:cm)?/i', (string)$variant->variant_name, $m)) {
                     $ketebalanVal = $m[1] . ' cm';
-                } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$variant->variant_name, $m)) {
+                } elseif (preg_match('/(?:tebal|tinggi)\s*(\d+)/i', (string)$variant->variant_name, $m)) {
                     $ketebalanVal = $m[1] . ' cm';
                 }
 

@@ -47,9 +47,13 @@
                     if ($pA['_has_thickness'] === true || $pA['_has_thickness'] === 'true' || $pA['_has_thickness'] === 1 || $pA['_has_thickness'] === '1') {
                         $hasThicknessSetting = true;
                     }
-                } elseif (!empty($pA['Ketebalan'])) {
+                } elseif (!empty($pA['Ketebalan']) || !empty($pA['tebal']) || (!empty($pA['height']) && (float)$pA['height'] > 0) || (!empty($v->height) && (float)$v->height > 0) || preg_match('/[Tt]\.?\s*\d+/i', (string)$v->variant_name)) {
                     $hasThicknessSetting = true;
                 }
+            } elseif (!empty($v->height) && (float)$v->height > 0) {
+                $hasThicknessSetting = true;
+            } elseif (preg_match('/[Tt]\.?\s*\d+/i', (string)$v->variant_name)) {
+                $hasThicknessSetting = true;
             }
         }
         $sizeTitle = $detectedSizeTitle ?: ($sizeTitle ?? 'Ukuran');
@@ -123,9 +127,11 @@
                                 $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['tebal']) . ' cm';
                             } elseif (!empty($parsedAttrs['height']) && (float)$parsedAttrs['height'] > 0) {
                                 $parsedAttrs['Ketebalan'] = ((int)$parsedAttrs['height']) . ' cm';
-                            } elseif (preg_match('/[Tt]\.?\s*(\d{2})\s*(?:cm)?/i', (string)$v->variant_name, $m)) {
+                            } elseif (!empty($v->height) && (float)$v->height > 0) {
+                                $parsedAttrs['Ketebalan'] = ((int)$v->height) . ' cm';
+                            } elseif (preg_match('/[Tt]\.?\s*(\d+)\s*(?:cm)?/i', (string)$v->variant_name, $m)) {
                                 $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
-                            } elseif (preg_match('/(?:tebal|tinggi)\s*(\d{2})/i', (string)$v->variant_name, $m)) {
+                            } elseif (preg_match('/(?:tebal|tinggi)\s*(\d+)/i', (string)$v->variant_name, $m)) {
                                 $parsedAttrs['Ketebalan'] = $m[1] . ' cm';
                             }
                         }
@@ -875,15 +881,30 @@
 
                 <!-- Clean Trust Points Strip -->
                 @php
-                    $warrantyDuration = $product->warranty_duration;
-                    $hasWarranty = !empty($warrantyDuration) || !empty($product->category->has_warranty);
-                    $warrantyText = $warrantyDuration ? $warrantyDuration : '15 Tahun';
+                    $rawWarranty = trim((string)($product->warranty_duration ?? ''));
+                    $categoryHasWarranty = !empty($product->category->has_warranty);
+                    $hasWarranty = !empty($rawWarranty) || $categoryHasWarranty;
+                    
+                    if (!empty($rawWarranty)) {
+                        $warrantyFormatted = is_numeric($rawWarranty) ? ($rawWarranty . ' ' . __('Tahun')) : $rawWarranty;
+                        $trustWarrantyTitle = __('Garansi Resmi');
+                        $trustWarrantySub = $warrantyFormatted;
+                        $specWarrantyText = "Resmi " . $warrantyFormatted;
+                    } elseif ($categoryHasWarranty) {
+                        $trustWarrantyTitle = __('Garansi Resmi');
+                        $trustWarrantySub = __('Pabrik');
+                        $specWarrantyText = __('Garansi Pabrik');
+                    } else {
+                        $trustWarrantyTitle = __('Garansi');
+                        $trustWarrantySub = __('Tanpa Garansi');
+                        $specWarrantyText = __('Tidak Ada Garansi');
+                    }
                 @endphp
                 <div class="grid grid-cols-3 gap-2.5 mb-8 p-4 rounded-2xl bg-white border border-[#EFECE6] shadow-2xs">
                     <div class="flex flex-col items-center text-center p-2">
                         <i class="fa-solid fa-shield-halved text-brand-gold text-lg mb-1.5"></i>
-                        <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ __('Garansi Resmi') }}</span>
-                        <span class="text-[10px] text-gray-400 mt-0.5">{{ $hasWarranty ? $warrantyText : 'Pabrik' }}</span>
+                        <span class="text-[11px] font-bold text-brand-dark leading-tight">{{ $trustWarrantyTitle }}</span>
+                        <span class="text-[10px] text-gray-400 mt-0.5">{{ $trustWarrantySub }}</span>
                     </div>
                     <div class="flex flex-col items-center text-center p-2 border-x border-gray-100">
                         <i class="fa-solid fa-truck-fast text-brand-gold text-lg mb-1.5"></i>
@@ -965,7 +986,7 @@
                                 </div>
                                 <div class="p-3 bg-gray-50 rounded-xl">
                                     <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Garansi') }}</dt>
-                                    <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $hasWarranty ? "Resmi $warrantyText" : __('Garansi Toko') }}</dd>
+                                    <dd class="mt-0.5 font-bold text-brand-dark text-sm">{{ $specWarrantyText }}</dd>
                                 </div>
                                 <div class="p-3 bg-gray-50 rounded-xl">
                                     <dt class="text-gray-400 font-bold uppercase tracking-wider text-[10px]">{{ __('Ketersediaan') }}</dt>
