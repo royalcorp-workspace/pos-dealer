@@ -37,10 +37,16 @@
             $pA = is_string($rawA) ? json_decode($rawA, true) : $rawA;
             if (is_array($pA)) {
                 if (!empty($pA['_size_title'])) {
-                    $detectedSizeTitle = trim((string)$pA['_size_title']);
+                    $st = trim((string)$pA['_size_title']);
+                    if (!str_starts_with($st, '_')) {
+                        $detectedSizeTitle = $st;
+                    }
                 }
                 if (!empty($pA['_completeness_title'])) {
-                    $detectedCompletenessTitle = trim((string)$pA['_completeness_title']);
+                    $ct = trim((string)$pA['_completeness_title']);
+                    if (!str_starts_with($ct, '_')) {
+                        $detectedCompletenessTitle = $ct;
+                    }
                 }
                 if (isset($pA['_has_thickness'])) {
                     $hasExplicitThicknessFlag = true;
@@ -57,7 +63,11 @@
             }
         }
         $sizeTitle = $detectedSizeTitle ?: ($sizeTitle ?? 'Ukuran');
+        if (str_starts_with($sizeTitle, '_')) $sizeTitle = 'Ukuran';
         $completenessTitle = $detectedCompletenessTitle ?: ($completenessTitle ?? 'Kelengkapan');
+        if (str_starts_with($completenessTitle, '_') || strcasecmp($completenessTitle, $sizeTitle) === 0) {
+            $completenessTitle = 'Kelengkapan';
+        }
         $isThicknessEnabled = $hasExplicitThicknessFlag ? $hasThicknessSetting : $hasThicknessSetting;
 
         $mappedVariants = collect($validVariants ?? [])->map(function($v) use ($sizeTitle, $completenessTitle, $isThicknessEnabled) {
@@ -149,6 +159,9 @@
                     // Normalisasi kunci & nilai ke bahasa Indonesia standar
                     $normalizedAttrs = [];
                     foreach ($parsedAttrs as $k => $val) {
+                        if (str_starts_with($k, '_') || in_array(strtolower($k), $ignoredKeys) || in_array($k, $ignoredKeys)) {
+                            continue;
+                        }
                         $normK = $k;
                         $normV = (string) $val;
                         if (strcasecmp($normK, 'feel') === 0 || strcasecmp($normK, 'completeness') === 0 || strcasecmp($normK, 'kelengkapan') === 0) {
@@ -569,6 +582,7 @@
                         <div class="mb-6 space-y-4 variant-selection-container">
                             @foreach($attributeGroups as $groupName => $options)
                                 @php
+                                    if (str_starts_with($groupName, '_')) continue;
                                     $isSizeGroup = stripos($groupName, 'ukuran') !== false || stripos($groupName, 'size') !== false || stripos($groupName, 'dimensi') !== false || (isset($sizeTitle) && strcasecmp($groupName, $sizeTitle) === 0);
                                 @endphp
                                 <div class="attribute-group-container" data-attribute-group="{{ $groupName }}">
@@ -882,18 +896,13 @@
                 <!-- Clean Trust Points Strip -->
                 @php
                     $rawWarranty = trim((string)($product->warranty_duration ?? ''));
-                    $categoryHasWarranty = !empty($product->category->has_warranty);
-                    $hasWarranty = !empty($rawWarranty) || $categoryHasWarranty;
+                    $hasWarranty = !empty($rawWarranty);
                     
-                    if (!empty($rawWarranty)) {
+                    if ($hasWarranty) {
                         $warrantyFormatted = is_numeric($rawWarranty) ? ($rawWarranty . ' ' . __('Tahun')) : $rawWarranty;
                         $trustWarrantyTitle = __('Garansi Resmi');
                         $trustWarrantySub = $warrantyFormatted;
                         $specWarrantyText = "Resmi " . $warrantyFormatted;
-                    } elseif ($categoryHasWarranty) {
-                        $trustWarrantyTitle = __('Garansi Resmi');
-                        $trustWarrantySub = __('Pabrik');
-                        $specWarrantyText = __('Garansi Pabrik');
                     } else {
                         $trustWarrantyTitle = __('Garansi');
                         $trustWarrantySub = __('Tanpa Garansi');
@@ -971,7 +980,7 @@
                             @click="openSpecs = !openSpecs"
                             class="w-full px-5 py-4 flex items-center justify-between text-left font-bold text-brand-dark text-sm bg-white hover:bg-gray-50/70 transition-colors focus:outline-none cursor-pointer"
                         >
-                            <span class="font-serif text-base">{{ __('Spesifikasi & Jaminan Pabrik') }}</span>
+                            <span class="font-serif text-base">{{ $hasWarranty ? __('Spesifikasi & Garansi Resmi') : __('Spesifikasi Produk') }}</span>
                             <i class="fa-solid fa-chevron-down text-xs transition-transform duration-300" :class="openSpecs ? 'rotate-180 text-brand-gold-dark' : 'text-gray-400'"></i>
                         </button>
                         <div x-show="openSpecs" x-collapse class="px-5 pb-5 pt-3 border-t border-gray-100">
