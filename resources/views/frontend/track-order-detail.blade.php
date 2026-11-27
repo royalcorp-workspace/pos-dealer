@@ -244,6 +244,27 @@
                         <span class="font-bold text-gray-600">Total Pembayaran</span>
                         <span class="text-2xl font-extrabold text-brand-gold-dark">Rp {{ number_format($total, 0, ',', '.') }}</span>
                     </div>
+
+                    @php
+                        $cm = $order->creditMemo ?? \App\Models\CreditMemo::where('order_id', $order->id)->latest('created_at')->first();
+                        $pm = $order->payment ?? \App\Models\Payment::where('order_id', $order->id)->latest('created_at')->first();
+                    @endphp
+
+                    @if($pm)
+                        <div class="mt-3 pt-3 border-t border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-600 gap-1">
+                            <span class="flex items-center gap-1.5 font-medium text-emerald-700">
+                                <i class="fa-solid fa-circle-check"></i> No. Pembayaran Resmi:
+                            </span>
+                            <span class="font-mono font-bold text-gray-800">{{ $pm->payment_number }}</span>
+                        </div>
+                    @elseif($cm)
+                        <div class="mt-3 pt-3 border-t border-gray-200/80 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-gray-600 gap-1">
+                            <span class="flex items-center gap-1.5 font-medium text-blue-700">
+                                <i class="fa-solid fa-receipt"></i> No. Referensi Bayar (Credit Memo):
+                            </span>
+                            <span class="font-mono font-bold text-gray-800">{{ $cm->credit_memo_number }}</span>
+                        </div>
+                    @endif
                 </div>
 
                 @php

@@ -44,4 +44,48 @@ class Payment extends Model
     {
         return $this->belongsTo(Order::class);
     }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->id)) {
+                $model->id = (string) \Illuminate\Support\Str::uuid();
+            }
+            if (empty($model->payment_number)) {
+                $model->payment_number = static::generateNumber($model->paid_at ?? now());
+            }
+        });
+    }
+
+    /**
+     * Format: PAY.tahunbulantanggal.4digit (e.g. PAY.20261120.0001)
+     */
+    public static function generateNumber($date = null): string
+    {
+        $dateObj = $date ? \Illuminate\Support\Carbon::parse($date) : now();
+        $prefix = 'PAY.' . $dateObj->format('Ymd') . '.';
+
+        $last = static::withoutGlobalScopes()
+            ->where('payment_number', 'like', $prefix . '%')
+            ->orderByRaw('LENGTH(payment_number) DESC, payment_number DESC')
+            ->value('payment_number');
+
+        $nextSeq = 1;
+        if ($last) {
+            $seqPart = substr($last, strlen($prefix));
+            if (is_numeric($seqPart)) {
+                $nextSeq = (int) $seqPart + 1;
+            }
+        }
+
+        $number = $prefix . str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+        while (static::withoutGlobalScopes()->where('payment_number', $number)->exists()) {
+            $nextSeq++;
+            $number = $prefix . str_pad((string) $nextSeq, 4, '0', STR_PAD_LEFT);
+        }
+
+        return $number;
+    }
 }
